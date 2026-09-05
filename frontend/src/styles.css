@@ -55,10 +55,11 @@ main.container { min-height: 66vh; padding-block: 28px 72px; }
 .brand small { margin-top: 4px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .65rem; font-weight: 500; letter-spacing: .04em; color: #dce8df; }
 .nav-panel { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 22px; }
 .nav-links, .nav-auth { display: flex; align-items: center; gap: 6px; }
-.nav-links a { position: relative; padding: 10px 12px; color: #e7efe9; text-decoration: none; font-size: .9rem; font-weight: 650; border-radius: var(--radius-sm); }
+.nav-links a { position: relative; padding: 10px 12px; color: #e7efe9; text-decoration: none; font-size: 1.02rem; font-weight: 650; border-radius: var(--radius-sm); }
 .nav-links a:hover, .nav-links a.active { background: rgba(255, 255, 255, .1); color: var(--white); }
 .badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; margin-left: 5px; padding: 0 5px; border-radius: 99px; color: var(--green-950); background: var(--gold); font-size: .7rem; font-weight: 800; }
-.hello { color: var(--white); text-decoration: none; padding: 8px; font-size: .88rem; font-weight: 700; }
+.nav-auth .btn, .hello { font-size: .98rem; }
+.hello { color: var(--white); text-decoration: none; padding: 8px; font-weight: 700; }
 .nav-toggle { display: none; width: 42px; height: 42px; margin-left: auto; border: 1px solid rgba(255,255,255,.25); border-radius: 10px; background: transparent; }
 .nav-toggle span { display: block; width: 19px; height: 2px; margin: 4px auto; background: white; }
 .mobile-nav { display: none; }
@@ -450,7 +451,7 @@ label b { color: var(--danger); }
   .mobile-nav a { position: relative; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 2px; border-radius: 11px; color: #d9e5dc; text-decoration: none; }
   .mobile-nav a.active { background: rgba(255,255,255,.1); color: white; }
   .mobile-nav a > span { font-size: 1.15rem; line-height: 1; }
-  .mobile-nav a small { font-size: .62rem; font-weight: 700; }
+  .mobile-nav a small { font-size: .7rem; font-weight: 700; }
   .mobile-nav a b { position: absolute; top: 3px; right: calc(50% - 23px); display: grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 99px; background: var(--gold); color: #312512; font-size: .62rem; }
   .hero { grid-template-columns: 1fr; min-height: auto; }
   .catalog-controls { align-items: stretch; flex-direction: column; }
