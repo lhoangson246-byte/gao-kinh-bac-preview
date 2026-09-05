@@ -1,0 +1,35 @@
+# Thư viện
+node_modules/
+
+# Kết quả build
+dist/
+build/
+
+# Biến môi trường và cơ sở dữ liệu thật — không bao giờ đưa lên Git
+.env
+.env.*
+!.env.example
+backend/data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Nhật ký và tệp tạm
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.vercel/
+.vscode/
+.idea/
+
+# Local workspace artifacts that are not part of the deployed application
+.claude/
+.docx-qa/
+sites-deploy/
+tools/
+*.docx
+*.tar.gz
+*.tgz
