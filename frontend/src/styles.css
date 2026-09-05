@@ -493,8 +493,20 @@ label b { color: var(--danger); }
 
 @media (max-width: 560px) {
   h1 { font-size: 2.55rem; }
-  .product-grid { grid-template-columns: 1fr; }
-  .product-image { height: 225px; }
+  /* A compact two-column catalogue lets customers compare products while browsing. */
+  .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .product-card { border-radius: 12px; }
+  .product-image { height: clamp(130px, 42vw, 170px); }
+  .stock-tag { top: 8px; right: 8px; max-width: calc(100% - 16px); padding: 4px 6px; font-size: .58rem; text-align: center; }
+  .product-body { padding: 12px; }
+  .product-meta { display: block; overflow: hidden; font-size: .63rem; white-space: nowrap; text-overflow: ellipsis; }
+  .product-meta span:last-child, .product-body .desc { display: none; }
+  .product-body h3 { display: -webkit-box; min-height: 2.32em; margin: 7px 0 9px; overflow: hidden; font-size: 1.03rem; line-height: 1.16; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .product-bottom { display: block; padding-top: 9px; }
+  .product-price { margin-bottom: 8px; }
+  .product-price strong { font-size: .98rem; }
+  .product-price span { font-size: .65rem; }
+  .product-bottom .add-button { width: 100%; min-height: 36px; padding: 7px 6px; font-size: .76rem; }
   .hero-visual { height: 250px; }
   .store-toolbar { min-height: 160px; padding: 24px 21px; }
   .toolbar-art { width: 74px; height: 74px; flex-basis: 74px; border-radius: 19px; }
