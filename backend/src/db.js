@@ -61,10 +61,58 @@ CREATE TABLE IF NOT EXISTS order_items (
   quantity     INTEGER NOT NULL
 );
 
+-- ---------------------------------------------------------------- --
+-- Bán lẻ tại quầy (POS). Tách riêng khỏi đơn đặt online: hoá đơn tại
+-- quầy KHÔNG trừ tồn kho của cửa hàng trên web.
+-- ---------------------------------------------------------------- --
+
+-- Khách quen của cửa hàng, nhận diện bằng số điện thoại.
+CREATE TABLE IF NOT EXISTS retail_customers (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  phone       TEXT NOT NULL UNIQUE,      -- luôn ở dạng chuẩn 0xxxxxxxxx
+  full_name   TEXT,
+  points      INTEGER NOT NULL DEFAULT 0,
+  total_spent INTEGER NOT NULL DEFAULT 0,
+  visit_count INTEGER NOT NULL DEFAULT 0,
+  note        TEXT,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS retail_invoices (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  code           TEXT UNIQUE,            -- mã hoá đơn cho khách tra cứu, ví dụ HD000012
+  customer_id    INTEGER REFERENCES retail_customers(id) ON DELETE SET NULL,
+  customer_phone TEXT,                   -- chép lại để hoá đơn cũ không đổi khi sửa khách
+  customer_name  TEXT,
+  subtotal       INTEGER NOT NULL,       -- tiền hàng trước giảm giá
+  discount       INTEGER NOT NULL DEFAULT 0,
+  total          INTEGER NOT NULL,       -- số tiền khách thực trả
+  points_earned  INTEGER NOT NULL DEFAULT 0,
+  payment_method TEXT NOT NULL DEFAULT 'cash',
+  note           TEXT,
+  created_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS retail_invoice_items (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  invoice_id   INTEGER NOT NULL REFERENCES retail_invoices(id) ON DELETE CASCADE,
+  product_id   INTEGER REFERENCES products(id) ON DELETE SET NULL,
+  product_name TEXT NOT NULL,            -- chép lại tên/giá lúc bán
+  unit         TEXT NOT NULL,
+  price        INTEGER NOT NULL,
+  quantity     INTEGER NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_items_order ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_products_active ON products(is_active);
+CREATE INDEX IF NOT EXISTS idx_retail_inv_customer ON retail_invoices(customer_id);
+CREATE INDEX IF NOT EXISTS idx_retail_inv_phone ON retail_invoices(customer_phone);
+CREATE INDEX IF NOT EXISTS idx_retail_inv_created ON retail_invoices(created_at);
+CREATE INDEX IF NOT EXISTS idx_retail_items_inv ON retail_invoice_items(invoice_id);
 `);
 
 /* ------------------------------------------------------------------ *

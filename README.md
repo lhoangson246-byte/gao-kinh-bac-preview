@@ -25,6 +25,22 @@
 - Theo dõi tồn kho, cảnh báo loại gạo sắp hết và doanh thu của đơn đã hoàn thành
 - Cảnh báo ngay số loại gạo **chưa nhập giá bán**
 
+### Bán lẻ tại quầy
+
+Khu vực `/quan-tri/ban-hang` dành cho nhân viên đứng quầy:
+
+- Nhập số điện thoại để **tra cứu khách quen**: hiện tên, điểm tích luỹ, số lần mua và các hoá đơn gần đây. Số chưa từng mua sẽ được báo là khách mới và tạo hồ sơ khi lưu hoá đơn.
+- Bấm vào loại gạo để thêm vào hoá đơn, chỉnh số lượng, chọn tiền mặt hoặc chuyển khoản.
+- **Giảm giá tự động theo giá trị hoá đơn** — khách không cần tích luỹ trước:
+  - từ 300.000₫ → giảm 10.000₫
+  - từ 500.000₫ → giảm 20.000₫
+- **Tích điểm**: 1.000₫ thực trả = 1 điểm, cộng vào hồ sơ theo số điện thoại. Khách vãng lai không cho số thì không tích điểm.
+- Tab **Hoá đơn cũ** tra theo mã hoá đơn (`HD000012`), số điện thoại, tên khách hoặc khoảng ngày; mở ra xem lại đúng tên và giá lúc bán.
+
+Muốn đổi chính sách giảm giá hoặc tỉ lệ tích điểm thì sửa `RETAIL_DISCOUNT_TIERS` và `RETAIL_VND_PER_POINT` trong `backend/src/constants.js`.
+
+**Bán tại quầy không trừ tồn kho của cửa hàng online** — hai bên theo dõi riêng, đúng như cửa hàng yêu cầu.
+
 ## Chạy thử trên máy
 
 Yêu cầu Node.js 20 hoặc 22 (xem lưu ý Node 24 ở cuối phần này).
@@ -70,7 +86,8 @@ Khi API đang chạy, mở một cửa sổ khác:
 
 ```bash
 cd backend
-npm run test:smoke
+npm run test:smoke     # cửa hàng online
+npm run test:retail    # bán lẻ tại quầy
 ```
 
 Bộ kiểm thử đi qua các luồng chính: đăng ký, đăng nhập, sổ địa chỉ, phân quyền, tạo đơn, giới hạn Bắc Ninh, tồn kho, huỷ đơn và hoàn kho, quy trình trạng thái đơn, quản lý sản phẩm.
@@ -129,15 +146,15 @@ gao-shop/
 │   └── src/
 │       ├── components/       # Navbar, ProtectedRoute, nút cài ứng dụng
 │       ├── context/          # AuthContext, CartContext
-│       ├── pages/            # Home, Cart, Checkout, Orders, Profile, Admin…
+│       ├── pages/            # Home, Cart, Checkout, Orders, Profile, Admin, Retail…
 │       └── api.js            # gọi API, định dạng tiền/ngày, kiểm tra khu vực
 ├── backend/                  # Express + SQLite
 │   ├── src/
 │   │   ├── constants.js      # khu vực giao hàng, trạng thái đơn, giới hạn dữ liệu
 │   │   ├── validate.js       # kiểm tra và chuẩn hoá dữ liệu đầu vào
 │   │   ├── middleware/       # xác thực JWT, kiểm tra quyền admin
-│   │   └── routes/           # auth, addresses, products, orders, admin
-│   └── test/smoke.mjs        # kiểm thử luồng API
+│   │   └── routes/           # auth, addresses, products, orders, admin, retail
+│   └── test/                 # smoke.mjs (online) + retail.mjs (bán tại quầy)
 ├── vercel.json               # cấu hình deploy frontend lên Vercel
 └── BAN_GIAO.md               # ghi chú tiếp tục phát triển
 ```

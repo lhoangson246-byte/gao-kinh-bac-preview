@@ -110,6 +110,47 @@ Năm loại có giá nhưng **chưa có ảnh bao bì**: Kê vàng, Gạo Thái,
   hiển thị lại cho khách ở trang Đơn hàng và cho cửa hàng ở trang quản trị.
 - Máy chủ chỉ nhận `sang` hoặc `chieu`; không chọn cũng đặt hàng được.
 
+## Hệ thống bán lẻ tại quầy
+
+Màn hình riêng ở `/quan-tri/ban-hang`, chỉ tài khoản `admin` vào được (kiểm tra ở máy chủ,
+không chỉ ẩn nút).
+
+### Ba chức năng cửa hàng yêu cầu
+
+| Yêu cầu | Cách hoạt động |
+|---|---|
+| Tích điểm | 1.000₫ khách **thực trả** = 1 điểm. Điểm cộng vào hồ sơ gắn với số điện thoại, xem được tổng điểm, số lần mua và tổng chi tiêu. |
+| Giảm 10k–20k cho hoá đơn từ 300k | Giảm **tự động theo bậc**, khách không cần tích luỹ trước: từ 300.000₫ giảm 10.000₫, từ 500.000₫ giảm 20.000₫. Máy chủ tự tính, không tin số tiền do máy bán hàng gửi lên. |
+| Tra cứu hoá đơn cũ | Tra theo mã hoá đơn (`HD000012`), số điện thoại, tên khách, hoặc lọc theo khoảng ngày. Có phân trang. |
+
+### Bảng dữ liệu mới
+
+- `retail_customers` — khách quen, khoá theo `phone` (duy nhất, chuẩn hoá `0xxxxxxxxx`),
+  giữ `points`, `total_spent`, `visit_count`.
+- `retail_invoices` — hoá đơn, có `code` dạng `HD000012` để khách đọc lại.
+- `retail_invoice_items` — chi tiết từng dòng, **chép lại tên và giá lúc bán** nên sửa giá
+  sau này không làm sai hoá đơn cũ.
+
+Các bảng này được tạo tự động khi khởi động API, không cần chạy lệnh riêng.
+
+### Điểm cần biết
+
+- **Không trừ tồn kho của web.** Theo yêu cầu của cửa hàng, bán tại quầy và bán online theo dõi
+  tồn kho riêng. Nếu sau này muốn dùng chung một kho thì sửa `routes/retail.js` để trừ `products.stock`
+  trong cùng transaction, giống `routes/orders.js`.
+- Toàn bộ tiền (tiền hàng, giảm giá, điểm) đều do **máy chủ tính lại**; dữ liệu gửi từ trình duyệt bị bỏ qua.
+- Loại gạo **chưa có giá** thì không bán được tại quầy.
+- Khách không cho số điện thoại vẫn bán được, chỉ là không tích điểm.
+- Đổi chính sách: sửa `RETAIL_DISCOUNT_TIERS` và `RETAIL_VND_PER_POINT` trong `backend/src/constants.js`,
+  giao diện tự đọc theo qua `GET /api/retail/policy` nên không phải sửa hai nơi.
+- Nút **In hoá đơn** dùng chức năng in của trình duyệt; CSS `@media print` đã ẩn phần giao diện thừa.
+
+### Kiểm thử
+
+`npm run test:retail` — 51 phép kiểm tra: phân quyền, các mốc giảm giá (kể cả đúng 300.000₫
+và 500.000₫), tích điểm cộng dồn, khách vãng lai, bỏ qua giá do trình duyệt gửi, gộp dòng trùng,
+không trừ tồn kho, tra cứu theo mã/SĐT/tên/ngày, phân trang.
+
 ## Việc bạn cần tự làm trước khi chạy thật
 
 1. **Đổi `JWT_SECRET`** thành chuỗi dài ngẫu nhiên và **đổi mật khẩu quản trị mẫu**.

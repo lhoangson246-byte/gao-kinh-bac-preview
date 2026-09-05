@@ -12,6 +12,7 @@ import productRoutes from './routes/products.js';
 import orderRoutes from './routes/orders.js';
 import addressRoutes from './routes/addresses.js';
 import adminRoutes from './routes/admin.js';
+import retailRoutes from './routes/retail.js';
 import { HttpError } from './validate.js';
 
 const app = express();
@@ -52,6 +53,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/addresses', addressRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/retail', retailRoutes);
 
 // Render preview deploys run the React app and API together. Keeping this
 // opt-in means local development can continue to use Vite's dev server.

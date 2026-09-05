@@ -11,6 +11,7 @@ import Checkout from './pages/Checkout.jsx';
 import Orders from './pages/Orders.jsx';
 import Profile from './pages/Profile.jsx';
 import Admin from './pages/Admin.jsx';
+import Retail from './pages/Retail.jsx';
 import NotFound from './pages/NotFound.jsx';
 
 const PAGE_TITLES = {
@@ -22,6 +23,7 @@ const PAGE_TITLES = {
   '/dang-nhap': 'Đăng nhập',
   '/dang-ky': 'Đăng ký',
   '/quan-tri': 'Quản trị cửa hàng',
+  '/quan-tri/ban-hang': 'Bán hàng tại quầy',
 };
 
 export default function App() {
@@ -42,6 +44,10 @@ export default function App() {
           <Route
             path="/quan-tri"
             element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>}
+          />
+          <Route
+            path="/quan-tri/ban-hang"
+            element={<ProtectedRoute adminOnly><Retail /></ProtectedRoute>}
           />
           <Route path="*" element={<NotFound />} />
         </Routes>

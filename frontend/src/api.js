@@ -77,6 +77,26 @@ export const api = {
   adminUpdateProduct: (id, payload) =>
     request(`/admin/products/${id}`, { method: 'PUT', body: payload, auth: true }),
   adminDeleteProduct: (id) => request(`/admin/products/${id}`, { method: 'DELETE', auth: true }),
+
+  /* --- Bán lẻ tại quầy --- */
+  retailPolicy: () => request('/retail/policy', { auth: true }),
+  retailStats: () => request('/retail/stats', { auth: true }),
+  retailFindCustomer: (phone) =>
+    request(`/retail/customers?phone=${encodeURIComponent(phone)}`, { auth: true }),
+  retailUpdateCustomer: (id, payload) =>
+    request(`/retail/customers/${id}`, { method: 'PUT', body: payload, auth: true }),
+  retailCreateInvoice: (payload) =>
+    request('/retail/invoices', { method: 'POST', body: payload, auth: true }),
+  retailInvoices: ({ q = '', from = '', to = '', limit = 20, offset = 0 } = {}) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    params.set('limit', String(limit));
+    params.set('offset', String(offset));
+    return request(`/retail/invoices?${params}`, { auth: true });
+  },
+  retailInvoice: (id) => request(`/retail/invoices/${encodeURIComponent(id)}`, { auth: true }),
 };
 
 /* ---- Hằng số và kiểm tra dùng chung với máy chủ ---- */

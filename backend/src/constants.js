@@ -53,6 +53,39 @@ const OTHER_PROVINCES = [
   'nghệ an', 'nghe an', 'hà tĩnh', 'ha tinh', 'phú thọ', 'phu tho', 'hoà bình', 'hòa bình',
 ];
 
+/* ------------------------------------------------------------------ *
+ * Bán lẻ tại quầy: giảm giá và tích điểm
+ * ------------------------------------------------------------------ */
+
+/**
+ * Giảm giá tự động theo giá trị hoá đơn — khách không cần tích luỹ trước.
+ * Xếp từ mức cao xuống thấp; mức đầu tiên khớp sẽ được áp dụng.
+ * Muốn đổi chính sách thì chỉ sửa ở đây.
+ */
+export const RETAIL_DISCOUNT_TIERS = [
+  { minSubtotal: 500_000, discount: 20_000 },
+  { minSubtotal: 300_000, discount: 10_000 },
+];
+
+/** Số tiền (đồng) tương ứng 1 điểm tích luỹ. 1.000đ = 1 điểm. */
+export const RETAIL_VND_PER_POINT = 1_000;
+
+export const RETAIL_PAYMENT_METHODS = {
+  cash: 'Tiền mặt',
+  transfer: 'Chuyển khoản',
+};
+
+/** Số tiền được giảm cho một hoá đơn có tiền hàng `subtotal`. */
+export function retailDiscountFor(subtotal) {
+  const tier = RETAIL_DISCOUNT_TIERS.find((t) => subtotal >= t.minSubtotal);
+  return tier ? tier.discount : 0;
+}
+
+/** Điểm tích được từ số tiền khách thực trả. */
+export function retailPointsFor(amountPaid) {
+  return Math.floor(Math.max(0, amountPaid) / RETAIL_VND_PER_POINT);
+}
+
 /** true nếu địa chỉ có nhắc tới một tỉnh/thành khác Bắc Ninh. */
 export function mentionsOtherProvince(address) {
   const text = String(address || '').toLowerCase();

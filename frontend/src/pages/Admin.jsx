@@ -206,6 +206,10 @@ export default function Admin() {
           <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>
             <span aria-hidden="true">◇</span><span>Sản phẩm<small>Giá bán và tồn kho</small></span>
           </button>
+          <Link to="/quan-tri/ban-hang" className="admin-sidebar-link">
+            <span aria-hidden="true">◧</span>
+            <span>Bán hàng tại quầy<small>Hoá đơn và tích điểm</small></span>
+          </Link>
           <div className="admin-help"><strong>Cần làm gì trước?</strong><p>Ưu tiên các đơn “Chờ xác nhận”, gọi khách rồi bấm “Xác nhận đơn”.</p></div>
         </aside>
 
