@@ -1,22 +1,29 @@
+import { validateRoutes } from '../schemas.js';
 import { Router } from 'express';
+import bcrypt from 'bcryptjs';
 import db from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import {
-  LIMITS, RETAIL_DISCOUNT_TIERS, RETAIL_PAYMENT_METHODS, RETAIL_VND_PER_POINT,
-  retailDiscountFor, retailPointsFor,
+  LIMITS, RETAIL_DISCOUNT_TIERS, RETAIL_PAYMENT_METHODS, RETAIL_POINTS_PER_REWARD,
+  RETAIL_VND_PER_POINT, retailRewardsAffordable,
+  localDate, retailDiscountFor, retailPointsFor,
 } from '../constants.js';
 import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../validate.js';
+import { writeAdminAudit } from '../audit.js';
+import { loyaltyProfile, onlineAccount } from '../loyalty.js';
 
 const router = Router();
 
 // Bán lẻ tại quầy là việc của nhân viên cửa hàng — luôn kiểm tra quyền ở máy chủ.
 router.use(requireAuth, requireAdmin);
+router.use(validateRoutes('retail'));
 
 const MAX_LINES = 60;
 const MAX_QTY_PER_LINE = 500;
 
 /** Mã hoá đơn dễ đọc cho khách tra cứu lại: HD000123 */
 const invoiceCode = (id) => `HD${String(id).padStart(6, '0')}`;
+const returnCode = (id) => `DT${String(id).padStart(6, '0')}`;
 
 const getItems = db.prepare(
   'SELECT * FROM retail_invoice_items WHERE invoice_id = ? ORDER BY id'
@@ -36,6 +43,10 @@ router.get('/policy', (req, res) => {
       tiers: RETAIL_DISCOUNT_TIERS,
       vndPerPoint: RETAIL_VND_PER_POINT,
       paymentMethods: RETAIL_PAYMENT_METHODS,
+      pointsPerReward: RETAIL_POINTS_PER_REWARD,
+      rewards: db.prepare(
+        'SELECT id, name, unit, image_url FROM products WHERE is_reward = 1 AND is_active = 1 ORDER BY id'
+      ).all(),
     },
   });
 });
@@ -57,13 +68,86 @@ router.get('/customers', (req, res, next) => {
     const customer = db.prepare('SELECT * FROM retail_customers WHERE phone = ?').get(phone);
     if (!customer) {
       // Chưa từng mua — vẫn trả 200 để nhân viên biết là khách mới, không phải lỗi.
-      return res.json({ customer: null, invoices: [], isNew: true });
+      return res.json({
+        customer: null, invoices: [], isNew: true,
+        account: onlineAccount(phone), onlineOrders: 0,
+        rewardsAffordable: 0, pointsPerReward: RETAIL_POINTS_PER_REWARD,
+      });
     }
 
     const invoices = db
       .prepare('SELECT * FROM retail_invoices WHERE customer_id = ? ORDER BY id DESC LIMIT 20')
       .all(customer.id);
-    res.json({ customer, invoices: invoices.map(withItems), isNew: false });
+    const account = onlineAccount(phone);
+    res.json({
+      customer,
+      account,
+      onlineOrders: account
+        ? db.prepare("SELECT COUNT(*) c FROM orders WHERE user_id = ?").get(account.id).c
+        : 0,
+      rewardsAffordable: retailRewardsAffordable(customer.points),
+      pointsPerReward: RETAIL_POINTS_PER_REWARD,
+      invoices: invoices.map(withItems),
+      isNew: false,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/retail/customers/account — tạo tài khoản đặt hàng online cho khách
+ *  Nhân viên đăng ký giúp khách ngay tại quầy. Số điện thoại của tài khoản
+ *  chính là số dùng để tích điểm, nên khách mua ở quầy hay đặt online đều
+ *  cộng vào cùng một hồ sơ.
+ *  body: { phone, full_name, password }
+ */
+router.post('/customers/account', async (req, res, next) => {
+  try {
+    const { phone, full_name, password } = req.body || {};
+
+    const normalized = normalizePhone(phone);
+    if (!normalized) {
+      throw new HttpError(400, 'Số điện thoại không hợp lệ (10 số, ví dụ 0912345678).', {
+        phone: 'Số điện thoại không hợp lệ.',
+      });
+    }
+    const fullName = cleanText(full_name, LIMITS.name);
+    if (!fullName || fullName.length < 2) {
+      throw new HttpError(400, 'Nhập họ tên khách.', { full_name: 'Nhập họ tên khách.' });
+    }
+
+    if (db.prepare('SELECT id FROM users WHERE phone = ?').get(normalized)) {
+      throw new HttpError(409, 'Số điện thoại này đã có tài khoản đặt hàng.', {
+        phone: 'Số này đã có tài khoản.',
+      });
+    }
+
+    const hash = await bcrypt.hash(password, 12);
+    const created = db.transaction(() => {
+      const userId = db.prepare(`
+        INSERT INTO users (full_name, email, password_hash, phone, address)
+        VALUES (?, NULL, ?, ?, NULL)
+      `).run(fullName, hash, normalized).lastInsertRowid;
+
+      // Chưa có hồ sơ tích điểm thì tạo luôn để nhân viên thấy ngay.
+      if (!db.prepare('SELECT id FROM retail_customers WHERE phone = ?').get(normalized)) {
+        db.prepare('INSERT INTO retail_customers (phone, full_name) VALUES (?, ?)')
+          .run(normalized, fullName);
+      }
+      return userId;
+    });
+
+    const userId = created();
+    writeAdminAudit(req, {
+      action: 'create_account', entityType: 'customer_account', entityId: userId,
+      after: { phone: normalized, full_name: fullName },
+    });
+
+    res.status(201).json({
+      account: onlineAccount(normalized),
+      customer: loyaltyProfile(normalized),
+      message: 'Đã tạo tài khoản. Đọc số điện thoại và mật khẩu cho khách để khách đặt hàng online.',
+    });
   } catch (err) {
     next(err);
   }
@@ -85,6 +169,7 @@ router.put('/customers/:id', (req, res, next) => {
     const fields = Object.keys(updates);
     if (!fields.length) throw new HttpError(400, 'Không có thông tin nào để cập nhật.');
 
+    const before = db.prepare('SELECT * FROM retail_customers WHERE id = ?').get(id);
     const info = db
       .prepare(`UPDATE retail_customers
                 SET ${fields.map((f) => `${f} = @${f}`).join(', ')}, updated_at = datetime('now')
@@ -92,7 +177,11 @@ router.put('/customers/:id', (req, res, next) => {
       .run({ ...updates, id });
     if (!info.changes) throw new HttpError(404, 'Không tìm thấy khách hàng.');
 
-    res.json({ customer: db.prepare('SELECT * FROM retail_customers WHERE id = ?').get(id) });
+    const customer = db.prepare('SELECT * FROM retail_customers WHERE id = ?').get(id);
+    writeAdminAudit(req, {
+      action: 'update', entityType: 'retail_customer', entityId: id, before, after: customer,
+    });
+    res.json({ customer });
   } catch (err) {
     next(err);
   }
@@ -128,13 +217,31 @@ function normalizeLines(items) {
   return merged;
 }
 
+/** Gộp danh sách quà đổi điểm. Cho phép bỏ trống. */
+function normalizeRewards(rewards) {
+  if (rewards == null) return new Map();
+  if (!Array.isArray(rewards)) throw new HttpError(400, 'Danh sách quà đổi điểm không hợp lệ.');
+  if (rewards.length > MAX_LINES) throw new HttpError(400, `Tối đa ${MAX_LINES} dòng quà.`);
+
+  const merged = new Map();
+  for (const line of rewards) {
+    const productId = toInteger(line?.product_id, { min: 1 });
+    const quantity = toInteger(line?.quantity, { min: 1, max: MAX_QTY_PER_LINE });
+    if (!productId) throw new HttpError(400, 'Phần quà không hợp lệ.');
+    if (!quantity) throw new HttpError(400, 'Số lượng quà phải lớn hơn 0.');
+    merged.set(productId, (merged.get(productId) || 0) + quantity);
+  }
+  return merged;
+}
+
 /** POST /api/retail/invoices
- *  body: { phone?, full_name?, items: [{product_id, quantity}], payment_method?, note? }
- *  Giá, giảm giá và điểm đều do máy chủ tự tính.
+ *  body: { phone?, full_name?, items: [{product_id, quantity}],
+ *          rewards?: [{product_id, quantity}], payment_method?, note? }
+ *  Giá, giảm giá, điểm tích và điểm trừ đều do máy chủ tự tính.
  */
 router.post('/invoices', (req, res, next) => {
   try {
-    const { phone, full_name, items, payment_method, note } = req.body || {};
+    const { phone, full_name, items, rewards, payment_method, note } = req.body || {};
 
     // Khách vãng lai không cần số điện thoại; có số thì mới tích được điểm.
     const rawPhone = cleanText(phone, LIMITS.phone);
@@ -151,7 +258,17 @@ router.post('/invoices', (req, res, next) => {
       throw new HttpError(400, 'Hình thức thanh toán không hợp lệ.');
     }
 
-    const wanted = normalizeLines(items);
+    const wantedRewards = normalizeRewards(rewards);
+    // Hoá đơn chỉ gồm quà (khách vào lấy quà, không mua thêm) vẫn hợp lệ.
+    const wanted = wantedRewards.size > 0 && (!Array.isArray(items) || items.length === 0)
+      ? new Map()
+      : normalizeLines(items);
+
+    if (wantedRewards.size > 0 && !customerPhone) {
+      throw new HttpError(400, 'Đổi quà cần số điện thoại của khách để trừ điểm.', {
+        phone: 'Nhập số điện thoại để đổi quà.',
+      });
+    }
     const invoiceNote = cleanText(note, LIMITS.note);
 
     // Bán tại quầy KHÔNG trừ tồn kho của cửa hàng online (theo yêu cầu của cửa hàng),
@@ -172,6 +289,21 @@ router.post('/invoices', (req, res, next) => {
         subtotal += product.price * quantity;
       }
 
+      // Quà đổi điểm: giá tính 0đ nên KHÔNG cộng vào tiền hàng, do đó cũng không
+      // giúp khách đạt mốc giảm giá và không sinh thêm điểm.
+      const rewardLines = [];
+      let rewardCount = 0;
+      for (const [productId, quantity] of wantedRewards) {
+        const product = getProduct.get(productId);
+        if (!product) throw new HttpError(400, `Không tìm thấy phần quà #${productId}.`);
+        if (!product.is_reward) {
+          throw new HttpError(400, `“${product.name}” không nằm trong danh sách quà đổi điểm.`);
+        }
+        rewardLines.push({ product, quantity });
+        rewardCount += quantity;
+      }
+      const pointsUsed = rewardCount * RETAIL_POINTS_PER_REWARD;
+
       const discount = retailDiscountFor(subtotal);
       const total = subtotal - discount;
       const pointsEarned = customerPhone ? retailPointsFor(total) : 0;
@@ -180,15 +312,34 @@ router.post('/invoices', (req, res, next) => {
       let customerId = null;
       if (customerPhone) {
         const existing = db.prepare('SELECT * FROM retail_customers WHERE phone = ?').get(customerPhone);
+
+        // Kiểm tra đủ điểm NGAY TRONG transaction, dựa trên số điểm đang có
+        // trước khi cộng điểm của chính hoá đơn này.
+        if (pointsUsed > 0) {
+          const available = existing?.points ?? 0;
+          if (available < pointsUsed) {
+            throw new HttpError(400,
+              `Khách chỉ có ${available} điểm, cần ${pointsUsed} điểm để đổi ${rewardCount} phần quà.`);
+          }
+        }
+
         if (existing) {
           customerId = existing.id;
-          db.prepare(`
+          // Trừ có điều kiện: nếu điểm vừa bị dùng ở nơi khác thì không dòng nào
+          // đổi và cả hoá đơn bị huỷ, tránh trừ điểm quá số đang có.
+          const changed = db.prepare(`
             UPDATE retail_customers
-            SET points = points + ?, total_spent = total_spent + ?, visit_count = visit_count + 1,
+            SET points = points + ? - ?, total_spent = total_spent + ?, visit_count = visit_count + 1,
                 full_name = COALESCE(?, full_name), updated_at = datetime('now')
-            WHERE id = ?
-          `).run(pointsEarned, total, customerName, customerId);
+            WHERE id = ? AND points >= ?
+          `).run(pointsEarned, pointsUsed, total, customerName, customerId, pointsUsed).changes;
+          if (!changed) {
+            throw new HttpError(409, 'Điểm của khách vừa thay đổi. Vui lòng tra cứu lại số điện thoại.');
+          }
         } else {
+          if (pointsUsed > 0) {
+            throw new HttpError(400, 'Khách chưa có điểm nào nên chưa đổi quà được.');
+          }
           customerId = db.prepare(`
             INSERT INTO retail_customers (phone, full_name, points, total_spent, visit_count)
             VALUES (?, ?, ?, ?, 1)
@@ -199,21 +350,28 @@ router.post('/invoices', (req, res, next) => {
       const invoiceId = db.prepare(`
         INSERT INTO retail_invoices
           (customer_id, customer_phone, customer_name, subtotal, discount, total,
-           points_earned, payment_method, note, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           points_earned, points_used, payment_method, note, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         customerId, customerPhone, customerName, subtotal, discount, total,
-        pointsEarned, paymentMethod, invoiceNote, req.user.id
+        pointsEarned, pointsUsed, paymentMethod, invoiceNote, req.user.id
       ).lastInsertRowid;
 
       db.prepare('UPDATE retail_invoices SET code = ? WHERE id = ?').run(invoiceCode(invoiceId), invoiceId);
 
       const insItem = db.prepare(`
-        INSERT INTO retail_invoice_items (invoice_id, product_id, product_name, unit, price, quantity)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO retail_invoice_items
+          (invoice_id, product_id, product_name, unit, price, quantity, cost_price, is_reward)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
       for (const { product, quantity } of lines) {
-        insItem.run(invoiceId, product.id, product.name, product.unit, product.price, quantity);
+        insItem.run(invoiceId, product.id, product.name, product.unit,
+          product.price, quantity, product.cost_price ?? 0, 0);
+      }
+      // Quà ghi giá 0 nhưng vẫn giữ giá vốn để báo cáo lãi không bị thổi phồng.
+      for (const { product, quantity } of rewardLines) {
+        insItem.run(invoiceId, product.id, product.name, product.unit,
+          0, quantity, product.cost_price ?? 0, 1);
       }
       return invoiceId;
     });
@@ -223,6 +381,11 @@ router.post('/invoices', (req, res, next) => {
     const customer = invoice.customer_id
       ? db.prepare('SELECT * FROM retail_customers WHERE id = ?').get(invoice.customer_id)
       : null;
+
+    writeAdminAudit(req, {
+      action: 'create', entityType: 'retail_invoice', entityId: invoice.code,
+      after: { code: invoice.code, total: invoice.total, customer_phone: invoice.customer_phone },
+    });
 
     res.status(201).json({ invoice, customer });
   } catch (err) {
@@ -270,8 +433,9 @@ router.get('/invoices', (req, res, next) => {
       params.digits = digits;
       params.digitsLike = `%${digits.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
     }
-    if (from) { where.push('date(created_at) >= date(@from)'); params.from = from; }
-    if (to) { where.push('date(created_at) <= date(@to)'); params.to = to; }
+    // Lọc theo ngày ở Việt Nam, không phải ngày UTC lưu trong cơ sở dữ liệu.
+    if (from) { where.push(`${localDate('created_at')} >= @from`); params.from = from; }
+    if (to) { where.push(`${localDate('created_at')} <= @to`); params.to = to; }
 
     const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const total = db.prepare(`SELECT COUNT(*) c FROM retail_invoices ${clause}`).get(params).c;
@@ -305,12 +469,155 @@ router.get('/invoices/:id', (req, res, next) => {
 });
 
 /* ------------------------------------------------------------------ *
+ * Đổi / trả hàng
+ * ------------------------------------------------------------------ */
+
+const getReturnItems = db.prepare(
+  'SELECT * FROM retail_return_items WHERE return_id = ? ORDER BY id'
+);
+
+function withReturnItems(row) {
+  return row ? { ...row, items: getReturnItems.all(row.id) } : null;
+}
+
+/** GET /api/retail/returns?limit=30 — các phiếu đổi trả gần đây. */
+router.get('/returns', (req, res, next) => {
+  try {
+    const limit = toInteger(req.query.limit, { min: 1, max: 100 }) ?? 30;
+    const rows = db.prepare(`
+      SELECT r.*, i.code AS invoice_code, i.customer_name, i.customer_phone
+      FROM retail_returns r JOIN retail_invoices i ON i.id = r.invoice_id
+      ORDER BY r.id DESC LIMIT ?
+    `).all(limit);
+    res.json({ returns: rows.map(withReturnItems) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/retail/returns
+ * body: { invoice_id, return_type, reason, refund_amount?, refund_method?, note?, items }
+ */
+router.post('/returns', (req, res, next) => {
+  try {
+    const invoiceId = toInteger(req.body?.invoice_id, { min: 1 });
+    const returnType = req.body?.return_type;
+    const reason = cleanText(req.body?.reason, LIMITS.note);
+    const note = cleanText(req.body?.note, LIMITS.note);
+    if (!invoiceId) throw new HttpError(400, 'Chưa chọn hoá đơn cần đổi/trả.');
+    if (!['return', 'exchange'].includes(returnType)) {
+      throw new HttpError(400, 'Hình thức xử lý phải là đổi hàng hoặc trả hàng.');
+    }
+    if (!reason || reason.length < 3) {
+      throw new HttpError(400, 'Vui lòng nhập lý do đổi/trả.', { reason: 'Nhập lý do đổi/trả.' });
+    }
+
+    const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
+    if (!rawItems.length || rawItems.length > MAX_LINES) {
+      throw new HttpError(400, 'Chọn ít nhất một sản phẩm cần đổi/trả.');
+    }
+
+    const wanted = new Map();
+    for (const row of rawItems) {
+      const itemId = toInteger(row?.invoice_item_id, { min: 1 });
+      const quantity = toInteger(row?.quantity, { min: 1, max: MAX_QTY_PER_LINE });
+      if (!itemId || !quantity) throw new HttpError(400, 'Sản phẩm hoặc số lượng đổi/trả không hợp lệ.');
+      wanted.set(itemId, (wanted.get(itemId) || 0) + quantity);
+    }
+
+    const refundMethod = returnType === 'exchange' ? 'none' : (req.body?.refund_method || 'cash');
+    if (!['cash', 'transfer', 'none'].includes(refundMethod) || (returnType === 'return' && refundMethod === 'none')) {
+      throw new HttpError(400, 'Hình thức hoàn tiền không hợp lệ.');
+    }
+
+    const create = db.transaction(() => {
+      const invoice = db.prepare('SELECT * FROM retail_invoices WHERE id = ?').get(invoiceId);
+      if (!invoice) throw new HttpError(404, 'Không tìm thấy hoá đơn cần đổi/trả.');
+
+      const selected = [];
+      let selectedValue = 0;
+      for (const [itemId, quantity] of wanted) {
+        const item = db.prepare(
+          'SELECT * FROM retail_invoice_items WHERE id = ? AND invoice_id = ?'
+        ).get(itemId, invoiceId);
+        if (!item) throw new HttpError(400, 'Có sản phẩm không thuộc hoá đơn đã chọn.');
+        const processed = db.prepare(`
+          SELECT COALESCE(SUM(ri.quantity), 0) quantity
+          FROM retail_return_items ri
+          JOIN retail_returns r ON r.id = ri.return_id
+          WHERE r.invoice_id = ? AND ri.invoice_item_id = ?
+        `).get(invoiceId, itemId).quantity;
+        if (quantity > item.quantity - processed) {
+          throw new HttpError(400, `“${item.product_name}” chỉ còn ${item.quantity - processed} ${item.unit} có thể đổi/trả.`);
+        }
+        selected.push({ item, quantity });
+        selectedValue += item.price * quantity;
+      }
+
+      let refundAmount = 0;
+      if (returnType === 'return') {
+        const rawRefund = req.body?.refund_amount;
+        refundAmount = rawRefund === '' || rawRefund == null
+          ? Math.min(selectedValue, invoice.total)
+          : toInteger(rawRefund, { min: 0, max: invoice.total });
+        if (refundAmount == null) throw new HttpError(400, 'Số tiền hoàn không hợp lệ.');
+        const refunded = db.prepare(
+          "SELECT COALESCE(SUM(refund_amount), 0) amount FROM retail_returns WHERE invoice_id = ? AND return_type = 'return'"
+        ).get(invoiceId).amount;
+        if (refunded + refundAmount > invoice.total) {
+          throw new HttpError(400, `Tổng tiền hoàn không được vượt ${invoice.total.toLocaleString('vi-VN')}đ.`);
+        }
+      }
+
+      const info = db.prepare(`
+        INSERT INTO retail_returns
+          (invoice_id, return_type, reason, refund_amount, refund_method, note, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(invoiceId, returnType, reason, refundAmount, refundMethod, note, req.user.id);
+      const returnId = info.lastInsertRowid;
+      db.prepare('UPDATE retail_returns SET code = ? WHERE id = ?').run(returnCode(returnId), returnId);
+
+      const insertItem = db.prepare(`
+        INSERT INTO retail_return_items
+          (return_id, invoice_item_id, product_name, unit, price, quantity)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      for (const { item, quantity } of selected) {
+        insertItem.run(returnId, item.id, item.product_name, item.unit, item.price, quantity);
+      }
+      return returnId;
+    });
+
+    const returnId = create();
+    const row = db.prepare(`
+      SELECT r.*, i.code AS invoice_code, i.customer_name, i.customer_phone
+      FROM retail_returns r JOIN retail_invoices i ON i.id = r.invoice_id
+      WHERE r.id = ?
+    `).get(returnId);
+    const saved = withReturnItems(row);
+    writeAdminAudit(req, {
+      action: 'create', entityType: 'retail_return', entityId: saved.code,
+      after: {
+        code: saved.code, invoice_code: saved.invoice_code, return_type: saved.return_type,
+        refund_amount: saved.refund_amount, reason: saved.reason,
+      },
+    });
+    res.status(201).json({ return: saved });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/* ------------------------------------------------------------------ *
  * Thống kê nhanh cho màn hình bán hàng
  * ------------------------------------------------------------------ */
 router.get('/stats', (req, res) => {
+  // Cả hai vế đều quy về ngày theo giờ Việt Nam, nếu không thì hoá đơn bán
+  // lúc sáng sớm (giờ UTC còn là hôm trước) sẽ bị đếm sai ngày.
   const today = db.prepare(`
     SELECT COUNT(*) c, COALESCE(SUM(total), 0) s, COALESCE(SUM(discount), 0) d
-    FROM retail_invoices WHERE date(created_at) = date('now', 'localtime')
+    FROM retail_invoices
+    WHERE ${localDate('created_at')} = ${localDate("'now'")}
   `).get();
 
   res.json({

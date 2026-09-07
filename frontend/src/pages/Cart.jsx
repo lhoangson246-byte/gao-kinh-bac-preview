@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
-import { api, formatVND } from '../api';
+import { api, formatVND, orderDiscountFor, ORDER_DISCOUNT_TIERS } from '../api';
 
 export default function Cart() {
   const { items, total, count, hasUnavailable, setQuantity, remove, clear, syncWithProducts } = useCart();
   const [syncError, setSyncError] = useState('');
+
+  // Hiển thị trước mức giảm cho khách; máy chủ vẫn tính lại khi tạo đơn.
+  const discount = orderDiscountFor(total);
+  const nextTier = [...ORDER_DISCOUNT_TIERS]
+    .sort((a, b) => a.minSubtotal - b.minSubtotal)
+    .find((t) => total < t.minSubtotal) || null;
   const navigate = useNavigate();
 
   // Lấy giá và tồn kho mới nhất để khách không đặt nhầm hàng đã hết.
@@ -97,12 +103,22 @@ export default function Cart() {
           <p className="eyebrow dark"><span></span>Tóm tắt</p>
           <h2>Đơn hàng</h2>
           <div className="summary-row"><span>Tiền hàng</span><strong>{formatVND(total)}</strong></div>
+          {discount > 0 ? (
+            <div className="summary-row">
+              <span>Giảm giá <small>hoá đơn từ {formatVND(300000)}</small></span>
+              <strong className="free-tag">− {formatVND(discount)}</strong>
+            </div>
+          ) : nextTier && (
+            <p className="pos-hint">
+              Mua thêm {formatVND(nextTier.minSubtotal - total)} nữa để được giảm {formatVND(nextTier.discount)}.
+            </p>
+          )}
           <div className="summary-row"><span>Phí giao hàng</span><strong className="free-tag">Miễn phí</strong></div>
           <div className="summary-note">
             <strong>Giao hàng tại Bắc Ninh</strong>
             <p>Giao hoả tốc trong ngày, miễn phí giao hàng. Cửa hàng gọi xác nhận địa chỉ trước khi giao.</p>
           </div>
-          <div className="summary-row grand-total"><span>Tạm tính</span><strong>{formatVND(total)}</strong></div>
+          <div className="summary-row grand-total"><span>Tạm tính</span><strong>{formatVND(total - discount)}</strong></div>
           <button
             className="btn btn-primary btn-block btn-large"
             disabled={hasUnavailable || count === 0}

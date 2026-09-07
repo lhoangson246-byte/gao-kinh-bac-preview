@@ -35,7 +35,7 @@ export default function Navbar() {
                   <Link to="/tai-khoan" className="hello">
                     {user.full_name.split(' ').pop()}
                   </Link>
-                  <button className="btn btn-ghost" onClick={() => { logout(); navigate('/'); }}>
+                  <button className="btn btn-ghost" onClick={async () => { try { await logout(); navigate('/'); } catch (err) { window.alert(err.message); } }}>
                     Đăng xuất
                   </button>
                 </>

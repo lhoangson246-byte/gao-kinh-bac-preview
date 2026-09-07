@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
 import AddressBook from '../components/AddressBook.jsx';
 import {
-  api, formatVND, DELIVERY_AREA_CODE, DELIVERY_AREA_LABEL, DELIVERY_SLOTS,
+  api, formatVND, orderDiscountFor, DELIVERY_AREA_CODE, DELIVERY_AREA_LABEL, DELIVERY_SLOTS,
 } from '../api';
 
 export default function Checkout() {
@@ -11,6 +11,8 @@ export default function Checkout() {
   const navigate = useNavigate();
 
   const orderable = items.filter((item) => item.stock > 0 && item.quantity > 0);
+  // Xem trước mức giảm; máy chủ vẫn tự tính lại khi tạo đơn.
+  const discount = orderDiscountFor(total);
 
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [form, setForm] = useState({
@@ -147,7 +149,7 @@ export default function Checkout() {
 
           <button type="button" className="btn btn-primary btn-block btn-large mobile-submit"
                   disabled={busy} onClick={onSubmit}>
-            {busy ? 'Đang gửi đơn…' : `Xác nhận đặt hàng · ${formatVND(total)}`}
+            {busy ? 'Đang gửi đơn…' : `Xác nhận đặt hàng · ${formatVND(total - discount)}`}
           </button>
         </div>
 
@@ -162,8 +164,11 @@ export default function Checkout() {
               </div>
             ))}
           </div>
+          {discount > 0 && (
+            <div className="summary-row"><span>Giảm giá</span><strong className="free-tag">− {formatVND(discount)}</strong></div>
+          )}
           <div className="summary-row"><span>Phí giao hàng</span><strong className="free-tag">Miễn phí</strong></div>
-          <div className="summary-row grand-total"><span>Tạm tính</span><strong>{formatVND(total)}</strong></div>
+          <div className="summary-row grand-total"><span>Tạm tính</span><strong>{formatVND(total - discount)}</strong></div>
           <p className="summary-disclaimer">
             Bằng việc đặt hàng, bạn xác nhận đây là đơn mua lẻ và địa chỉ nhận thuộc tỉnh {DELIVERY_AREA_LABEL}.
           </p>

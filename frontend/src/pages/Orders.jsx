@@ -113,6 +113,9 @@ export default function Orders() {
                     <small>Giao {DELIVERY_SLOT_LABEL[order.delivery_slot]} · miễn phí</small>
                   )}
                   <small>{PAYMENT_LABEL[order.payment_method] || order.payment_method}</small>
+                  {order.points_earned > 0 && (
+                    <small>Đã cộng {order.points_earned} điểm tích luỹ</small>
+                  )}
                   {order.note && <small>Ghi chú: {order.note}</small>}
                 </div>
               </div>
@@ -137,7 +140,12 @@ export default function Orders() {
                     </span>
                   )}
                 </div>
-                <div className="total">Tổng tiền hàng <strong>{formatVND(order.total)}</strong></div>
+                <div className="total">
+                  {order.discount > 0 && (
+                    <small className="order-discount">Đã giảm {formatVND(order.discount)}</small>
+                  )}
+                  Tổng tiền hàng <strong>{formatVND(order.total)}</strong>
+                </div>
               </footer>
             </article>
           ))}

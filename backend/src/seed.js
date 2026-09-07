@@ -1,11 +1,24 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import db from './db.js';
+import { isEmail } from './validate.js';
+import { newPassword } from './schemas.js';
 
 // Tài khoản quản trị đầu tiên. Có thể đặt qua biến môi trường khi cài đặt thật:
 //   ADMIN_EMAIL=... ADMIN_PASSWORD=... npm run seed
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@gaokinhbac.vn').toLowerCase();
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+const existingAdmin = db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get();
+if (ADMIN_EMAIL) {
+  const existing = db.prepare('SELECT role FROM users WHERE email = ?').get(ADMIN_EMAIL);
+  if (existing && existing.role !== 'admin') throw new Error('ADMIN_EMAIL belongs to a customer; choose a different administrator address.');
+}
+if (!existingAdmin || ADMIN_EMAIL || ADMIN_PASSWORD) {
+  if (!isEmail(ADMIN_EMAIL) || !newPassword.safeParse(ADMIN_PASSWORD).success
+      || /^(admin123|dat_mat_khau|change.?me)/i.test(ADMIN_PASSWORD)) {
+    throw new Error('Set ADMIN_EMAIL and a strong ADMIN_PASSWORD (12+ characters, at most 72 UTF-8 bytes) before seeding.');
+  }
+}
 
 /**
  * TỒN KHO LÀ SỐ TẠM.
@@ -22,7 +35,7 @@ const STOCK_PLACEHOLDER = Number(process.env.SEED_STOCK ?? 100);
  */
 const products = [
   /* ---------- Túi 5kg ---------- */
-  { name: 'Gạo ST25 – Gạo sạch', origin: 'LVS – Bắc Ninh', unit: 'túi 5kg', price: 150_000,
+  { name: 'Gạo ST25 – Gạo sạch', origin: 'LVS – Bắc Ninh', unit: 'túi 5kg', price: 145_000,
     image: 'lvs-gao-sach-st25-5kg',
     description: 'Túi 5kg. Bao bì ghi: dẻo thơm, ngon đậm đà, giữ được vỏ cám mỡ, không tồn dư thuốc BVTV, không chất bảo quản.' },
   { name: 'Gạo ST25 Cỏ May cao cấp', origin: 'Cỏ May – Đặc sản Sóc Trăng', unit: 'túi 5kg', price: 160_000,
@@ -115,11 +128,11 @@ const products = [
 ];
 
 const tx = db.transaction(() => {
-  if (!db.prepare('SELECT id FROM users WHERE email = ?').get(ADMIN_EMAIL)) {
+  if (ADMIN_EMAIL && !db.prepare('SELECT id FROM users WHERE email = ?').get(ADMIN_EMAIL)) {
     db.prepare(
       `INSERT INTO users (full_name, email, password_hash, phone, address, role)
        VALUES (?, ?, ?, NULL, NULL, 'admin')`
-    ).run('Quản trị viên', ADMIN_EMAIL, bcrypt.hashSync(ADMIN_PASSWORD, 10));
+    ).run('Quản trị viên', ADMIN_EMAIL, bcrypt.hashSync(ADMIN_PASSWORD, 12));
     console.log(`✅ Tạo tài khoản quản trị: ${ADMIN_EMAIL}`);
   } else {
     console.log(`ℹ️  Tài khoản quản trị ${ADMIN_EMAIL} đã có sẵn, không tạo lại.`);
@@ -128,8 +141,8 @@ const tx = db.transaction(() => {
   // Cùng tên nhưng khác quy cách đóng gói vẫn là hai sản phẩm khác nhau.
   const existed = db.prepare('SELECT id FROM products WHERE name = ? AND unit = ?');
   const ins = db.prepare(
-    `INSERT INTO products (name, description, origin, price, unit, stock, image_url)
-     VALUES (@name, @description, @origin, @price, @unit, @stock, @image_url)`
+    `INSERT INTO products (name, description, origin, price, unit, stock, image_url, is_reward)
+     VALUES (@name, @description, @origin, @price, @unit, @stock, @image_url, @is_reward)`
   );
 
   let added = 0;
@@ -144,6 +157,7 @@ const tx = db.transaction(() => {
       // Loại chưa có giá cũng chưa mở bán, để tồn kho 0 cho khỏi hiểu nhầm.
       stock: p.price > 0 ? STOCK_PLACEHOLDER : 0,
       image_url: p.image ? `/products/${p.image}.jpg` : null,
+      is_reward: /1kg/.test(p.unit) && /nếp|lứt|ê vàng/.test(p.name) ? 1 : 0,
     });
     added++;
   }
@@ -166,7 +180,4 @@ console.warn(
   `\n⚠️  TỒN KHO ĐANG LÀ SỐ TẠM (${STOCK_PLACEHOLDER} mỗi loại) vì cửa hàng chưa gửi số lượng thật.\n` +
   '   Phải sửa lại trong /quan-tri → Sản phẩm trước khi bán thật, nếu không sẽ nhận đơn quá số hàng đang có.'
 );
-if (ADMIN_PASSWORD === 'admin123') {
-  console.warn('⚠️  Mật khẩu quản trị đang là "admin123" — chỉ dùng khi phát triển. Hãy đổi trước khi chạy thật.');
-}
 console.log('\n🌾 Seed xong. Chạy `npm run dev` để khởi động API.');

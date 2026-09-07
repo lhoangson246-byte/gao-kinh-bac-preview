@@ -4,6 +4,13 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const siteUrl = (env.VITE_SITE_URL || '').replace(/\/$/, '');
+  for (const value of [siteUrl, env.VITE_API_URL].filter(Boolean)) {
+    const parsed = new URL(value);
+    if (parsed.origin !== value || !['http:', 'https:'].includes(parsed.protocol)
+        || (mode === 'production' && parsed.protocol !== 'https:')) {
+      throw new Error('VITE_SITE_URL and VITE_API_URL must be exact origins (HTTPS for production).');
+    }
+  }
 
   return {
     plugins: [
@@ -28,6 +35,7 @@ export default defineConfig(({ mode }) => {
       },
     ],
     server: {
+      host: '127.0.0.1',
       port: 5173,
       proxy: {
         // Gọi /api/... từ frontend sẽ được chuyển sang backend cổng 4000

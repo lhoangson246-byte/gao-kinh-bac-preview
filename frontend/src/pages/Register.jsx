@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isPhone } from '../api';
+import { passwordError } from '../password';
 
 export default function Register() {
   const [form, setForm] = useState({
@@ -23,7 +24,7 @@ export default function Register() {
     if (form.full_name.trim().length < 2) errors.full_name = 'Vui lòng nhập họ tên.';
     if (!form.phone.trim()) errors.phone = 'Nhập số điện thoại để đăng nhập.';
     else if (!isPhone(form.phone)) errors.phone = 'Số điện thoại không hợp lệ (10 số, ví dụ 0912345678).';
-    if (form.password.length < 6) errors.password = 'Mật khẩu tối thiểu 6 ký tự.';
+    if (passwordError(form.password)) errors.password = passwordError(form.password);
     if (form.password !== form.confirm) errors.confirm = 'Mật khẩu nhập lại không khớp.';
 
     if (Object.keys(errors).length) {
@@ -72,7 +73,7 @@ export default function Register() {
         <div className="row">
           <label>Mật khẩu <b>*</b>
             <input className="input" type="password" name="password" value={form.password}
-                   onChange={onChange} required minLength={6} autoComplete="new-password"
+                   onChange={onChange} required minLength={12} autoComplete="new-password"
                    aria-invalid={!!fieldErrors.password} />
             {fieldErrors.password && <small className="err">{fieldErrors.password}</small>}
           </label>

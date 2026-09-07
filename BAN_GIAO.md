@@ -151,6 +151,211 @@ Các bảng này được tạo tự động khi khởi động API, không cầ
 và 500.000₫), tích điểm cộng dồn, khách vãng lai, bỏ qua giá do trình duyệt gửi, gộp dòng trùng,
 không trừ tồn kho, tra cứu theo mã/SĐT/tên/ngày, phân trang.
 
+## Báo cáo doanh thu theo ngày / tháng
+
+Tab **Doanh thu** trong `/quan-tri`.
+
+- Chọn nhanh: **Hôm nay · Hôm qua · 7 ngày · Tháng này · Tháng trước**, hoặc tự chọn
+  một ngày, một tháng, hoặc khoảng ngày bất kỳ.
+- Bốn ô tổng hợp: tổng doanh thu (kèm số giao dịch), bán online, bán tại quầy, và
+  số tiền đã giảm cho khách.
+- Bảng chi tiết từng ngày có cột so sánh dạng thanh ngang, kèm dòng **Cộng** ở cuối.
+- Nguồn số liệu: đơn online **đã hoàn thành** (giữ nguyên quy tắc doanh thu cũ) cộng với
+  toàn bộ hoá đơn bán tại quầy.
+
+API: `GET /api/admin/revenue?period=day|month|range&date=&month=&from=&to=` (chỉ admin).
+
+### Đã sửa kèm: lỗi lệch ngày do múi giờ
+
+SQLite lưu `created_at` theo **giờ UTC**, trong khi cửa hàng ở **UTC+7**. Thống kê cũ của
+trang bán hàng so `date(created_at)` (giờ UTC) với `date('now','localtime')` — hoá đơn bán
+trước 07h00 sáng bị tính sang **ngày hôm trước**.
+
+Nay mọi chỗ lọc theo ngày đều quy về giờ Việt Nam qua `localDate()` trong `constants.js`.
+Đổi múi giờ bằng biến môi trường `REPORT_TIME_SHIFT` (mặc định `+7 hours`); giá trị sai
+định dạng sẽ bị bỏ qua và quay về mặc định, vì chuỗi này được ghép vào câu SQL.
+
+Chỗ đã sửa: `GET /api/retail/stats` (doanh thu hôm nay) và bộ lọc ngày của
+`GET /api/retail/invoices`.
+
+## Quản lý tài khoản khách hàng
+
+Tab **Khách hàng** trong `/quan-tri`.
+
+- Danh sách khách kèm số điện thoại, email, ngày đăng ký, **số đơn đã đặt** và **tổng đã mua**.
+  Tìm theo tên, số điện thoại hoặc email; lọc riêng những tài khoản đang bị khoá.
+- Nút **Chi tiết** mở ra sổ địa chỉ và 10 đơn gần nhất của khách.
+- **Đặt lại mật khẩu**: mật khẩu được băm bằng bcrypt nên *không ai đọc lại được*, kể cả cửa hàng.
+  Khi khách quên, cửa hàng đặt một mật khẩu mới (có nút gợi ý chuỗi dễ đọc qua điện thoại)
+  rồi đọc cho khách. Giao diện nói rõ điều này để không ai hiểu nhầm là xem được mật khẩu cũ.
+- **Khoá / mở khoá tài khoản**: khoá xong thì khách không đăng nhập được nữa, và
+  **token đang dùng cũng hết hiệu lực ngay** (`requireAuth` kiểm tra `is_locked` mỗi lần gọi API),
+  nên không phải chờ token hết hạn.
+
+Ràng buộc an toàn:
+
+- API chỉ thao tác trên tài khoản có `role = 'customer'`; đụng vào tài khoản quản trị trả 403.
+- Không tự khoá được tài khoản của chính mình (tránh tự khoá mình ra ngoài).
+- Không API nào trả về `password_hash`.
+
+API: `GET/PUT /api/admin/customers`, `POST /api/admin/customers/:id/reset-password`,
+`PATCH /api/admin/customers/:id/lock`.
+
+## Nhập kho và giá nhập
+
+### Nhập kho cộng dồn
+
+Nút **Nhập kho** ở mỗi dòng sản phẩm. Gõ số lượng nhập thêm — hệ thống **cộng vào** tồn kho
+hiện có chứ không ghi đè, đúng cách nghĩ "hôm nay nhập thêm 20 bao". Hộp nhập hiện luôn
+"tồn kho hiện tại → sau khi nhập" để nhìn thấy kết quả trước khi bấm.
+
+Mỗi lần nhập ghi một dòng vào bảng `stock_entries`: số lượng, giá nhập của lần đó,
+tồn kho sau khi nhập, ghi chú, ai nhập, lúc nào. Lịch sử hiện ngay dưới hộp nhập.
+
+Việc cộng tồn kho và ghi lịch sử nằm trong **cùng một transaction**.
+
+### Giá nhập và lãi
+
+- Mỗi loại gạo có thêm cột `cost_price` — **chỉ cửa hàng thấy**, khách không thấy.
+- Nhập kho có khai giá nhập thì giá nhập của sản phẩm được cập nhật luôn.
+- Danh sách sản phẩm hiện **lãi mỗi đơn vị** = giá bán − giá nhập.
+- Thống kê có thêm **giá trị tồn kho** (giá nhập × số lượng) và số loại chưa khai giá nhập.
+- Báo cáo doanh thu có thêm phần **lãi gộp** = doanh thu − giá vốn.
+
+**Quan trọng:** giá nhập được **chép vào từng dòng hàng lúc bán**
+(`order_items.cost_price`, `retail_invoice_items.cost_price`). Nhờ vậy đổi giá nhập về sau
+không làm sai lãi của các đơn cũ — có phép kiểm tra riêng cho việc này.
+
+API: `POST /api/admin/products/:id/stock`, `GET /api/admin/products/:id/stock`,
+`GET /api/admin/stock-entries`.
+
+### Kiểm thử
+
+`npm run test:manage` — 59 phép kiểm tra: phân quyền, tìm kiếm, phân trang, đặt lại mật khẩu
+(mật khẩu cũ hết tác dụng, mật khẩu mới dùng được), khoá tài khoản (chặn đăng nhập, vô hiệu token
+cũ, chặn đặt hàng), không tự khoá mình, nhập kho cộng dồn, lịch sử, chặn số lượng âm/0,
+giá trị tồn kho, lãi gộp, và đổi giá nhập không làm sai đơn cũ.
+
+## Thể lệ tích điểm đầy đủ (cửa hàng chốt 06/09/2026)
+
+| Nội dung | Quy tắc |
+|---|---|
+| Giảm giá theo hoá đơn | Từ **300.000₫** giảm **10.000₫** · từ **500.000₫** giảm **20.000₫**. Tự động, không cần tích luỹ trước. |
+| Tích điểm | **1.000₫ thực trả = 1 điểm**, tính trên số tiền sau giảm giá, gắn với số điện thoại. |
+| Đổi quà | Đủ **1.000 điểm** đổi **1 túi 1kg**: gạo nếp cái hoa vàng, gạo lứt, hoặc kê vàng. |
+
+### Cách đổi quà hoạt động
+
+- Nhân viên tra số điện thoại; nếu khách đủ điểm, khối **"Đổi được N phần quà"** hiện ra
+  với ba loại quà để chọn. Không đủ điểm thì hiện dòng nhắc còn thiếu bao nhiêu.
+- Quà vào hoá đơn thành **dòng giá 0₫** có nhãn *"Quà đổi điểm"*.
+- Quà **không cộng vào tiền hàng**, nên không giúp khách đạt mốc giảm giá và không sinh thêm điểm.
+- Khách có thể **chỉ đến lấy quà** mà không mua gì — hoá đơn 0₫ vẫn hợp lệ.
+- Khách vãng lai không cho số điện thoại thì không đổi quà được.
+
+### Bảo đảm đúng đắn
+
+- Số điểm được kiểm tra và trừ **trong cùng transaction với việc tạo hoá đơn**, bằng câu lệnh
+  có điều kiện `WHERE points >= ?`. Hai máy bán hàng cùng đổi quà cho một khách thì chỉ
+  một máy thành công, không bao giờ trừ âm điểm.
+- Máy chủ tự kiểm tra sản phẩm có đúng là quà (`is_reward = 1`) hay không —
+  không tin danh sách gửi từ trình duyệt.
+- Dòng quà vẫn lưu **giá vốn**, nên báo cáo lãi không bị thổi phồng vì hàng tặng.
+- Hoá đơn lưu `points_used`; mở lại hoá đơn cũ vẫn thấy rõ phần quà và số điểm đã trừ.
+
+### Đổi loại quà hoặc mức điểm
+
+- Mức điểm: sửa `RETAIL_POINTS_PER_REWARD` trong `backend/src/constants.js`.
+- Loại nào được làm quà: bật/tắt cột `products.is_reward`. Mặc định đã bật cho
+  ba loại 1kg (nếp, lứt, kê) qua migration `2026-09-mark-default-rewards`.
+- Giao diện đọc thể lệ qua `GET /api/retail/policy` nên không phải sửa hai nơi.
+
+## Một hồ sơ điểm cho cả quầy và online (cửa hàng chốt 06/09/2026)
+
+Yêu cầu: *"lưu data ttin sdt khách để tích điểm = sdt đăng ký = sdt tài khoản đăng nhập order online"*.
+
+### Nguyên tắc
+
+**Số điện thoại là chìa khoá duy nhất.** Khách mua tại quầy hay đặt "đơn hàng online – giao
+hàng tận nhà" đều cộng vào cùng một hồ sơ tích điểm, tra theo số điện thoại đã chuẩn hoá
+về dạng `0xxxxxxxxx`. Một khách không còn có hai sổ điểm.
+
+Logic dùng chung nằm ở `backend/src/loyalty.js`, cả hai luồng đều gọi vào đây:
+
+| Hàm | Việc |
+| --- | --- |
+| `loyaltyPhoneForOrder(order)` | Lấy SĐT **của tài khoản đặt đơn**, không lấy SĐT người nhận trên đơn |
+| `creditPoints(phone, {...})` | Tạo hoặc cập nhật hồ sơ `retail_customers`, trả về số điểm vừa cộng |
+| `loyaltyProfile(phone)` | Đọc hồ sơ điểm |
+| `onlineAccount(phone)` | Đọc tài khoản đăng nhập gắn với số đó |
+
+> Cố ý lấy SĐT của **tài khoản**, không lấy SĐT trên địa chỉ nhận hàng: khách hay đặt hộ
+> người khác, điểm phải về đúng người mua.
+
+### Đơn online giờ cũng được giảm giá
+
+Đơn online dùng **chung mốc giảm giá** với hoá đơn quầy (từ 300.000₫ giảm 10.000₫, từ
+500.000₫ giảm 20.000₫). Giỏ hàng và trang đặt hàng hiện trước số tiền được giảm, giỏ hàng
+còn nhắc *"mua thêm X nữa để được giảm Y"*. Bảng `orders` thêm ba cột `subtotal`,
+`discount`, `points_earned`.
+
+**Máy chủ vẫn tự tính lại toàn bộ.** Con số trên trình duyệt chỉ để khách xem trước;
+`POST /api/orders` lấy giá hiện tại trong kho, tự cộng tiền hàng rồi tự áp mốc giảm —
+không đọc bất kỳ số tiền nào do trình duyệt gửi lên.
+
+### Điểm cộng đúng một lần
+
+Điểm chỉ được cộng khi cửa hàng bấm **Hoàn thành**, và ghi ngay số điểm đã cộng vào
+`orders.points_earned`:
+
+- đơn đang *chờ xác nhận / đã xác nhận / đang giao* → **chưa** cộng điểm;
+- đơn *đã huỷ* → **không** cộng điểm, hàng được hoàn về kho;
+- `ALLOWED_TRANSITIONS` không cho quay lại trạng thái cũ, nên không có đường nào bấm
+  *Hoàn thành* hai lần cho cùng một đơn.
+
+### Đăng ký tài khoản cho khách ngay tại quầy
+
+Nhân viên tra số điện thoại xong:
+
+- **Số chưa có tài khoản** → hiện ô mời *"Chưa có tài khoản đặt hàng online"*. Bấm
+  **Tạo tài khoản**, nhập tên khách, bấm **Gợi ý** để hệ thống sinh mật khẩu dễ đọc qua
+  điện thoại (dạng `gao123456`), rồi bấm **Tạo tài khoản**. Màn hình hiện đúng câu để
+  nhân viên đọc cho khách: *"số 09xxxxxxxx, mật khẩu gaoxxxxxx"*.
+- **Số đã có tài khoản** → hiện dải xanh *"Đã có tài khoản đặt hàng online"* kèm số đơn
+  giao tận nhà khách đã đặt, và báo rõ nếu tài khoản đang bị khoá.
+
+API: `POST /api/retail/customers/account` (chỉ admin). Máy chủ từ chối nếu số đó đã có
+tài khoản, mật khẩu vẫn được **hash bằng bcrypt** như mọi tài khoản khác, và mật khẩu
+không bao giờ được đọc ngược ra — nếu khách quên thì dùng chức năng *đặt lại mật khẩu*
+trong phần Quản lý tài khoản khách.
+
+Nhắc nhân viên: đây là mật khẩu tạm, nên dặn khách tự đổi sau lần đăng nhập đầu tiên.
+
+### Đã sửa kèm: form đăng ký bị đóng giữa chừng
+
+Ô số điện thoại ở quầy tra cứu lại mỗi khi mất focus. Khi nhân viên bấm vào form đăng ký,
+lần tra cứu thừa đó đưa màn hình về trạng thái *đang tải* và **làm mất form đang nhập dở,
+đồng thời xoá luôn phần quà đã chọn**. Nay chỉ tra lại khi nhân viên thực sự sửa số hoặc
+tự bấm nút *Tra cứu*.
+
+### Đã sửa kèm: khách nhìn thấy giá nhập của cửa hàng
+
+`GET /api/orders` và `GET /api/orders/:id` trả dòng hàng bằng `SELECT *`, nên từ khi thêm
+cột `order_items.cost_price` (giá nhập) thì **khách xem đơn của mình là đọc được giá nhập
+của cửa hàng**. Nay hai API chỉ trả đúng các cột được phép; giá nhập chỉ còn xuất hiện
+trong khu vực quản trị. `npm run test:smoke` có hai phép thử canh việc này.
+
+### Kiểm thử
+
+`npm run test:manage` — **84 PASS · 0 FAIL** (toàn bộ ba bộ: **261 PASS · 0 FAIL**), trong đó:
+
+- Đơn online từ 300k được giảm 10.000₫
+- Điểm đơn online cộng vào ĐÚNG hồ sơ SĐT
+- Đơn đang giao vẫn chưa cộng điểm
+- Đơn bị huỷ không cộng điểm
+- Mua tại quầy cộng tiếp vào cùng hồ sơ
+- Đơn hoàn thành ghi lại số điểm đã cộng
+
 ## Việc bạn cần tự làm trước khi chạy thật
 
 1. **Đổi `JWT_SECRET`** thành chuỗi dài ngẫu nhiên và **đổi mật khẩu quản trị mẫu**.
@@ -187,4 +392,4 @@ Trước khi làm bước nào, chạy `npm run test:smoke` để chắc chắn 
 
 ## Tài khoản mẫu
 
-`admin@gaokinhbac.vn` / `admin123` — chỉ dùng để phát triển, không dùng ở production.
+Không còn tài khoản mặc định. Đặt `ADMIN_EMAIL` và `ADMIN_PASSWORD` riêng trước lần seed đầu. Xem `SECURITY_AUDIT.md` để biết các thay đổi bảo mật và việc cần làm khi triển khai.

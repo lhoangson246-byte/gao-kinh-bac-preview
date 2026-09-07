@@ -27,7 +27,7 @@ const customer = {
   full_name: 'Nguyễn Văn Test',
   email: `test${suffix}@example.com`,
   phone: phoneOf(1),
-  password: 'matkhau123',
+  password: 'matkhau123!test',
 };
 
 /* ---------- 1. Health ---------- */
@@ -68,7 +68,7 @@ let token;
 /* ---------- 3. Đăng ký chỉ bằng số điện thoại (không cần email) ---------- */
 let phoneOnlyToken;
 {
-  const noEmail = { full_name: 'Trần Không Email', phone: phoneOf(4), password: 'matkhau123' };
+  const noEmail = { full_name: 'Trần Không Email', phone: phoneOf(4), password: 'matkhau123!test' };
   const r = await call('/auth/register', { method: 'POST', body: noEmail });
   check('Đăng ký KHÔNG cần email', r.status === 201 && !!r.data.token, JSON.stringify(r.data));
   check('Tài khoản không email có email = null', r.data.user?.email === null, JSON.stringify(r.data.user?.email));
@@ -148,8 +148,8 @@ let savedAddressId;
 const adminLogin = await call('/auth/login', {
   method: 'POST',
   body: {
-    identifier: process.env.ADMIN_EMAIL || 'admin@gaokinhbac.vn',
-    password: process.env.ADMIN_PASSWORD || 'admin123',
+    identifier: process.env.ADMIN_EMAIL,
+    password: process.env.ADMIN_PASSWORD,
   },
 });
 check('Đăng nhập tài khoản quản trị', adminLogin.status === 200 && adminLogin.data.user?.role === 'admin',
@@ -221,7 +221,7 @@ const baseOrder = {
     method: 'POST', token,
     body: { ...baseOrder, delivery_area: 'ha-noi', items: [{ product_id: product.id, quantity: 1 }] },
   });
-  check('Đơn ngoài khu vực bị từ chối (400)', outside.status === 400 && !!outside.data.errors?.address);
+  check('Đơn ngoài khu vực bị từ chối (400)', outside.status === 400 && !!outside.data.errors?.delivery_area);
 
   const hanoiText = await call('/orders', {
     method: 'POST', token,
@@ -251,19 +251,24 @@ const baseOrder = {
 const stockBefore = product.stock;
 let orderId;
 {
+  const tampered = await call('/orders', {
+    method: 'POST', token,
+    body: { ...baseOrder, total: 1, items: [{ product_id: product.id, quantity: 2, price: 1 }] },
+  });
+  check('Giá và tổng tiền do client gửi bị từ chối (400)', tampered.status === 400);
   const r = await call('/orders', {
     method: 'POST', token,
     body: {
       ...baseOrder, address_id: savedAddressId,
       receiver_name: 'Dữ liệu giả', phone: '000', address: 'Hà Nội',
-      total: 1, items: [{ product_id: product.id, quantity: 2, price: 1 }],
+      items: [{ product_id: product.id, quantity: 2 }],
     },
   });
   check('Tạo đơn thành công (201)', r.status === 201, JSON.stringify(r.data));
   check('Đơn lấy người nhận từ địa chỉ đã chọn',
     r.data.order?.receiver_name === 'Nguyễn Văn Test' && r.data.order?.phone === '0912345678');
   orderId = r.data.order?.id;
-  check('Tổng tiền do máy chủ tính, bỏ qua giá client gửi',
+  check('Tổng tiền do máy chủ tính từ giá trong cơ sở dữ liệu',
     r.data.order?.total === product.price * 2, `nhận ${r.data.order?.total}, cần ${product.price * 2}`);
   check('Địa chỉ được chuẩn hoá kèm "Bắc Ninh"', /Bắc Ninh$/.test(r.data.order?.address || ''), r.data.order?.address);
   check('Khung giờ giao được lưu vào đơn', r.data.order?.delivery_slot === 'sang',
@@ -272,6 +277,15 @@ let orderId;
   const after = await call(`/products/${product.id}`);
   check('Tồn kho bị trừ đúng 2', after.data.product.stock === stockBefore - 2,
     `${after.data.product.stock} vs ${stockBefore - 2}`);
+
+  // Giá nhập là thông tin nội bộ của cửa hàng, khách không được thấy.
+  const mine = await call('/orders', { token });
+  check('Đơn của khách KHÔNG lộ giá nhập (cost_price)',
+    !JSON.stringify(mine.data).includes('cost_price'));
+  const detail = await call(`/orders/${orderId}`, { token });
+  check('Chi tiết đơn KHÔNG lộ giá nhập (cost_price)',
+    detail.status === 200 && !JSON.stringify(detail.data).includes('cost_price'),
+    `status=${detail.status}`);
 }
 
 /* ---------- 11. Gộp dòng trùng và chặn vượt kho ---------- */
@@ -293,7 +307,7 @@ let orderId;
 
 /* ---------- 12. Khách không xem/huỷ được đơn của người khác ---------- */
 {
-  const other = { full_name: 'Trần Thị B', phone: phoneOf(5), password: 'matkhau123' };
+  const other = { full_name: 'Trần Thị B', phone: phoneOf(5), password: 'matkhau123!test' };
   const reg = await call('/auth/register', { method: 'POST', body: other });
   check('Khách khác không xem được đơn (404)', (await call(`/orders/${orderId}`, { token: reg.data.token })).status === 404);
   check('Khách khác không huỷ được đơn (404)',

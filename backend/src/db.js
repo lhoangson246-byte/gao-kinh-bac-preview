@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dataDir = path.join(__dirname, '..', 'data');
+const dataDir = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, '..', 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
 const db = new Database(path.join(dataDir, 'app.db'));
@@ -105,6 +105,57 @@ CREATE TABLE IF NOT EXISTS retail_invoice_items (
   quantity     INTEGER NOT NULL
 );
 
+-- Phiếu đổi/trả tại quầy. Dữ liệu được tách khỏi hoá đơn gốc để hoá đơn cũ
+-- luôn giữ nguyên và một hoá đơn có thể phát sinh nhiều lần xử lý.
+CREATE TABLE IF NOT EXISTS retail_returns (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  code            TEXT UNIQUE,
+  invoice_id      INTEGER NOT NULL REFERENCES retail_invoices(id) ON DELETE RESTRICT,
+  return_type     TEXT NOT NULL CHECK (return_type IN ('return', 'exchange')),
+  reason          TEXT NOT NULL,
+  refund_amount   INTEGER NOT NULL DEFAULT 0,
+  refund_method   TEXT NOT NULL DEFAULT 'cash' CHECK (refund_method IN ('cash', 'transfer', 'none')),
+  note            TEXT,
+  created_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS retail_return_items (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  return_id      INTEGER NOT NULL REFERENCES retail_returns(id) ON DELETE CASCADE,
+  invoice_item_id INTEGER NOT NULL REFERENCES retail_invoice_items(id) ON DELETE RESTRICT,
+  product_name   TEXT NOT NULL,
+  unit           TEXT NOT NULL,
+  price          INTEGER NOT NULL,
+  quantity       INTEGER NOT NULL
+);
+
+-- Nhật ký giúp biết quản trị viên nào đã thay đổi dữ liệu nào. Không lưu mật khẩu
+-- hoặc token trong bảng này.
+CREATE TABLE IF NOT EXISTS admin_audit_logs (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  actor_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  actor_name    TEXT,
+  action        TEXT NOT NULL,
+  entity_type   TEXT NOT NULL,
+  entity_id     TEXT,
+  before_json   TEXT,
+  after_json    TEXT,
+  ip_address    TEXT,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Lịch sử đăng nhập thành công. Chỉ lưu tài khoản, cách đăng nhập và thông tin
+-- thiết bị cơ bản; tuyệt đối không lưu mật khẩu hay JWT.
+CREATE TABLE IF NOT EXISTS login_history (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  login_method  TEXT NOT NULL,
+  ip_address    TEXT,
+  user_agent    TEXT,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_items_order ON order_items(order_id);
@@ -113,6 +164,10 @@ CREATE INDEX IF NOT EXISTS idx_retail_inv_customer ON retail_invoices(customer_i
 CREATE INDEX IF NOT EXISTS idx_retail_inv_phone ON retail_invoices(customer_phone);
 CREATE INDEX IF NOT EXISTS idx_retail_inv_created ON retail_invoices(created_at);
 CREATE INDEX IF NOT EXISTS idx_retail_items_inv ON retail_invoice_items(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_retail_returns_invoice ON retail_returns(invoice_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_retail_return_items_return ON retail_return_items(return_id);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_logs(id DESC);
+CREATE INDEX IF NOT EXISTS idx_login_history_user ON login_history(user_id, id DESC);
 `);
 
 /* ------------------------------------------------------------------ *
@@ -182,17 +237,7 @@ if (duplicatePhones.length) {
   console.warn(
     '\n⚠️  Chưa đặt được ràng buộc "mỗi số điện thoại một tài khoản" vì đang có số bị trùng:'
   );
-  for (const row of duplicatePhones) {
-    const owners = db
-      .prepare('SELECT id, full_name, email FROM users WHERE phone = ? ORDER BY id')
-      .all(row.phone);
-    console.warn(`   ${row.phone} — ${row.c} tài khoản: ` +
-      owners.map((u) => `#${u.id} ${u.full_name}${u.email ? ` <${u.email}>` : ''}`).join(', '));
-  }
-  console.warn(
-    '   Chỉ tài khoản có id nhỏ nhất đăng nhập được bằng số điện thoại.\n' +
-    '   Hãy sửa hoặc xoá số trùng trong trang quản trị rồi khởi động lại API.\n'
-  );
+  throw new Error('Duplicate account phone numbers: resolve database conflicts before starting the API.');
 } else {
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL');
 }
@@ -228,5 +273,130 @@ db.prepare(`
     AND u.phone IS NOT NULL AND u.phone != ''
     AND NOT EXISTS (SELECT 1 FROM delivery_addresses a WHERE a.user_id = u.id)
 `).run();
+
+// 5. Khoá tài khoản khách: cửa hàng cần chặn được tài khoản phá rối.
+if (!db.prepare('PRAGMA table_info(users)').all().some((c) => c.name === 'is_locked')) {
+  db.exec('ALTER TABLE users ADD COLUMN is_locked INTEGER NOT NULL DEFAULT 0');
+  console.log('✅ Đã thêm cột is_locked vào bảng users.');
+}
+
+if (!db.prepare('PRAGMA table_info(users)').all().some((c) => c.name === 'session_version')) {
+  db.exec('ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0');
+}
+
+// 6. Giá nhập của từng loại gạo — chỉ cửa hàng thấy, dùng để tính lãi và
+//    giá trị hàng đang có trong kho. 0 nghĩa là chưa khai báo giá nhập.
+if (!db.prepare('PRAGMA table_info(products)').all().some((c) => c.name === 'cost_price')) {
+  db.exec('ALTER TABLE products ADD COLUMN cost_price INTEGER NOT NULL DEFAULT 0');
+  console.log('✅ Đã thêm cột cost_price vào bảng products.');
+}
+
+// 7. Chép giá nhập vào từng dòng hàng đã bán. Giá nhập đổi về sau sẽ không
+//    làm sai lãi của những đơn cũ.
+for (const table of ['order_items', 'retail_invoice_items']) {
+  if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === 'cost_price')) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN cost_price INTEGER NOT NULL DEFAULT 0`);
+    console.log(`✅ Đã thêm cột cost_price vào bảng ${table}.`);
+  }
+}
+
+// 8. Lịch sử nhập kho: mỗi lần nhập thêm hàng được ghi lại một dòng.
+db.exec(`
+CREATE TABLE IF NOT EXISTS stock_entries (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id  INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  quantity    INTEGER NOT NULL,          -- số lượng nhập thêm (luôn > 0)
+  cost_price  INTEGER,                   -- giá nhập của lần này, để trống nếu không khai
+  stock_after INTEGER NOT NULL,          -- tồn kho ngay sau khi nhập
+  note        TEXT,
+  created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_stock_entries_product ON stock_entries(product_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_stock_entries_created ON stock_entries(created_at);
+`);
+
+// 9. Cập nhật giá Gạo ST25 LVS túi 5kg theo thông báo giảm 5.000đ. Migration
+// chỉ chạy một lần để những lần quản trị viên sửa giá sau này không bị ghi đè.
+db.exec(`
+CREATE TABLE IF NOT EXISTS app_migrations (
+  name       TEXT PRIMARY KEY,
+  applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`);
+
+const st25PriceMigration = '2026-09-06-lvs-st25-5kg-price-145000';
+if (!db.prepare('SELECT name FROM app_migrations WHERE name = ?').get(st25PriceMigration)) {
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE products SET price = 145000
+      WHERE unit = 'túi 5kg'
+        AND (image_url = '/products/lvs-gao-sach-st25-5kg.jpg'
+          OR (name = 'Gạo ST25 – Gạo sạch' AND origin LIKE 'LVS%'))
+    `).run();
+    db.prepare('INSERT INTO app_migrations (name) VALUES (?)').run(st25PriceMigration);
+  })();
+}
+
+/* ------------------------------------------------------------------ *
+ * Đổi điểm lấy quà: 1.000 điểm = 1 túi 1kg (gạo nếp / gạo lứt / kê vàng)
+ * ------------------------------------------------------------------ */
+
+// Loại gạo nào được dùng làm quà đổi điểm.
+if (!db.prepare('PRAGMA table_info(products)').all().some((c) => c.name === 'is_reward')) {
+  db.exec('ALTER TABLE products ADD COLUMN is_reward INTEGER NOT NULL DEFAULT 0');
+  console.log('✅ Đã thêm cột is_reward vào bảng products.');
+}
+
+// Đánh dấu dòng hàng là quà đổi điểm (giá 0) để hoá đơn cũ đọc lại vẫn đúng.
+if (!db.prepare('PRAGMA table_info(retail_invoice_items)').all().some((c) => c.name === 'is_reward')) {
+  db.exec('ALTER TABLE retail_invoice_items ADD COLUMN is_reward INTEGER NOT NULL DEFAULT 0');
+  console.log('✅ Đã thêm cột is_reward vào bảng retail_invoice_items.');
+}
+
+// Số điểm đã dùng để đổi quà trong hoá đơn.
+if (!db.prepare('PRAGMA table_info(retail_invoices)').all().some((c) => c.name === 'points_used')) {
+  db.exec('ALTER TABLE retail_invoices ADD COLUMN points_used INTEGER NOT NULL DEFAULT 0');
+  console.log('✅ Đã thêm cột points_used vào bảng retail_invoices.');
+}
+
+// Đặt sẵn ba loại quà cửa hàng công bố: gạo nếp, gạo lứt và kê vàng loại 1kg.
+// Chỉ chạy một lần; sau đó chủ cửa hàng tự bật/tắt trong trang quản trị.
+const rewardMigration = '2026-09-mark-default-rewards';
+if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(rewardMigration)) {
+  db.transaction(() => {
+    const marked = db.prepare(`
+      UPDATE products SET is_reward = 1
+      WHERE unit LIKE '%1kg%'
+        AND (name LIKE '%nếp%' OR name LIKE '%lứt%' OR name LIKE '%ê vàng%')
+    `).run().changes;
+    db.prepare('INSERT INTO app_migrations (name) VALUES (?)').run(rewardMigration);
+    if (marked) console.log(`✅ Đã đánh dấu ${marked} loại gạo làm quà đổi điểm.`);
+  })();
+}
+
+/* ------------------------------------------------------------------ *
+ * Đơn online cũng được giảm giá theo mốc và tích điểm vào cùng hồ sơ
+ * số điện thoại như mua tại quầy.
+ * ------------------------------------------------------------------ */
+{
+  const cols = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
+
+  // Tiền hàng trước giảm giá. Đơn cũ chưa có cột này thì lấy bằng total.
+  if (!cols.includes('subtotal')) {
+    db.exec('ALTER TABLE orders ADD COLUMN subtotal INTEGER NOT NULL DEFAULT 0');
+    db.prepare('UPDATE orders SET subtotal = total WHERE subtotal = 0').run();
+    console.log('✅ Đã thêm cột subtotal vào bảng orders.');
+  }
+  if (!cols.includes('discount')) {
+    db.exec('ALTER TABLE orders ADD COLUMN discount INTEGER NOT NULL DEFAULT 0');
+    console.log('✅ Đã thêm cột discount vào bảng orders.');
+  }
+  // Điểm đã cộng cho đơn này. Chỉ cộng một lần, lúc đơn chuyển sang "hoàn thành".
+  if (!cols.includes('points_earned')) {
+    db.exec('ALTER TABLE orders ADD COLUMN points_earned INTEGER NOT NULL DEFAULT 0');
+    console.log('✅ Đã thêm cột points_earned vào bảng orders.');
+  }
+}
 
 export default db;

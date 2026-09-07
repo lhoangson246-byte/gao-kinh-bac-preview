@@ -1,13 +1,19 @@
+import { validateRoutes } from '../schemas.js';
 import { Router } from 'express';
 import db from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
   DELIVERY_AREA_CODE, DELIVERY_AREA_LABEL, DELIVERY_SLOT_CODES, LIMITS,
-  mentionsOtherProvince, normalizeBacNinhAddress,
+  mentionsOtherProvince, normalizeBacNinhAddress, retailDiscountFor,
 } from '../constants.js';
-import { HttpError, cleanText, isPhone, toInteger } from '../validate.js';
+import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../validate.js';
 
 const router = Router();
+router.use(requireAuth);
+router.use(validateRoutes('orders'));
+
+/** Cột dòng hàng được phép trả cho khách. KHÔNG gồm cost_price (giá nhập, chỉ cửa hàng thấy). */
+const ORDER_ITEM_COLUMNS = 'id, order_id, product_id, product_name, unit, price, quantity';
 
 /** Gộp các dòng trùng sản phẩm rồi kiểm tra số lượng. */
 function normalizeItems(items) {
@@ -83,17 +89,18 @@ router.post('/', requireAuth, (req, res, next) => {
     const wanted = normalizeItems(items);
     const deliveryAddress = normalizeBacNinhAddress(rawAddress);
     const customerNote = cleanText(note, LIMITS.note);
-    const customerPhone = cleanText(receiverPhone, LIMITS.phone);
+    const customerPhone = normalizePhone(receiverPhone);
     const deliverySlot = DELIVERY_SLOT_CODES.includes(delivery_slot) ? delivery_slot : null;
 
     const getProduct = db.prepare('SELECT * FROM products WHERE id = ? AND is_active = 1');
     const insOrder = db.prepare(
-      `INSERT INTO orders (user_id, receiver_name, phone, address, note, payment_method, total, delivery_slot)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO orders (user_id, receiver_name, phone, address, note, payment_method,
+                           subtotal, discount, total, delivery_slot)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     const insItem = db.prepare(
-      `INSERT INTO order_items (order_id, product_id, product_name, unit, price, quantity)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO order_items (order_id, product_id, product_name, unit, price, quantity, cost_price)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     );
     // Trừ kho có điều kiện: nếu người khác vừa mua trước thì không dòng nào đổi
     // và cả transaction bị huỷ bỏ, tránh bán vượt tồn kho.
@@ -102,7 +109,7 @@ router.post('/', requireAuth, (req, res, next) => {
     // Đọc giá, kiểm tra tồn kho, tạo đơn và trừ kho trong cùng một transaction.
     const createOrder = db.transaction(() => {
       const lines = [];
-      let total = 0;
+      let subtotal = 0;
 
       for (const [productId, quantity] of wanted) {
         const product = getProduct.get(productId);
@@ -117,12 +124,16 @@ router.post('/', requireAuth, (req, res, next) => {
           throw new HttpError(400, `“${product.name}” chỉ còn ${product.stock} ${product.unit}.`);
         }
         lines.push({ product, quantity });
-        total += product.price * quantity;
+        subtotal += product.price * quantity;
       }
+
+      // Đơn online hưởng cùng mốc giảm giá với mua tại quầy.
+      const discount = retailDiscountFor(subtotal);
+      const total = subtotal - discount;
 
       const orderId = insOrder.run(
         req.user.id, receiverName, customerPhone, deliveryAddress,
-        customerNote, paymentMethod, total, deliverySlot
+        customerNote, paymentMethod, subtotal, discount, total, deliverySlot
       ).lastInsertRowid;
 
       for (const { product, quantity } of lines) {
@@ -130,13 +141,13 @@ router.post('/', requireAuth, (req, res, next) => {
         if (!changed) {
           throw new HttpError(409, `“${product.name}” vừa được mua hết. Vui lòng thử lại.`);
         }
-        insItem.run(orderId, product.id, product.name, product.unit, product.price, quantity);
+        insItem.run(orderId, product.id, product.name, product.unit, product.price, quantity, product.cost_price ?? 0);
       }
 
       // Ghi nhớ SĐT / địa chỉ mặc định nếu tài khoản chưa có.
       db.prepare(
-        `UPDATE users SET phone = COALESCE(phone, ?), address = COALESCE(address, ?) WHERE id = ?`
-      ).run(customerPhone, deliveryAddress, req.user.id);
+        'UPDATE users SET address = COALESCE(address, ?) WHERE id = ?'
+      ).run(deliveryAddress, req.user.id);
 
       return orderId;
     });
@@ -153,7 +164,7 @@ router.get('/', requireAuth, (req, res) => {
   const orders = db
     .prepare('SELECT * FROM orders WHERE user_id = ? ORDER BY id DESC')
     .all(req.user.id);
-  const getItems = db.prepare('SELECT * FROM order_items WHERE order_id = ? ORDER BY id');
+  const getItems = db.prepare(`SELECT ${ORDER_ITEM_COLUMNS} FROM order_items WHERE order_id = ? ORDER BY id`);
   res.json({ orders: orders.map((o) => ({ ...o, items: getItems.all(o.id) })) });
 });
 
@@ -213,7 +224,9 @@ export function restoreStockForOrder(orderId) {
 function getOrderForUser(orderId, userId) {
   const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(orderId, userId);
   if (!order) return null;
-  order.items = db.prepare('SELECT * FROM order_items WHERE order_id = ? ORDER BY id').all(order.id);
+  order.items = db
+    .prepare(`SELECT ${ORDER_ITEM_COLUMNS} FROM order_items WHERE order_id = ? ORDER BY id`)
+    .all(order.id);
   return order;
 }
 

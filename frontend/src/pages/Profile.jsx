@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isPhone } from '../api';
 import AddressBook from '../components/AddressBook.jsx';
+import ChangePassword from '../components/ChangePassword.jsx';
 
 export default function Profile() {
   const { user, isAdmin, updateProfile, logout } = useAuth();
@@ -85,10 +86,11 @@ export default function Profile() {
         <AddressBook />
       </section>
 
+      <ChangePassword />
       <div className="profile-actions">
         {isAdmin && <Link className="btn btn-secondary btn-block" to="/quan-tri">Mở trang quản trị</Link>}
         <button type="button" className="btn btn-secondary btn-block"
-                onClick={() => { logout(); navigate('/', { replace: true }); }}>
+                onClick={async () => { try { await logout(); navigate('/', { replace: true }); } catch (err) { setError(err.message); } }}>
           Đăng xuất
         </button>
       </div>

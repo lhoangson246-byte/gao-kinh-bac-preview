@@ -9,15 +9,15 @@ export function AuthProvider({ children }) {
 
   // Khôi phục phiên đăng nhập khi tải lại trang
   useEffect(() => {
-    if (!localStorage.getItem('token')) return setLoading(false);
+    // Remove legacy JavaScript-readable credentials; restore only the server cookie.
+    try { localStorage.removeItem('token'); } catch {}
     api.me()
       .then(({ user }) => setUser(user))
-      .catch(() => localStorage.removeItem('token'))
+      .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
 
-  const handleAuth = ({ user, token }) => {
-    localStorage.setItem('token', token);
+  const handleAuth = ({ user }) => {
     setUser(user);
     return user;
   };
@@ -33,8 +33,8 @@ export function AuthProvider({ children }) {
       setUser(user);
       return user;
     },
-    logout: () => {
-      localStorage.removeItem('token');
+    logout: async () => {
+      try { await api.logout(); } catch (err) { if (err.status !== 401) throw err; }
       setUser(null);
     },
   };

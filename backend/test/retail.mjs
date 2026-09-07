@@ -25,8 +25,8 @@ const phone = `09${String(suffix).slice(-8)}`;
 const login = await call('/auth/login', {
   method: 'POST',
   body: {
-    identifier: process.env.ADMIN_EMAIL || 'admin@gaokinhbac.vn',
-    password: process.env.ADMIN_PASSWORD || 'admin123',
+    identifier: process.env.ADMIN_EMAIL,
+    password: process.env.ADMIN_PASSWORD,
   },
 });
 if (login.status === 429) {
@@ -41,7 +41,7 @@ const admin = login.data.token;
   check('Khách vãng lai không vào được API bán lẻ (401)',
     (await call('/retail/invoices')).status === 401);
 
-  const cust = { full_name: 'Khách Thường', phone: `09${String(suffix).slice(-7)}7`, password: 'matkhau123' };
+  const cust = { full_name: 'Khách Thường', phone: `09${String(suffix).slice(-7)}7`, password: 'matkhau123!test' };
   const reg = await call('/auth/register', { method: 'POST', body: cust });
   if (reg.status === 201) {
     check('Khách thường không vào được API bán lẻ (403)',
@@ -63,9 +63,11 @@ const admin = login.data.token;
 
 /* ---------- Chuẩn bị sản phẩm để bán ---------- */
 const products = (await call('/products')).data.products.filter((p) => p.price > 0);
-const p150 = products.find((p) => p.price === 150000);   // Gạo ST25 – Gạo sạch
+const p145 = products.find((p) => p.image_url === '/products/lvs-gao-sach-st25-5kg.jpg');
+const p150 = products.find((p) => p.price === 150000);   // Dùng thử đúng mốc giảm giá
 const p35 = products.find((p) => p.price === 35000);     // Gạo nếp / gạo lứt
-check('Có sản phẩm để bán tại quầy', !!p150 && !!p35);
+check('Gạo ST25 LVS túi 5kg đã giảm còn 145.000₫', p145?.price === 145000, String(p145?.price));
+check('Có sản phẩm để bán tại quầy', !!p145 && !!p150 && !!p35);
 
 /* ---------- Khách mới ---------- */
 {
@@ -97,14 +99,14 @@ let invoice10k;
 {
   const r = await call('/retail/invoices', {
     method: 'POST', token: admin,
-    body: { phone, items: [{ product_id: p150.id, quantity: 2 }, { product_id: p35.id, quantity: 2 }] },
+    body: { phone, items: [{ product_id: p145.id, quantity: 2 }, { product_id: p35.id, quantity: 2 }] },
   });
   invoice10k = r.data.invoice;
-  check('Hoá đơn 370.000₫ được giảm 10.000₫',
-    invoice10k?.subtotal === 370000 && invoice10k?.discount === 10000 && invoice10k?.total === 360000,
+  check('Hoá đơn 360.000₫ được giảm 10.000₫',
+    invoice10k?.subtotal === 360000 && invoice10k?.discount === 10000 && invoice10k?.total === 350000,
     JSON.stringify({ s: invoice10k?.subtotal, d: invoice10k?.discount, t: invoice10k?.total }));
-  check('Điểm tính trên số tiền thực trả (360)', invoice10k?.points_earned === 360, String(invoice10k?.points_earned));
-  check('Điểm cộng dồn vào khách cũ (70 + 360 = 430)', r.data.customer?.points === 430, String(r.data.customer?.points));
+  check('Điểm tính trên số tiền thực trả (350)', invoice10k?.points_earned === 350, String(invoice10k?.points_earned));
+  check('Điểm cộng dồn vào khách cũ (70 + 350 = 420)', r.data.customer?.points === 420, String(r.data.customer?.points));
   check('Số lần mua tăng lên 2', r.data.customer?.visit_count === 2, String(r.data.customer?.visit_count));
 }
 
@@ -112,11 +114,11 @@ let invoice10k;
 {
   const r = await call('/retail/invoices', {
     method: 'POST', token: admin,
-    body: { phone, items: [{ product_id: p150.id, quantity: 4 }] },
+    body: { phone, items: [{ product_id: p145.id, quantity: 4 }] },
   });
   const inv = r.data.invoice;
-  check('Hoá đơn 600.000₫ được giảm 20.000₫',
-    inv?.subtotal === 600000 && inv?.discount === 20000 && inv?.total === 580000,
+  check('Hoá đơn 580.000₫ được giảm 20.000₫',
+    inv?.subtotal === 580000 && inv?.discount === 20000 && inv?.total === 560000,
     JSON.stringify({ s: inv?.subtotal, d: inv?.discount, t: inv?.total }));
 }
 
@@ -161,10 +163,7 @@ let invoice10k;
       subtotal: 1, discount: 999999, total: 1, points_earned: 99999,
     },
   });
-  const inv = r.data.invoice;
-  check('Bỏ qua giá/giảm giá/điểm do trình duyệt gửi',
-    inv?.subtotal === 35000 && inv?.discount === 0 && inv?.total === 35000 && inv?.points_earned === 0,
-    JSON.stringify({ s: inv?.subtotal, d: inv?.discount, t: inv?.total, p: inv?.points_earned }));
+  check('Từ chối giá/giảm giá/điểm do trình duyệt gửi (400)', r.status === 400);
 }
 
 /* ---------- Kiểm tra dữ liệu đầu vào ---------- */
@@ -267,6 +266,38 @@ let invoice10k;
     JSON.stringify({ n: page.data.invoices.length, total: page.data.total }));
 }
 
+/* ---------- Đổi / trả hàng ---------- */
+{
+  const item = invoice10k.items[0];
+  const created = await call('/retail/returns', {
+    method: 'POST', token: admin,
+    body: {
+      invoice_id: invoice10k.id,
+      return_type: 'exchange',
+      reason: 'Túi bị rách khi giao',
+      note: 'Đổi túi mới cùng loại',
+      items: [{ invoice_item_id: item.id, quantity: 1 }],
+    },
+  });
+  check('Lưu phiếu đổi hàng (201)', created.status === 201, JSON.stringify(created.data));
+  check('Phiếu đổi hàng có mã DT……', /^DT\d{6}$/.test(created.data.return?.code || ''));
+  check('Phiếu giữ liên kết tới hoá đơn cũ', created.data.return?.invoice_code === invoice10k.code);
+
+  const over = await call('/retail/returns', {
+    method: 'POST', token: admin,
+    body: {
+      invoice_id: invoice10k.id,
+      return_type: 'return', reason: 'Khách đổi ý', refund_amount: 1000,
+      items: [{ invoice_item_id: item.id, quantity: item.quantity }],
+    },
+  });
+  check('Không thể đổi/trả quá số lượng đã mua (400)', over.status === 400, `status=${over.status}`);
+
+  const list = await call('/retail/returns', { token: admin });
+  check('Xem được lịch sử đổi trả', list.status === 200 && list.data.returns.some((r) => r.invoice_code === invoice10k.code));
+  check('Khách thường không xem được phiếu đổi trả (401)', (await call('/retail/returns')).status === 401);
+}
+
 /* ---------- Thống kê ---------- */
 {
   const r = await call('/retail/stats', { token: admin });
@@ -274,6 +305,171 @@ let invoice10k;
     r.status === 200 && r.data.stats.todayInvoices > 0 && r.data.stats.todayRevenue > 0,
     JSON.stringify(r.data.stats));
   check('Thống kê đếm được khách quen', r.data.stats.customers >= 1);
+}
+
+/* ---------- Báo cáo doanh thu lọc theo ngày / tháng ---------- */
+{
+  const pad = (n) => String(n).padStart(2, '0');
+  const now = new Date();
+  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const month = today.slice(0, 7);
+
+  const day = await call(`/admin/revenue?period=day&date=${today}`, { token: admin });
+  check('Doanh thu lọc theo ngày hoạt động', day.status === 200 && day.data.period.type === 'day',
+    JSON.stringify(day.data.period));
+  check('Doanh thu hôm nay gồm hoá đơn vừa tạo', day.data.retail.revenue > 0,
+    String(day.data.retail?.revenue));
+  check('Tổng = online + tại quầy',
+    day.data.total.revenue === day.data.online.revenue + day.data.retail.revenue);
+
+  const mon = await call(`/admin/revenue?period=month&month=${month}`, { token: admin });
+  check('Doanh thu lọc theo tháng hoạt động', mon.status === 200 && mon.data.period.type === 'month');
+  check('Doanh thu tháng >= doanh thu ngày', mon.data.total.revenue >= day.data.total.revenue,
+    `${mon.data.total.revenue} vs ${day.data.total.revenue}`);
+  check('Kỳ tháng bắt đầu từ ngày 01', mon.data.period.from === `${month}-01`, mon.data.period.from);
+
+  const range = await call(`/admin/revenue?period=range&from=${month}-01&to=${today}`, { token: admin });
+  check('Doanh thu lọc theo khoảng ngày hoạt động', range.status === 200 && range.data.period.type === 'range');
+  check('Có chi tiết từng ngày', Array.isArray(range.data.daily) && range.data.daily.length > 0);
+  check('Cộng các ngày đúng bằng tổng kỳ',
+    range.data.daily.reduce((s, d) => s + d.total, 0) === range.data.total.revenue,
+    JSON.stringify({ cong: range.data.daily.reduce((s, d) => s + d.total, 0), tong: range.data.total.revenue }));
+
+  const feb = await call('/admin/revenue?period=month&month=2024-02', { token: admin });
+  check('Tháng 2 năm nhuận có 29 ngày', feb.data.period.to === '2024-02-29', feb.data.period.to);
+
+  const empty = await call('/admin/revenue?period=day&date=2000-01-01', { token: admin });
+  check('Ngày không có giao dịch trả về 0', empty.data.total.revenue === 0 && empty.data.daily.length === 0);
+
+  check('Kiểu lọc lạ bị từ chối (400)',
+    (await call('/admin/revenue?period=nam', { token: admin })).status === 400);
+  check('Tháng 13 bị từ chối (400)',
+    (await call('/admin/revenue?period=month&month=2026-13', { token: admin })).status === 400);
+  check('Ngày sai định dạng bị từ chối (400)',
+    (await call('/admin/revenue?period=day&date=hom-qua', { token: admin })).status === 400);
+  check('from sau to bị từ chối (400)',
+    (await call('/admin/revenue?period=range&from=2026-09-10&to=2026-09-01', { token: admin })).status === 400);
+  check('Khách vãng lai không xem được doanh thu (401)',
+    (await call('/admin/revenue?period=month&month=' + month)).status === 401);
+}
+
+/* ---------- Đổi điểm lấy quà: 1.000 điểm = 1 túi 1kg ---------- */
+{
+  const pol = (await call('/retail/policy', { token: admin })).data.policy;
+  check('Chính sách nêu 1.000 điểm đổi 1 quà', pol.pointsPerReward === 1000, String(pol.pointsPerReward));
+  check('Có danh sách quà (nếp, lứt, kê)', pol.rewards.length >= 3, String(pol.rewards.length));
+  check('Quà đều là loại 1kg', pol.rewards.every((g) => /1kg/.test(g.unit)),
+    JSON.stringify(pol.rewards.map((g) => g.unit)));
+
+  const gift = pol.rewards[0];
+  const notGift = products.find((p) => !pol.rewards.some((g) => g.id === p.id));
+  const giftPhone = `09${String(suffix).slice(-7)}9`;
+
+  /* Khách mới chưa có điểm thì chưa đổi được */
+  const tooSoon = await call('/retail/invoices', {
+    method: 'POST', token: admin,
+    body: { phone: giftPhone, items: [{ product_id: p35.id, quantity: 1 }],
+            rewards: [{ product_id: gift.id, quantity: 1 }] },
+  });
+  check('Khách chưa có điểm thì không đổi quà được (400)', tooSoon.status === 400,
+    `status=${tooSoon.status}`);
+
+  /* Mua đủ để có hơn 1.000 điểm */
+  const buy = await call('/retail/invoices', {
+    method: 'POST', token: admin,
+    body: { phone: giftPhone, full_name: 'Khách Đổi Quà', items: [{ product_id: p150.id, quantity: 10 }] },
+  });
+  check('Tạo hoá đơn lớn để tích điểm', buy.status === 201, JSON.stringify(buy.data));
+  const pointsAfterBuy = buy.data.customer.points;
+  check('Tích được hơn 1.000 điểm', pointsAfterBuy >= 1000, String(pointsAfterBuy));
+
+  const look = await call(`/retail/customers?phone=${giftPhone}`, { token: admin });
+  check('Tra cứu cho biết đổi được mấy phần quà',
+    look.data.rewardsAffordable === Math.floor(pointsAfterBuy / 1000),
+    `${look.data.rewardsAffordable} vs ${Math.floor(pointsAfterBuy / 1000)}`);
+
+  /* Đổi 1 phần quà kèm mua hàng */
+  const redeem = await call('/retail/invoices', {
+    method: 'POST', token: admin,
+    body: { phone: giftPhone, items: [{ product_id: p35.id, quantity: 1 }],
+            rewards: [{ product_id: gift.id, quantity: 1 }] },
+  });
+  check('Đổi quà thành công (201)', redeem.status === 201, JSON.stringify(redeem.data));
+  const inv = redeem.data.invoice;
+  check('Hoá đơn ghi đã dùng 1.000 điểm', inv?.points_used === 1000, String(inv?.points_used));
+
+  const giftLine = inv?.items.find((i) => i.is_reward === 1);
+  check('Dòng quà được đánh dấu is_reward', !!giftLine);
+  check('Quà tính giá 0đ', giftLine?.price === 0, String(giftLine?.price));
+  check('Quà KHÔNG cộng vào tiền hàng', inv?.subtotal === 35000, String(inv?.subtotal));
+  check('Khách chỉ trả tiền phần mua thật', inv?.total === 35000, String(inv?.total));
+
+  const expected = pointsAfterBuy - 1000 + Math.floor(35000 / 1000);
+  check('Điểm bị trừ đúng 1.000 và vẫn cộng điểm mua hàng',
+    redeem.data.customer.points === expected,
+    `${redeem.data.customer.points} vs ${expected}`);
+
+  /* Không đổi được sản phẩm không nằm trong danh sách quà */
+  const wrongGift = await call('/retail/invoices', {
+    method: 'POST', token: admin,
+    body: { phone: giftPhone, items: [{ product_id: p35.id, quantity: 1 }],
+            rewards: [{ product_id: notGift.id, quantity: 1 }] },
+  });
+  check('Không đổi được loại không phải quà (400)', wrongGift.status === 400,
+    `status=${wrongGift.status}`);
+
+  /* Không đủ điểm cho 2 phần quà */
+  const now = (await call(`/retail/customers?phone=${giftPhone}`, { token: admin })).data.customer.points;
+  const tooMany = Math.floor(now / 1000) + 1;
+  const over = await call('/retail/invoices', {
+    method: 'POST', token: admin,
+    body: { phone: giftPhone, items: [{ product_id: p35.id, quantity: 1 }],
+            rewards: [{ product_id: gift.id, quantity: tooMany }] },
+  });
+  check('Đổi quá số điểm đang có bị từ chối (400)', over.status === 400, `status=${over.status}`);
+  check('Từ chối xong điểm giữ nguyên',
+    (await call(`/retail/customers?phone=${giftPhone}`, { token: admin })).data.customer.points === now);
+
+  /* Khách vãng lai không có số điện thoại thì không đổi quà */
+  const noPhone = await call('/retail/invoices', {
+    method: 'POST', token: admin,
+    body: { items: [{ product_id: p35.id, quantity: 1 }], rewards: [{ product_id: gift.id, quantity: 1 }] },
+  });
+  check('Không có SĐT thì không đổi quà được (400)', noPhone.status === 400, `status=${noPhone.status}`);
+
+  /* Nạp lại điểm cho các phép thử còn lại (lần đổi trên đã tiêu 1.000 điểm) */
+  await call('/retail/invoices', {
+    method: 'POST', token: admin,
+    body: { phone: giftPhone, items: [{ product_id: p150.id, quantity: 20 }] },
+  });
+  const refilled = (await call(`/retail/customers?phone=${giftPhone}`, { token: admin })).data.customer.points;
+  // Cần ít nhất 2.000 điểm cho hai phép thử đổi quà còn lại.
+  check('Mua thêm để có đủ điểm đổi tiếp', refilled >= 2000, String(refilled));
+
+  /* Chỉ lấy quà, không mua gì thêm */
+  const onlyGift = await call('/retail/invoices', {
+    method: 'POST', token: admin,
+    body: { phone: giftPhone, items: [], rewards: [{ product_id: gift.id, quantity: 1 }] },
+  });
+  check('Chỉ đến lấy quà, không mua gì vẫn được (201)', onlyGift.status === 201,
+    JSON.stringify(onlyGift.data));
+  check('Hoá đơn chỉ có quà thì khách trả 0đ', onlyGift.data.invoice?.total === 0,
+    String(onlyGift.data.invoice?.total));
+
+  /* Quà không làm khách đạt mốc giảm giá */
+  const noTier = await call('/retail/invoices', {
+    method: 'POST', token: admin,
+    body: { phone: giftPhone, items: [{ product_id: p35.id, quantity: 1 }],
+            rewards: [{ product_id: gift.id, quantity: 1 }] },
+  });
+  check('Quà không giúp đạt mốc giảm giá', noTier.data.invoice?.discount === 0,
+    String(noTier.data.invoice?.discount));
+
+  /* Hoá đơn cũ đọc lại vẫn thấy phần quà */
+  const reread = await call(`/retail/invoices/${inv.code}`, { token: admin });
+  check('Hoá đơn cũ vẫn ghi rõ phần quà',
+    reread.data.invoice.items.some((i) => i.is_reward === 1)
+    && reread.data.invoice.points_used === 1000);
 }
 
 console.log(results.join('\n'));

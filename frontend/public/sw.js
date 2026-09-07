@@ -1,7 +1,7 @@
 // Service worker cho PWA "Gạo Kinh Bắc".
 // Nguyên tắc: KHÔNG bao giờ lưu đệm dữ liệu API — giá, tồn kho và đơn hàng
 // phải luôn lấy mới từ máy chủ.
-const CACHE_NAME = 'gao-kinh-bac-v3';
+const CACHE_NAME = 'gao-kinh-bac-v4';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {

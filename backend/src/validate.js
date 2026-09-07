@@ -15,6 +15,7 @@ export class HttpError extends Error {
  * Trả về chuỗi rỗng nếu không phải số điện thoại Việt Nam hợp lệ.
  */
 export const normalizePhone = (v) => {
+  if (typeof v !== 'string') return '';
   const raw = String(v ?? '').replace(/[\s.\-()]/g, '');
   if (!raw) return '';
   const normalized = raw.startsWith('+84') ? `0${raw.slice(3)}`
@@ -31,19 +32,21 @@ export const isPhone = (v) => normalizePhone(v) !== '';
 /** Bỏ khoảng trắng thừa; trả về null nếu rỗng. */
 export function cleanText(value, maxLength) {
   if (value == null) return null;
-  const text = String(value).replace(/\s+/g, ' ').trim();
+  if (typeof value !== 'string' || (maxLength && value.length > maxLength)) {
+    throw new HttpError(400, 'Trường văn bản sai kiểu hoặc quá dài.');
+  }
+  const text = value.replace(/\s+/g, ' ').trim();
   if (!text) return null;
-  return maxLength ? text.slice(0, maxLength) : text;
+  return text;
 }
 
 /** Số nguyên không âm trong khoảng cho phép, hoặc null nếu không hợp lệ. */
 export function toInteger(value, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
   if (value === '' || value == null) return null;
+  if (typeof value !== 'number' && (typeof value !== 'string' || !/^-?\d+$/.test(value))) return null;
   const num = Number(value);
-  if (!Number.isFinite(num)) return null;
-  const rounded = Math.round(num);
-  if (rounded < min || rounded > max) return null;
-  return rounded;
+  if (!Number.isSafeInteger(num) || num < min || num > max) return null;
+  return num;
 }
 
 /**
@@ -53,10 +56,11 @@ export function toInteger(value, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}
 export function cleanImageUrl(value) {
   const text = cleanText(value, LIMITS.imageUrl);
   if (!text) return null;
+  if (/[\\\u0000-\u0020\u007f]/.test(text)) return null;
   if (text.startsWith('/')) return text.startsWith('//') ? null : text;
   try {
     const url = new URL(text);
-    return ['http:', 'https:'].includes(url.protocol) ? text : null;
+    return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password ? text : null;
   } catch {
     return null;
   }

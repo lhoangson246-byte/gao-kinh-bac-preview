@@ -1,3 +1,4 @@
+import { validateRoutes } from '../schemas.js';
 import { Router } from 'express';
 import db from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -7,6 +8,8 @@ import {
 import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../validate.js';
 
 const router = Router();
+router.use(requireAuth);
+router.use(validateRoutes('addresses'));
 const MAX_ADDRESSES = 10;
 
 function listForUser(userId) {

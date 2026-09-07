@@ -5,24 +5,15 @@ if (import.meta.env.PROD && !BASE) {
   console.warn('Chưa đặt VITE_API_URL — ứng dụng sẽ gọi API cùng tên miền với trang web.');
 }
 
-function getToken() {
-  try {
-    return localStorage.getItem('token');
-  } catch {
-    return null;
-  }
-}
-
 async function request(path, { method = 'GET', body, auth = false } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
-  const token = auth ? getToken() : null;
-  if (token) headers.Authorization = `Bearer ${token}`;
+  const headers = { 'Content-Type': 'application/json', 'X-Session-Mode': 'cookie', 'X-CSRF-Protection': '1' };
 
   let res;
   try {
     res = await fetch(`${BASE}/api${path}`, {
       method,
       headers,
+      credentials: 'include',
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch {
@@ -45,6 +36,8 @@ async function request(path, { method = 'GET', body, auth = false } = {}) {
 export const api = {
   register: (payload) => request('/auth/register', { method: 'POST', body: payload }),
   login: (payload) => request('/auth/login', { method: 'POST', body: payload }),
+  logout: () => request('/auth/logout', { method: 'POST', auth: true }),
+  changePassword: (payload) => request('/auth/password', { method: 'PUT', body: payload, auth: true }),
   me: () => request('/auth/me', { auth: true }),
   updateMe: (payload) => request('/auth/me', { method: 'PUT', body: payload, auth: true }),
 
@@ -77,6 +70,34 @@ export const api = {
   adminUpdateProduct: (id, payload) =>
     request(`/admin/products/${id}`, { method: 'PUT', body: payload, auth: true }),
   adminDeleteProduct: (id) => request(`/admin/products/${id}`, { method: 'DELETE', auth: true }),
+  /* --- Quản lý tài khoản khách --- */
+  adminCustomers: ({ q = '', locked = '', limit = 20, offset = 0 } = {}) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (locked !== '') params.set('locked', locked);
+    params.set('limit', String(limit));
+    params.set('offset', String(offset));
+    return request(`/admin/customers?${params}`, { auth: true });
+  },
+  adminCustomer: (id) => request(`/admin/customers/${id}`, { auth: true }),
+  adminRenameCustomer: (id, full_name) =>
+    request(`/admin/customers/${id}`, { method: 'PUT', body: { full_name }, auth: true }),
+  adminResetPassword: (id, password) =>
+    request(`/admin/customers/${id}/reset-password`, { method: 'POST', body: { password }, auth: true }),
+  adminLockCustomer: (id, is_locked) =>
+    request(`/admin/customers/${id}/lock`, { method: 'PATCH', body: { is_locked }, auth: true }),
+
+  /* --- Nhập kho --- */
+  adminReceiveStock: (id, payload) =>
+    request(`/admin/products/${id}/stock`, { method: 'POST', body: payload, auth: true }),
+  adminStockHistory: (id) => request(`/admin/products/${id}/stock`, { auth: true }),
+  adminStockEntries: (limit = 30) => request(`/admin/stock-entries?limit=${limit}`, { auth: true }),
+
+  adminRevenue: (filters) => {
+    const params = new URLSearchParams(filters);
+    return request(`/admin/revenue?${params}`, { auth: true });
+  },
+  adminActivity: (limit = 50) => request(`/admin/activity?limit=${limit}`, { auth: true }),
 
   /* --- Bán lẻ tại quầy --- */
   retailPolicy: () => request('/retail/policy', { auth: true }),
@@ -85,6 +106,8 @@ export const api = {
     request(`/retail/customers?phone=${encodeURIComponent(phone)}`, { auth: true }),
   retailUpdateCustomer: (id, payload) =>
     request(`/retail/customers/${id}`, { method: 'PUT', body: payload, auth: true }),
+  retailCreateAccount: (payload) =>
+    request('/retail/customers/account', { method: 'POST', body: payload, auth: true }),
   retailCreateInvoice: (payload) =>
     request('/retail/invoices', { method: 'POST', body: payload, auth: true }),
   retailInvoices: ({ q = '', from = '', to = '', limit = 20, offset = 0 } = {}) => {
@@ -97,9 +120,27 @@ export const api = {
     return request(`/retail/invoices?${params}`, { auth: true });
   },
   retailInvoice: (id) => request(`/retail/invoices/${encodeURIComponent(id)}`, { auth: true }),
+  retailReturns: (limit = 30) => request(`/retail/returns?limit=${limit}`, { auth: true }),
+  retailCreateReturn: (payload) =>
+    request('/retail/returns', { method: 'POST', body: payload, auth: true }),
 };
 
 /* ---- Hằng số và kiểm tra dùng chung với máy chủ ---- */
+
+/**
+ * Mốc giảm giá áp dụng cho CẢ đơn online lẫn mua tại quầy.
+ * Chỉ để hiển thị trước cho khách — máy chủ luôn tính lại khi tạo đơn.
+ */
+export const ORDER_DISCOUNT_TIERS = [
+  { minSubtotal: 500000, discount: 20000 },
+  { minSubtotal: 300000, discount: 10000 },
+];
+
+/** Số tiền được giảm cho một đơn có tiền hàng bằng subtotal. */
+export function orderDiscountFor(subtotal) {
+  const tier = ORDER_DISCOUNT_TIERS.find((t) => subtotal >= t.minSubtotal);
+  return tier ? tier.discount : 0;
+}
 
 export const DELIVERY_AREA_CODE = 'bac-ninh';
 export const DELIVERY_AREA_LABEL = 'Bắc Ninh';

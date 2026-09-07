@@ -1,18 +1,22 @@
+import { validateRoutes } from '../schemas.js';
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import db from '../db.js';
 import { signToken, requireAuth } from '../middleware/auth.js';
 import { LIMITS } from '../constants.js';
 import { HttpError, cleanText, isEmail, isPhone, normalizePhone } from '../validate.js';
+import { writeLoginHistory } from '../audit.js';
+import { deliverSession, COOKIE_NAME, COOKIE_OPTIONS } from '../security.js';
 
 const router = Router();
+router.use(validateRoutes('auth'));
 
 const PUBLIC_USER_COLUMNS = 'id, full_name, email, phone, address, role';
 
 /** POST /api/auth/register — Đăng ký
  *  Chỉ cần MỘT trong hai: số điện thoại hoặc email. Khách không có email vẫn dùng được.
  */
-router.post('/register', (req, res, next) => {
+router.post('/register', async (req, res, next) => {
   try {
     const { full_name, email, password, phone } = req.body || {};
     const errors = {};
@@ -34,11 +38,6 @@ router.post('/register', (req, res, next) => {
       errors.email = 'Email không hợp lệ. Có thể bỏ trống nếu bạn không dùng email.';
     }
 
-    if (typeof password !== 'string' || password.length < 6) {
-      errors.password = 'Mật khẩu tối thiểu 6 ký tự.';
-    } else if (password.length > 100) {
-      errors.password = 'Mật khẩu tối đa 100 ký tự.';
-    }
     if (Object.keys(errors).length) throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', errors);
 
     if (rawEmail && db.prepare('SELECT id FROM users WHERE email = ?').get(rawEmail)) {
@@ -50,7 +49,7 @@ router.post('/register', (req, res, next) => {
       });
     }
 
-    const hash = bcrypt.hashSync(password, 10);
+    const hash = await bcrypt.hash(password, 12);
     const info = db
       .prepare(
         `INSERT INTO users (full_name, email, password_hash, phone, address)
@@ -62,7 +61,7 @@ router.post('/register', (req, res, next) => {
       .prepare(`SELECT ${PUBLIC_USER_COLUMNS} FROM users WHERE id = ?`)
       .get(info.lastInsertRowid);
 
-    res.status(201).json({ user, token: signToken(user) });
+    deliverSession(req, res, user, signToken(user), 201);
   } catch (err) {
     next(err);
   }
@@ -71,7 +70,8 @@ router.post('/register', (req, res, next) => {
 /** POST /api/auth/login — Đăng nhập bằng số điện thoại HOẶC email
  *  body: { identifier, password }  (vẫn nhận `email` / `phone` để tương thích ngược)
  */
-router.post('/login', (req, res, next) => {
+const dummyHash = bcrypt.hashSync('dummy-credential-never-a-user', 12);
+router.post('/login', async (req, res, next) => {
   try {
     const { email, phone, identifier, password } = req.body || {};
     if (typeof password !== 'string' || !password) {
@@ -92,15 +92,27 @@ router.post('/login', (req, res, next) => {
     }
 
     // Thông báo giống nhau cho mọi trường hợp để không lộ tài khoản nào đang tồn tại.
-    if (!row || !bcrypt.compareSync(password, row.password_hash)) {
+    const validPassword = await bcrypt.compare(password, row?.password_hash || dummyHash);
+    if (!row || !validPassword) {
       throw new HttpError(401, 'Số điện thoại/email hoặc mật khẩu không đúng.');
+    }
+    // Đúng mật khẩu nhưng tài khoản đã bị khoá — báo rõ để khách biết đường liên hệ.
+    if (row.is_locked) {
+      throw new HttpError(403, 'Tài khoản đã bị khoá. Vui lòng liên hệ cửa hàng.');
+    }
+
+    // Password reset/lock may happen while bcrypt yields to another request.
+    const current = db.prepare('SELECT password_hash, session_version, is_locked FROM users WHERE id = ?').get(row.id);
+    if (!current || current.is_locked || current.password_hash !== row.password_hash || current.session_version !== row.session_version) {
+      throw new HttpError(401, 'Tài khoản vừa thay đổi. Vui lòng đăng nhập lại.');
     }
 
     const user = {
       id: row.id, full_name: row.full_name, email: row.email,
       phone: row.phone, address: row.address, role: row.role,
     };
-    res.json({ user, token: signToken(user) });
+    writeLoginHistory(req, row.id, raw.includes('@') ? 'email' : 'phone');
+    deliverSession(req, res, user, signToken(user));
   } catch (err) {
     next(err);
   }
@@ -108,6 +120,26 @@ router.post('/login', (req, res, next) => {
 
 /** GET /api/auth/me — Thông tin tài khoản */
 router.get('/me', requireAuth, (req, res) => res.json({ user: req.user }));
+
+router.post('/logout', requireAuth, (req, res) => {
+  db.prepare('UPDATE users SET session_version = session_version + 1 WHERE id = ?').run(req.user.id);
+  res.clearCookie(COOKIE_NAME, COOKIE_OPTIONS);
+  res.json({ ok: true });
+});
+
+router.put('/password', requireAuth, async (req, res, next) => {
+  try {
+    const row = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.id);
+    if (!await bcrypt.compare(req.body.current_password, row.password_hash)) {
+      throw new HttpError(401, 'Mật khẩu hiện tại không đúng.');
+    }
+    const hash = await bcrypt.hash(req.body.password, 12);
+    const changed = db.prepare(`UPDATE users SET password_hash = ?, session_version = session_version + 1
+      WHERE id = ? AND password_hash = ? AND is_locked = 0`).run(hash, req.user.id, row.password_hash).changes;
+    if (!changed) throw new HttpError(409, 'Tài khoản vừa thay đổi. Vui lòng đăng nhập lại.');
+    deliverSession(req, res, req.user, signToken(req.user));
+  } catch (err) { next(err); }
+});
 
 /** PUT /api/auth/me — Cập nhật họ tên / SĐT / địa chỉ mặc định
  *  Chỉ đổi những trường được gửi lên; gửi chuỗi rỗng nghĩa là muốn xoá.

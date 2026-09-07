@@ -2,8 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, formatDateTime, formatVND, STATUS_LABEL, DELIVERY_SLOT_LABEL } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
+import RevenueReport from '../components/RevenueReport.jsx';
+import CustomerManager from '../components/CustomerManager.jsx';
+import StockReceive from '../components/StockReceive.jsx';
+import ActivityLog from '../components/ActivityLog.jsx';
 
-const EMPTY = { name: '', origin: '', price: '', unit: 'kg', stock: '', description: '', image_url: '' };
+const EMPTY = { name: '', origin: '', price: '', cost_price: '', unit: 'kg', stock: '', description: '', image_url: '' };
 const FILTERS = [
   ['all', 'Tất cả'], ['pending', 'Chờ xác nhận'], ['confirmed', 'Đã xác nhận'],
   ['shipping', 'Đang giao'], ['completed', 'Hoàn thành'], ['cancelled', 'Đã huỷ'],
@@ -24,6 +28,7 @@ export default function Admin() {
   const [editingId, setEditingId] = useState(null);
   const [formErrors, setFormErrors] = useState({});
   const [showForm, setShowForm] = useState(false);
+  const [receiving, setReceiving] = useState(null);   // loại gạo đang nhập kho
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
@@ -128,6 +133,7 @@ export default function Admin() {
       const payload = {
         ...form,
         price: Number(form.price),
+        cost_price: form.cost_price === '' ? 0 : Number(form.cost_price),
         stock: form.stock === '' ? 0 : Number(form.stock),
       };
       if (editingId) {
@@ -151,7 +157,8 @@ export default function Admin() {
     setEditingId(product.id);
     setFormErrors({});
     setForm({
-      name: product.name, origin: product.origin || '', price: product.price, unit: product.unit,
+      name: product.name, origin: product.origin || '', price: product.price,
+      cost_price: product.cost_price || '', unit: product.unit,
       stock: product.stock, description: product.description || '', image_url: product.image_url || '',
     });
     setShowForm(true);
@@ -206,6 +213,15 @@ export default function Admin() {
           <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>
             <span aria-hidden="true">◇</span><span>Sản phẩm<small>Giá bán và tồn kho</small></span>
           </button>
+          <button className={tab === 'customers' ? 'active' : ''} onClick={() => setTab('customers')}>
+            <span aria-hidden="true">☺</span><span>Khách hàng<small>Tài khoản đăng nhập</small></span>
+          </button>
+          <button className={tab === 'revenue' ? 'active' : ''} onClick={() => setTab('revenue')}>
+            <span aria-hidden="true">◱</span><span>Doanh thu<small>Lọc theo ngày, tháng</small></span>
+          </button>
+          <button className={tab === 'activity' ? 'active' : ''} onClick={() => setTab('activity')}>
+            <span aria-hidden="true">⌁</span><span>Nhật ký<small>Thay đổi và đăng nhập</small></span>
+          </button>
           <Link to="/quan-tri/ban-hang" className="admin-sidebar-link">
             <span aria-hidden="true">◧</span>
             <span>Bán hàng tại quầy<small>Hoá đơn và tích điểm</small></span>
@@ -216,6 +232,7 @@ export default function Admin() {
         <main className="admin-content">
           {loading ? <div className="loading-state page-loading"><span></span>Đang mở trang quản trị…</div> : (
             <>
+              {!['revenue', 'customers', 'activity'].includes(tab) && (
               <div className="admin-page-heading">
                 <div>
                   <p className="eyebrow dark"><span></span>{tab === 'orders' ? 'Công việc hôm nay' : 'Quản lý gian hàng'}</p>
@@ -228,8 +245,9 @@ export default function Admin() {
                   </button>
                 )}
               </div>
+              )}
 
-              {stats && (
+              {!['revenue', 'customers', 'activity'].includes(tab) && stats && (
                 <section className="stats" aria-label="Thống kê cửa hàng">
                   <div className="stat urgent"><span>Đơn cần xác nhận</span><strong>{pendingCount}</strong><small>Nên xử lý trước</small></div>
                   <div className="stat"><span>Tổng đơn hàng</span><strong>{stats.orders}</strong><small>Tất cả thời gian</small></div>
@@ -238,7 +256,7 @@ export default function Admin() {
                 </section>
               )}
 
-              {stats?.missingPrice > 0 && (
+              {!['revenue', 'customers', 'activity'].includes(tab) && stats?.missingPrice > 0 && (
                 <div className="alert warning" role="status">
                   <strong>{stats.missingPrice} loại gạo chưa có giá bán.</strong>{' '}
                   Khách nhìn thấy sản phẩm nhưng chưa đặt mua được.{' '}
@@ -256,7 +274,10 @@ export default function Admin() {
               )}
               {msg && <div className="toast success" role="status"><span>✓</span>{msg}</div>}
 
-              {tab === 'orders' ? (
+              {tab === 'activity' ? <ActivityLog />
+                : tab === 'revenue' ? <RevenueReport />
+                : tab === 'customers' ? <CustomerManager />
+                : tab === 'orders' ? (
                 <section>
                   <div className="filter-bar" aria-label="Lọc đơn theo trạng thái">
                     {FILTERS.map(([value, label]) => {
@@ -328,6 +349,12 @@ export default function Admin() {
                             <input className="input" type="number" name="price" value={form.price} onChange={onChange} required min="1" step="1" inputMode="numeric" aria-invalid={!!formErrors.price} />
                             {formErrors.price && <small className="err">{formErrors.price}</small>}
                           </label>
+                          <label>Giá nhập (đồng) <span className="optional">Chỉ cửa hàng thấy</span>
+                            <input className="input" type="number" name="cost_price" value={form.cost_price} onChange={onChange} min="0" step="1" inputMode="numeric" placeholder="Ví dụ: 120000" aria-invalid={!!formErrors.cost_price} />
+                            {formErrors.cost_price
+                              ? <small className="err">{formErrors.cost_price}</small>
+                              : <small className="field-help">Dùng để tính lãi và giá trị hàng trong kho.</small>}
+                          </label>
                           <label>Đơn vị<input className="input" name="unit" value={form.unit} onChange={onChange} placeholder="kg hoặc bao 10kg" /></label>
                           <label>Số lượng còn lại
                             <input className="input" type="number" name="stock" value={form.stock} onChange={onChange} min="0" step="1" inputMode="numeric" aria-invalid={!!formErrors.stock} />
@@ -344,6 +371,19 @@ export default function Admin() {
                         <div className="form-actions"><button className="btn btn-primary btn-large" disabled={busyId === (editingId || 'new-product')}>{busyId === (editingId || 'new-product') ? 'Đang lưu…' : editingId ? 'Lưu thay đổi' : 'Thêm vào cửa hàng'}</button><button type="button" className="btn btn-secondary" onClick={resetProductForm}>Bỏ qua</button></div>
                       </form>
                     </div>
+                  )}
+
+                  {receiving && (
+                    <StockReceive
+                      product={receiving}
+                      onClose={() => setReceiving(null)}
+                      onDone={(updated, text) => {
+                        setReceiving(null);
+                        notify(text);
+                        setProducts((cur) => cur.map((p) => (p.id === updated.id ? updated : p)));
+                        reload();
+                      }}
+                    />
                   )}
 
                   {products.length === 0 && (
@@ -367,6 +407,9 @@ export default function Admin() {
                             {product.price > 0
                               ? `${formatVND(product.price)}/${product.unit}`
                               : <span className="price-pending">Chưa có giá</span>}
+                            {product.cost_price > 0 && product.price > 0 && (
+                              <span className="margin-tag"> · lãi {formatVND(product.price - product.cost_price)}</span>
+                            )}
                           </p>
                         </div>
                         <div className="inventory">
@@ -378,6 +421,7 @@ export default function Admin() {
                         </div>
                         <span className={`visibility ${product.is_active ? 'shown' : ''}`}>{product.is_active ? 'Đang bán' : 'Đang ẩn'}</span>
                         <div className="product-actions">
+                          <button className="btn btn-primary" onClick={() => setReceiving(product)}>Nhập kho</button>
                           <button className="btn btn-secondary" onClick={() => editProduct(product)}>Sửa</button>
                           {product.is_active
                             ? <button className="btn btn-danger-ghost" disabled={busyId === product.id} onClick={() => hideProduct(product)}>Ẩn</button>
