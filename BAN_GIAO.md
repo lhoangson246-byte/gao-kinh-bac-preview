@@ -120,7 +120,7 @@ không chỉ ẩn nút).
 | Yêu cầu | Cách hoạt động |
 |---|---|
 | Tích điểm | 1.000₫ khách **thực trả** = 1 điểm. Điểm cộng vào hồ sơ gắn với số điện thoại, xem được tổng điểm, số lần mua và tổng chi tiêu. |
-| Giảm 10k–20k cho hoá đơn từ 300k | Giảm **tự động theo bậc**, khách không cần tích luỹ trước: từ 300.000₫ giảm 10.000₫, từ 500.000₫ giảm 20.000₫. Máy chủ tự tính, không tin số tiền do máy bán hàng gửi lên. |
+| Giảm giá tại quầy | *(Chính sách này đã đổi — xem mục "Chính sách giảm giá mới" bên dưới.)* Ban đầu là giảm tự động theo bậc 300k/500k; nay chỉ giảm cho hoá đơn từ 50kg, theo % nhân viên nhập tay. Máy chủ vẫn tự tính, không tin số tiền do máy bán hàng gửi lên. |
 | Tra cứu hoá đơn cũ | Tra theo mã hoá đơn (`HD000012`), số điện thoại, tên khách, hoặc lọc theo khoảng ngày. Có phân trang. |
 
 ### Bảng dữ liệu mới
@@ -141,7 +141,7 @@ Các bảng này được tạo tự động khi khởi động API, không cầ
 - Toàn bộ tiền (tiền hàng, giảm giá, điểm) đều do **máy chủ tính lại**; dữ liệu gửi từ trình duyệt bị bỏ qua.
 - Loại gạo **chưa có giá** thì không bán được tại quầy.
 - Khách không cho số điện thoại vẫn bán được, chỉ là không tích điểm.
-- Đổi chính sách: sửa `RETAIL_DISCOUNT_TIERS` và `RETAIL_VND_PER_POINT` trong `backend/src/constants.js`,
+- Đổi chính sách: sửa `RETAIL_DISCOUNT_MIN_KG`, `RETAIL_DISCOUNT_MAX_PERCENT` và `RETAIL_VND_PER_POINT` trong `backend/src/constants.js`,
   giao diện tự đọc theo qua `GET /api/retail/policy` nên không phải sửa hai nơi.
 - Nút **In hoá đơn** dùng chức năng in của trình duyệt; CSS `@media print` đã ẩn phần giao diện thừa.
 
@@ -249,7 +249,7 @@ giá trị tồn kho, lãi gộp, và đổi giá nhập không làm sai đơn c
 - Nhân viên tra số điện thoại; nếu khách đủ điểm, khối **"Đổi được N phần quà"** hiện ra
   với ba loại quà để chọn. Không đủ điểm thì hiện dòng nhắc còn thiếu bao nhiêu.
 - Quà vào hoá đơn thành **dòng giá 0₫** có nhãn *"Quà đổi điểm"*.
-- Quà **không cộng vào tiền hàng**, nên không giúp khách đạt mốc giảm giá và không sinh thêm điểm.
+- Quà **không cộng vào tiền hàng và không cộng vào khối lượng**, nên không giúp khách đạt mốc giảm giá và không sinh thêm điểm.
 - Khách có thể **chỉ đến lấy quà** mà không mua gì — hoá đơn 0₫ vẫn hợp lệ.
 - Khách vãng lai không cho số điện thoại thì không đổi quà được.
 
@@ -292,15 +292,15 @@ Logic dùng chung nằm ở `backend/src/loyalty.js`, cả hai luồng đều g�
 > Cố ý lấy SĐT của **tài khoản**, không lấy SĐT trên địa chỉ nhận hàng: khách hay đặt hộ
 > người khác, điểm phải về đúng người mua.
 
-### Đơn online giờ cũng được giảm giá
+### Đơn online cũng được giảm giá
 
-Đơn online dùng **chung mốc giảm giá** với hoá đơn quầy (từ 300.000₫ giảm 10.000₫, từ
-500.000₫ giảm 20.000₫). Giỏ hàng và trang đặt hàng hiện trước số tiền được giảm, giỏ hàng
-còn nhắc *"mua thêm X nữa để được giảm Y"*. Bảng `orders` thêm ba cột `subtotal`,
-`discount`, `points_earned`.
+> **Đã đổi 08/09/2026.** Lúc đầu đơn online dùng chung mốc 300k/500k với quầy. Nay là ưu
+> đãi 20.000₫ cho đơn đầu tiên của mỗi tài khoản — xem mục *"Chính sách giảm giá mới"* bên dưới.
+
+Bảng `orders` có thêm ba cột `subtotal`, `discount`, `points_earned`.
 
 **Máy chủ vẫn tự tính lại toàn bộ.** Con số trên trình duyệt chỉ để khách xem trước;
-`POST /api/orders` lấy giá hiện tại trong kho, tự cộng tiền hàng rồi tự áp mốc giảm —
+`POST /api/orders` lấy giá hiện tại trong kho, tự cộng tiền hàng rồi tự áp mức giảm —
 không đọc bất kỳ số tiền nào do trình duyệt gửi lên.
 
 ### Điểm cộng đúng một lần
@@ -355,6 +355,159 @@ trong khu vực quản trị. `npm run test:smoke` có hai phép thử canh vi�
 - Đơn bị huỷ không cộng điểm
 - Mua tại quầy cộng tiếp vào cùng hồ sơ
 - Đơn hoàn thành ghi lại số điểm đã cộng
+
+## Ảnh sản phẩm: bốn cách đưa ảnh vào thay vì gõ đường dẫn
+
+Trước đây trang quản trị chỉ có ô **"Đường dẫn ảnh"** để gõ tay. Ô đó vẫn lưu đúng, nhưng
+chủ cửa hàng có ảnh trong điện thoại thì không có cách nào đưa vào, lại không có ảnh xem
+trước nên gõ sai đường dẫn cũng không biết. Nay có nút chọn ảnh thật.
+
+### Bốn cách đưa ảnh vào, dùng cách nào cũng được
+
+Trong **Quản trị → Sản phẩm**, mở *Thêm loại gạo* hoặc *Sửa*, tới mục **Ảnh sản phẩm**:
+
+1. **Bấm nút "Chọn ảnh từ máy"** — hoặc bấm thẳng vào ô ảnh — rồi chọn tệp.
+   Trên điện thoại sẽ hiện luôn lựa chọn chụp ảnh mới.
+2. **Kéo ảnh thả vào ô** bên trái. Ô sẽ đổi màu khi ảnh được kéo tới đúng chỗ.
+3. **Dán bằng Ctrl + V**: bấm vào ô ảnh rồi dán tấm ảnh vừa sao chép — tiện khi
+   ảnh lấy từ Zalo, Messenger hay ảnh chụp màn hình.
+4. **"Chọn từ ảnh đã có"** — mở thư viện ảnh của cửa hàng, bấm một tấm là xong.
+   Thư viện gồm ảnh từng tải lên (ghi ngày tải) và ảnh của các loại gạo khác
+   (ghi tên loại gạo), nên muốn dùng lại ảnh nào cũng không phải nhớ tên tệp.
+
+Ảnh hiện ngay ở ô xem trước. **Đổi ảnh khác** / **Bỏ ảnh** khi cần; để trống thì khách
+thấy ảnh gạo mặc định. Mục *"Hoặc dán đường dẫn ảnh có sẵn"* vẫn giữ cách gõ tay như cũ.
+
+Nhớ bấm **Lưu thay đổi** — tải ảnh lên xong vẫn phải lưu sản phẩm thì khách mới thấy.
+
+### Ảnh được cất ở đâu
+
+Ảnh nằm trong **chính tệp SQLite** (bảng `product_images`), không nằm trong thư mục của
+máy chủ. Lý do: Render dựng lại máy là xoá sạch thư mục, còn tệp SQLite đã được gắn ổ đĩa
+riêng qua `DATA_DIR`. Cho ảnh đi cùng cơ sở dữ liệu thì sao lưu một tệp là xong, không phải
+thuê thêm dịch vụ lưu trữ.
+
+| | |
+| --- | --- |
+| Tải lên | `POST /api/admin/images` — chỉ quản trị viên, thân yêu cầu là nội dung tệp ảnh |
+| Thư viện | `GET /api/admin/images` — chỉ quản trị viên; ảnh đã tải lên + ảnh các loại gạo đang dùng |
+| Xem ảnh | `GET /api/images/<id>.jpg` — ai cũng xem được, giống ảnh trong thư mục public |
+| Lưu vào sản phẩm | `products.image_url` giữ đường dẫn `/api/images/<id>.jpg` |
+
+### Những chỗ đã tính trước
+
+- **Trình duyệt thu nhỏ ảnh trước khi gửi**: cạnh dài nhất còn 1200px, nén JPEG.
+  Ảnh 867KB chụp sẵn qua bước này còn 167KB, nên cơ sở dữ liệu không phình.
+  Giới hạn cứng ở máy chủ là 3MB.
+- **Không tin `Content-Type` trình duyệt khai**: máy chủ đọc mấy byte đầu tệp để nhận dạng
+  JPG / PNG / WEBP. Đổi tên tệp HTML thành `.jpg` rồi gửi lên sẽ bị từ chối — nếu không,
+  máy chủ sẽ phát lại tệp đó cho khách.
+- **Chỉ quản trị viên tải lên được**: khách thường nhận 403, chưa đăng nhập nhận 401.
+- **Id ảnh phải đúng 32 ký tự hex**, đường dẫn lạ trả 404 chứ không đụng tới ổ đĩa.
+- Ảnh không bao giờ đổi nội dung (mỗi lần tải lên sinh id mới) nên đặt
+  `Cache-Control: immutable`, trình duyệt khách chỉ tải một lần.
+- Ảnh trong suốt (PNG) được tô nền trắng trước khi chuyển sang JPG, tránh ra nền đen.
+- **Tải lên đúng tấm ảnh đã có thì dùng lại bản cũ**, không lưu thêm bản trùng. Máy chủ
+  so sánh bằng vân tay SHA-256 của nội dung ảnh (cột `product_images.sha256`), nên thư
+  viện không đầy những tấm giống hệt nhau và cơ sở dữ liệu không phình vô ích.
+
+### Việc chưa làm
+
+Đổi ảnh của một sản phẩm thì **ảnh cũ vẫn nằm lại** trong bảng `product_images` — đó cũng
+là chủ ý, vì ảnh cũ vẫn hiện trong thư viện để chọn lại. Mỗi ảnh khoảng 150KB nên với một
+cửa hàng thì không đáng kể, nhưng nếu về sau tải lên rất nhiều thì nên có lệnh dọn những
+ảnh không sản phẩm nào dùng tới.
+
+### Kiểm thử
+
+`npm run test:manage` — **99 PASS · 0 FAIL**, thêm 15 phép thử cho phần ảnh:
+tải lên, xem lại đúng nguyên vẹn, đúng kiểu ảnh, tải trùng thì dùng lại bản cũ, thư viện
+liệt kê đúng và không lặp, khách không xem được thư viện, tệp giả danh bị chặn, chưa đăng
+nhập, khách thường, ảnh không tồn tại, id bất thường và gắn ảnh vào sản phẩm.
+
+Kéo thả, dán Ctrl+V và chọn từ thư viện được kiểm tra bằng Chrome thật.
+
+## Chính sách giảm giá mới: hai kênh, hai cách (cửa hàng chốt 08/09/2026)
+
+Trước đây cả đơn online lẫn hoá đơn quầy dùng chung mốc "từ 300k giảm 10k, từ 500k giảm 20k".
+Nay hai kênh tách hẳn. **Tích điểm thì vẫn giống nhau ở cả hai kênh.**
+
+| | Đặt online | Mua tại quầy |
+| --- | --- | --- |
+| Giảm giá | **20.000₫ cho đơn ĐẦU TIÊN** của mỗi tài khoản | Chỉ hoá đơn **từ 50kg**, giảm theo **% nhân viên nhập tay** (tối đa 50%) |
+| Giảm tự động theo tiền | Không còn | Không còn |
+| Tích điểm | Có — 1.000₫ = 1 điểm | Có — 1.000₫ = 1 điểm |
+
+Toàn bộ nằm ở `backend/src/constants.js`: `FIRST_ORDER_DISCOUNT`,
+`RETAIL_DISCOUNT_MIN_KG`, `RETAIL_DISCOUNT_MAX_PERCENT`, `RETAIL_VND_PER_POINT`.
+
+### Đơn online: ưu đãi đơn đầu tiên
+
+"Đơn đầu tiên" nghĩa là tài khoản **chưa có đơn nào khác đang còn hiệu lực**:
+
+- Đơn *đã huỷ* không tính, nên khách lỡ đặt rồi huỷ vẫn được hưởng ở lần đặt sau.
+- Đơn *còn chờ xác nhận* thì có tính, nên khách không thể đặt liền hai đơn để ăn ưu đãi hai lần.
+- Câu lệnh kiểm tra nằm **trong cùng transaction** với lệnh tạo đơn, nên hai yêu cầu gửi
+  song song cũng chỉ một đơn được giảm.
+- Nếu tiền hàng nhỏ hơn 20.000₫ thì chỉ giảm bằng đúng tiền hàng, không bao giờ âm.
+
+Giỏ hàng và trang đặt hàng hỏi `GET /api/orders/discount` để hiện trước cho khách. Đó chỉ
+là con số xem trước — **máy chủ vẫn tự quyết** khi thật sự tạo đơn.
+
+### Mua tại quầy: giảm % theo khối lượng
+
+Máy bán hàng cộng tổng số kg của hoá đơn và hiện ngay dưới dòng *Tiền hàng*:
+
+- Chưa đủ 50kg → ô nhập % bị **khoá**, kèm dòng nhắc còn thiếu bao nhiêu kg.
+- Đủ 50kg → nhân viên gõ mức % cho hoá đơn đó. Số tiền giảm hiện ngay.
+- Máy chủ **tự tính lại**: kiểm tra lại khối lượng, chặn % vượt 50, rồi tính
+  `giảm = floor(tiền hàng × % / 100)`. Trình duyệt gửi sẵn số tiền giảm cũng không được tin.
+- Hoá đơn lưu cả `discount_percent` và `total_kg`, nên mở lại hoá đơn cũ vẫn biết
+  hôm đó cửa hàng giảm bao nhiêu phần trăm và hoá đơn nặng bao nhiêu.
+- **Quà đổi điểm không tính vào khối lượng** (cũng như không tính vào tiền hàng),
+  nên không ai lấy quà để đẩy hoá đơn cho đủ 50kg.
+
+### Khối lượng mỗi loại gạo lấy từ đâu
+
+Cột mới `products.weight_kg`. Migration tự suy từ tên đơn vị: `"bao 10kg"` → 10,
+`"túi 5kg"` → 5. Toàn bộ 52 loại đang có đều suy đúng, không loại nào còn 0kg.
+
+Form sản phẩm trong trang quản trị có thêm ô **Khối lượng (kg)** ngay cạnh *Đơn vị*.
+Bỏ trống thì hệ thống tự suy lại từ đơn vị. Loại gạo nào bán theo đơn vị lạ
+(ví dụ "bao" không ghi số kg) thì cửa hàng nhập tay vào đây, nếu không loại đó
+sẽ được tính 0kg và không giúp hoá đơn đạt mốc 50kg.
+
+### Trang quản trị hiện thông tin giảm giá
+
+Thẻ đơn hàng trong **Quản trị → Đơn hàng** nay hiện đủ:
+
+- *Tiền hàng* → *Giảm giá* (ghi rõ "đơn đầu tiên của khách") → *Khách trả*;
+- dòng điểm: đơn chưa xong ghi *"Sẽ cộng N điểm khi bấm Hoàn thành"*, đơn đã xong ghi
+  *"Đã cộng N điểm cho <số điện thoại>"*.
+
+Đơn không được giảm thì chỉ hiện *Khách trả*, không bày thêm dòng thừa.
+
+### Kiểm thử
+
+- `npm run test:smoke` — **82 PASS · 0 FAIL**
+- `npm run test:retail` — **107 PASS · 0 FAIL**, trong đó: hoá đơn to tiền nhưng chưa đủ
+  50kg vẫn không giảm; nhập % khi chưa đủ 50kg bị từ chối; đủ 50kg giảm đúng %;
+  đủ 50kg nhưng không nhập % thì không giảm; % vượt trần và % âm đều bị từ chối;
+  hoá đơn lưu đúng `discount_percent` và `total_kg`.
+- `npm run test:manage` — **104 PASS · 0 FAIL**, trong đó: đơn đầu tiên giảm 20.000₫;
+  đơn thứ hai và đơn lớn về sau không giảm; tài khoản khác vẫn được ưu đãi của mình;
+  huỷ đơn đầu rồi đặt lại vẫn được giảm; đơn rẻ hơn 20.000₫ chỉ giảm bằng đúng tiền hàng.
+- Giao diện được kiểm bằng Chrome thật: giỏ hàng và trang đặt hàng của khách mới,
+  thẻ đơn của quản trị viên, và máy bán hàng (khoá ô % ở 20kg, mở ở 50kg, nhập 10%
+  ra đúng −145.000₫ trên hoá đơn 1.450.000₫).
+
+### Điều cửa hàng nên cân nhắc
+
+Ưu đãi 20.000₫ hiện **không kèm mức mua tối thiểu**, đúng như yêu cầu. Nghĩa là khách
+đặt một túi gạo 35.000₫ cho đơn đầu vẫn được giảm 20.000₫, còn đơn dưới 20.000₫ thì
+khách trả 0₫. Nếu muốn chặn, thêm mức tối thiểu (ví dụ chỉ áp dụng cho đơn từ 150.000₫)
+là sửa ở `backend/src/routes/orders.js` chỗ tính `discount`.
+
 
 ## Việc bạn cần tự làm trước khi chạy thật
 

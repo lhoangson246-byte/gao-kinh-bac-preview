@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { HttpError, cleanImageUrl } from './validate.js';
-import { LIMITS, ORDER_STATUSES } from './constants.js';
+import { LIMITS, ORDER_STATUSES, RETAIL_DISCOUNT_MAX_PERCENT } from './constants.js';
 
 const obj = (shape) => z.strictObject(shape);
 const text = (max) => z.string().max(max).refine((v) => !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(v));
@@ -10,6 +10,11 @@ const integer = (min, max = Number.MAX_SAFE_INTEGER) => z.union([
   z.string().regex(/^\d+$/).transform(Number).pipe(z.number().int().min(min).max(max)),
 ]);
 const id = integer(1);
+// Số có thể lẻ (phần trăm giảm, khối lượng kg). Nhận cả chuỗi từ ô nhập.
+const decimal = (min, max) => z.union([
+  z.number().min(min).max(max),
+  z.string().regex(/^\d+(?:[.,]\d+)?$/).transform((v) => Number(v.replace(',', '.'))).pipe(z.number().min(min).max(max)),
+]);
 const flag = z.union([z.boolean(), z.literal(0), z.literal(1)]);
 export const newPassword = z.string().min(12, 'Mật khẩu tối thiểu 12 ký tự.')
   .refine((v) => Buffer.byteLength(v, 'utf8') <= 72, 'Mật khẩu tối đa 72 byte UTF-8.');
@@ -29,6 +34,7 @@ const product = {
   unit: optionalText(LIMITS.unit), origin: optionalText(LIMITS.origin), description: optionalText(LIMITS.description),
   image_url: optionalText(LIMITS.imageUrl).refine((v) => !v || cleanImageUrl(v) !== null),
   cost_price: integer(0, LIMITS.price).or(z.literal('')).nullable().optional(), is_active: flag.optional(),
+  weight_kg: decimal(0, 1000).or(z.literal('')).nullable().optional(),
 };
 const day = text(10).regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => {
   const d = new Date(`${v}T00:00:00Z`);
@@ -82,7 +88,8 @@ add('retail', 'GET', /^\/(policy|stats)\/?$/);
 add('retail', 'GET', /^\/customers\/?$/, empty, obj({ phone: text(LIMITS.phone) }));
 add('retail', 'POST', /^\/customers\/account\/?$/, obj({ phone: text(LIMITS.phone), full_name: name, password: newPassword }));
 add('retail', 'PUT', /^\/customers\/[^/]+\/?$/, obj({ full_name: name.optional(), note }));
-add('retail', 'POST', /^\/invoices\/?$/, obj({ phone, full_name: name.optional(), items: retailLines.optional(), rewards: retailLines.optional(), payment_method: z.enum(['cash', 'transfer']).optional(), note }));
+add('retail', 'POST', /^\/invoices\/?$/, obj({ phone, full_name: name.optional(), items: retailLines.optional(), rewards: retailLines.optional(), payment_method: z.enum(['cash', 'transfer']).optional(), note,
+  discount_percent: decimal(0, RETAIL_DISCOUNT_MAX_PERCENT).or(z.literal('')).nullable().optional() }));
 add('retail', 'GET', /^\/invoices\/?$/, empty, obj({ ...page, q: text(60).optional(), from: day.optional(), to: day.optional() }));
 add('retail', 'GET', /^\/invoices\/[^/]+\/?$/);
 add('retail', 'GET', /^\/returns\/?$/, empty, obj({ limit: page.limit }));

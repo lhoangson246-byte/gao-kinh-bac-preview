@@ -268,8 +268,13 @@ let orderId;
   check('Đơn lấy người nhận từ địa chỉ đã chọn',
     r.data.order?.receiver_name === 'Nguyễn Văn Test' && r.data.order?.phone === '0912345678');
   orderId = r.data.order?.id;
-  check('Tổng tiền do máy chủ tính từ giá trong cơ sở dữ liệu',
-    r.data.order?.total === product.price * 2, `nhận ${r.data.order?.total}, cần ${product.price * 2}`);
+  check('Tiền hàng do máy chủ tính từ giá trong cơ sở dữ liệu',
+    r.data.order?.subtotal === product.price * 2,
+    `nhận ${r.data.order?.subtotal}, cần ${product.price * 2}`);
+  // Đây là đơn đầu tiên của tài khoản vừa đăng ký nên được giảm 20.000đ.
+  check('Đơn đầu tiên của tài khoản được giảm 20.000₫',
+    r.data.order?.discount === 20000 && r.data.order?.total === product.price * 2 - 20000,
+    JSON.stringify({ d: r.data.order?.discount, t: r.data.order?.total }));
   check('Địa chỉ được chuẩn hoá kèm "Bắc Ninh"', /Bắc Ninh$/.test(r.data.order?.address || ''), r.data.order?.address);
   check('Khung giờ giao được lưu vào đơn', r.data.order?.delivery_slot === 'sang',
     JSON.stringify(r.data.order?.delivery_slot));
@@ -344,7 +349,9 @@ let orderId;
   check('Đơn hoàn thành KHÔNG hoàn kho', afterDone.data.product.stock === stockBefore - 2);
 
   const stats2 = await call('/admin/stats', { token: adminToken });
-  check('Doanh thu tính đơn đã hoàn thành', stats2.data.stats.revenue >= product.price * 2);
+  // Doanh thu là số khách thực trả, nên đơn đầu tiên đã được ưu đãi 20.000đ
+  // phải được tính theo total chứ không phải subtotal.
+  check('Doanh thu tính đơn đã hoàn thành', stats2.data.stats.revenue >= c3.data.order.total);
 }
 
 /* ---------- 14. Huỷ đơn hoàn kho đúng một lần ---------- */

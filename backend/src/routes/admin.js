@@ -4,7 +4,7 @@ import db from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { restoreStockForOrder } from './orders.js';
 import { creditPoints, loyaltyPhoneForOrder } from '../loyalty.js';
-import { ALLOWED_TRANSITIONS, ORDER_STATUSES, LIMITS, localDate } from '../constants.js';
+import { ALLOWED_TRANSITIONS, ORDER_STATUSES, LIMITS, localDate, parseWeightKg } from '../constants.js';
 import { HttpError, cleanImageUrl, cleanText, toInteger } from '../validate.js';
 import { writeAdminAudit } from '../audit.js';
 
@@ -129,6 +129,22 @@ function readProductInput(body, { partial }) {
 
   if (!partial || has('unit')) {
     data.unit = cleanText(body?.unit, LIMITS.unit) || 'kg';
+  }
+
+  // Khối lượng một đơn vị bán, dùng để tính mốc 50kg được giảm giá tại quầy.
+  // Bỏ trống thì tự suy từ tên đơn vị ("bao 10kg" → 10).
+  if (!partial || has('weight_kg') || has('unit')) {
+    const blank = body?.weight_kg === '' || body?.weight_kg == null;
+    if (blank) {
+      if (!partial || has('unit')) data.weight_kg = parseWeightKg(data.unit ?? body?.unit);
+    } else {
+      const kg = Number(String(body.weight_kg).replace(',', '.'));
+      if (!Number.isFinite(kg) || kg < 0 || kg > 1000) {
+        errors.weight_kg = 'Khối lượng phải là số từ 0 đến 1000 kg.';
+      } else {
+        data.weight_kg = kg;
+      }
+    }
   }
   if (has('origin')) data.origin = cleanText(body.origin, LIMITS.origin);
   if (has('description')) data.description = cleanText(body.description, LIMITS.description);
@@ -262,8 +278,8 @@ router.post('/products', (req, res, next) => {
     const data = readProductInput(req.body, { partial: false });
     const info = db
       .prepare(
-        `INSERT INTO products (name, description, origin, price, cost_price, unit, stock, image_url, is_active)
-         VALUES (@name, @description, @origin, @price, @cost_price, @unit, @stock, @image_url, @is_active)`
+        `INSERT INTO products (name, description, origin, price, cost_price, unit, weight_kg, stock, image_url, is_active)
+         VALUES (@name, @description, @origin, @price, @cost_price, @unit, @weight_kg, @stock, @image_url, @is_active)`
       )
       .run({
         name: data.name,
@@ -272,6 +288,7 @@ router.post('/products', (req, res, next) => {
         price: data.price,
         cost_price: data.cost_price ?? 0,
         unit: data.unit,
+        weight_kg: data.weight_kg ?? 0,
         stock: data.stock ?? 0,
         image_url: data.image_url ?? null,
         is_active: data.is_active ?? 1,

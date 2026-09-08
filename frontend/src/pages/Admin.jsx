@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, formatDateTime, formatVND, STATUS_LABEL, DELIVERY_SLOT_LABEL } from '../api';
+import ImagePicker from '../components/ImagePicker.jsx';
+import { api, formatDateTime, formatVND, pointsFor, STATUS_LABEL, DELIVERY_SLOT_LABEL } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
 import RevenueReport from '../components/RevenueReport.jsx';
 import CustomerManager from '../components/CustomerManager.jsx';
 import StockReceive from '../components/StockReceive.jsx';
 import ActivityLog from '../components/ActivityLog.jsx';
 
-const EMPTY = { name: '', origin: '', price: '', cost_price: '', unit: 'kg', stock: '', description: '', image_url: '' };
+const EMPTY = { name: '', origin: '', price: '', cost_price: '', unit: 'kg', weight_kg: '', stock: '', description: '', image_url: '' };
 const FILTERS = [
   ['all', 'Tất cả'], ['pending', 'Chờ xác nhận'], ['confirmed', 'Đã xác nhận'],
   ['shipping', 'Đang giao'], ['completed', 'Hoàn thành'], ['cancelled', 'Đã huỷ'],
@@ -159,6 +160,7 @@ export default function Admin() {
     setForm({
       name: product.name, origin: product.origin || '', price: product.price,
       cost_price: product.cost_price || '', unit: product.unit,
+      weight_kg: product.weight_kg || '',
       stock: product.stock, description: product.description || '', image_url: product.image_url || '',
     });
     setShowForm(true);
@@ -314,8 +316,22 @@ export default function Admin() {
                                 <ul className="admin-order-items">
                                   {order.items.map((item) => <li key={item.id}><span>{item.product_name}<small>{item.quantity} {item.unit}</small></span><strong>{formatVND(item.price * item.quantity)}</strong></li>)}
                                 </ul>
-                                <div className="admin-order-total"><span>Tổng tiền hàng</span><strong>{formatVND(order.total)}</strong></div>
+                                {order.discount > 0 && (
+                                  <>
+                                    <div className="admin-order-line"><span>Tiền hàng</span><span>{formatVND(order.subtotal || order.total + order.discount)}</span></div>
+                                    <div className="admin-order-line discount">
+                                      <span>Giảm giá <small>đơn đầu tiên của khách</small></span>
+                                      <span>− {formatVND(order.discount)}</span>
+                                    </div>
+                                  </>
+                                )}
+                                <div className="admin-order-total"><span>Khách trả</span><strong>{formatVND(order.total)}</strong></div>
                                 <small className="payment-label">{order.payment_method === 'bank' ? 'Khách chọn chuyển khoản' : 'Thanh toán khi nhận hàng'}</small>
+                                {order.status === 'completed'
+                                  ? <small className="payment-label points">Đã cộng {order.points_earned || 0} điểm cho {order.phone}</small>
+                                  : order.status !== 'cancelled' && (
+                                    <small className="payment-label points muted">Sẽ cộng {pointsFor(order.total)} điểm khi bấm Hoàn thành</small>
+                                  )}
                               </section>
                             </div>
                             <footer>
@@ -356,18 +372,26 @@ export default function Admin() {
                               : <small className="field-help">Dùng để tính lãi và giá trị hàng trong kho.</small>}
                           </label>
                           <label>Đơn vị<input className="input" name="unit" value={form.unit} onChange={onChange} placeholder="kg hoặc bao 10kg" /></label>
+                          <label>Khối lượng (kg)
+                            <input className="input" type="number" name="weight_kg" value={form.weight_kg} onChange={onChange} min="0" step="0.5" inputMode="decimal" placeholder="Tự suy từ đơn vị" aria-invalid={!!formErrors.weight_kg} />
+                            {formErrors.weight_kg
+                              ? <small className="err">{formErrors.weight_kg}</small>
+                              : <small className="field-help">Dùng để tính mốc 50kg được giảm giá tại quầy.</small>}
+                          </label>
                           <label>Số lượng còn lại
                             <input className="input" type="number" name="stock" value={form.stock} onChange={onChange} min="0" step="1" inputMode="numeric" aria-invalid={!!formErrors.stock} />
                             {formErrors.stock && <small className="err">{formErrors.stock}</small>}
                           </label>
                         </div>
                         <label>Mô tả ngắn<textarea className="input" name="description" rows={3} value={form.description} onChange={onChange} placeholder="Đặc điểm hạt gạo, độ dẻo, mùi thơm…" /></label>
-                        <label>Đường dẫn ảnh <span className="optional">Không bắt buộc</span>
-                          <input className="input" type="text" name="image_url" value={form.image_url} onChange={onChange} placeholder="/products/ten-anh.jpg hoặc https://…" aria-invalid={!!formErrors.image_url} />
-                          {formErrors.image_url
-                            ? <small className="err">{formErrors.image_url}</small>
-                            : <small className="field-help">Nếu để trống, cửa hàng sẽ dùng ảnh gạo mặc định.</small>}
-                        </label>
+                        <ImagePicker
+                          value={form.image_url}
+                          error={formErrors.image_url}
+                          onChange={(url) => {
+                            setForm((current) => ({ ...current, image_url: url }));
+                            setFormErrors((current) => ({ ...current, image_url: undefined }));
+                          }}
+                        />
                         <div className="form-actions"><button className="btn btn-primary btn-large" disabled={busyId === (editingId || 'new-product')}>{busyId === (editingId || 'new-product') ? 'Đang lưu…' : editingId ? 'Lưu thay đổi' : 'Thêm vào cửa hàng'}</button><button type="button" className="btn btn-secondary" onClick={resetProductForm}>Bỏ qua</button></div>
                       </form>
                     </div>

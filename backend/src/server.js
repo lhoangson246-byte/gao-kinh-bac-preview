@@ -15,6 +15,7 @@ import adminRoutes from './routes/admin.js';
 import retailRoutes from './routes/retail.js';
 import customerRoutes from './routes/customers.js';
 import { HttpError } from './validate.js';
+import imageRoutes from './routes/images.js';
 import { trustedProxy, originAllowed, protectBrowserRequests } from './security.js';
 import { createHash } from 'node:crypto';
 import { normalizePhone } from './validate.js';
@@ -56,6 +57,8 @@ app.use('/api', apiLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/auth/password', authLimiter);
+// Ảnh gửi lên dưới dạng nhị phân, gắn trước express.json để bộ đọc JSON không nuốt mất.
+app.use('/api', imageRoutes);
 app.use(express.json({ limit: '100kb' }));
 // Keep one account protected even when attempts arrive from different IPs.
 const accountLimiter = rateLimit({
@@ -112,8 +115,14 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Lỗi máy chủ. Vui lòng thử lại.' });
 });
 
-const PORT = process.env.PORT || 4000;
-const server = app.listen(PORT, () => {
-  console.log(`API listening on port ${server.address().port}`);
-  if (process.send) process.send({ port: server.address().port });
-});
+export default app;
+
+// Vercel imports the Express app as a function. The local server is only
+// started when this file is run directly (npm start / npm run dev).
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  const PORT = process.env.PORT || 4000;
+  const server = app.listen(PORT, () => {
+    console.log(`API listening on port ${server.address().port}`);
+    if (process.send) process.send({ port: server.address().port });
+  });
+}

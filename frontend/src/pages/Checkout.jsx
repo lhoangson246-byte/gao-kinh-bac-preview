@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
 import AddressBook from '../components/AddressBook.jsx';
 import {
-  api, formatVND, orderDiscountFor, DELIVERY_AREA_CODE, DELIVERY_AREA_LABEL, DELIVERY_SLOTS,
+  api, formatVND, pointsFor, DELIVERY_AREA_CODE, DELIVERY_AREA_LABEL, DELIVERY_SLOTS,
 } from '../api';
 
 export default function Checkout() {
@@ -11,8 +11,9 @@ export default function Checkout() {
   const navigate = useNavigate();
 
   const orderable = items.filter((item) => item.stock > 0 && item.quantity > 0);
-  // Xem trước mức giảm; máy chủ vẫn tự tính lại khi tạo đơn.
-  const discount = orderDiscountFor(total);
+  // Xem trước ưu đãi đơn đầu tiên; máy chủ vẫn tự quyết khi tạo đơn.
+  const [firstOrder, setFirstOrder] = useState(null);
+  const discount = firstOrder?.available ? Math.min(firstOrder.amount, total) : 0;
 
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [form, setForm] = useState({
@@ -24,6 +25,14 @@ export default function Checkout() {
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.orderDiscount()
+      .then((r) => { if (!cancelled) setFirstOrder(r); })
+      .catch(() => { if (!cancelled) setFirstOrder({ available: false, amount: 0 }); });
+    return () => { cancelled = true; };
+  }, []);
 
   const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
   const onSelectAddress = (address) => {
@@ -165,10 +174,11 @@ export default function Checkout() {
             ))}
           </div>
           {discount > 0 && (
-            <div className="summary-row"><span>Giảm giá</span><strong className="free-tag">− {formatVND(discount)}</strong></div>
+            <div className="summary-row"><span>Giảm giá <small>ưu đãi đơn đầu tiên</small></span><strong className="free-tag">− {formatVND(discount)}</strong></div>
           )}
           <div className="summary-row"><span>Phí giao hàng</span><strong className="free-tag">Miễn phí</strong></div>
           <div className="summary-row grand-total"><span>Tạm tính</span><strong>{formatVND(total - discount)}</strong></div>
+          <p className="pos-hint">Đơn này cộng {pointsFor(total - discount)} điểm tích luỹ khi giao xong.</p>
           <p className="summary-disclaimer">
             Bằng việc đặt hàng, bạn xác nhận đây là đơn mua lẻ và địa chỉ nhận thuộc tỉnh {DELIVERY_AREA_LABEL}.
           </p>

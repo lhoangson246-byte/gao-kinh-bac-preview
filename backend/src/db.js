@@ -1,15 +1,26 @@
-import Database from 'better-sqlite3';
+import { createHash } from 'node:crypto';
+import { parseWeightKg } from './constants.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dataDir = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, '..', 'data');
-if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+const remoteDatabaseUrl = process.env.LIBSQL_URL;
+const { default: Database } = await import(remoteDatabaseUrl ? 'libsql' : 'better-sqlite3');
 
-const db = new Database(path.join(dataDir, 'app.db'));
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+let db;
+if (remoteDatabaseUrl) {
+  db = new Database(remoteDatabaseUrl, { authToken: process.env.LIBSQL_AUTH_TOKEN });
+  // libsql deliberately has no .pragma() helper. Sending the SQL statement
+  // directly preserves the cascading constraints used by the application.
+  db.exec('PRAGMA foreign_keys = ON');
+} else {
+  const dataDir = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, '..', 'data');
+  if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+  db = new Database(path.join(dataDir, 'app.db'));
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+}
 
 db.exec(`
 -- Khách có thể đăng ký chỉ bằng số điện thoại, nên email được phép để trống.
@@ -397,6 +408,82 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(rewardMigrati
     db.exec('ALTER TABLE orders ADD COLUMN points_earned INTEGER NOT NULL DEFAULT 0');
     console.log('✅ Đã thêm cột points_earned vào bảng orders.');
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * Ảnh sản phẩm do cửa hàng tự tải lên
+ *
+ * Ảnh nằm luôn trong SQLite để đi cùng ổ đĩa bền vững của cơ sở dữ liệu.
+ * Nếu để trên thư mục của máy chủ thì mỗi lần Render dựng lại máy là mất
+ * ảnh, trong khi tệp SQLite đã được gắn ổ đĩa riêng qua DATA_DIR.
+ * ------------------------------------------------------------------ */
+db.exec(`
+CREATE TABLE IF NOT EXISTS product_images (
+  id         TEXT PRIMARY KEY,
+  mime       TEXT NOT NULL,
+  bytes      BLOB NOT NULL,
+  size       INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`);
+
+// Vân tay nội dung ảnh. Tải lên đúng tấm ảnh đã có thì dùng lại bản cũ, nhờ vậy
+// thư viện ảnh không đầy những tấm giống hệt nhau và cơ sở dữ liệu không phình.
+if (!db.prepare('PRAGMA table_info(product_images)').all().some((c) => c.name === 'sha256')) {
+  db.exec('ALTER TABLE product_images ADD COLUMN sha256 TEXT');
+  console.log('✅ Đã thêm cột sha256 vào bảng product_images.');
+}
+{
+  // Tính vân tay cho những ảnh tải lên trước khi có cột này.
+  const missing = db.prepare('SELECT id, bytes FROM product_images WHERE sha256 IS NULL').all();
+  if (missing.length) {
+    const setHash = db.prepare('UPDATE product_images SET sha256 = ? WHERE id = ?');
+    db.transaction(() => {
+      for (const row of missing) {
+        setHash.run(createHash('sha256').update(row.bytes).digest('hex'), row.id);
+      }
+    })();
+  }
+}
+db.exec('CREATE INDEX IF NOT EXISTS idx_product_images_sha256 ON product_images(sha256)');
+
+
+/* ------------------------------------------------------------------ *
+ * Chính sách giảm giá mới (cửa hàng chốt 08/09/2026)
+ *
+ * Mua tại quầy chỉ giảm khi hoá đơn đạt 50kg trở lên, nên phải biết mỗi
+ * loại gạo nặng bao nhiêu kg cho một đơn vị bán.
+ * ------------------------------------------------------------------ */
+if (!db.prepare('PRAGMA table_info(products)').all().some((c) => c.name === 'weight_kg')) {
+  db.exec('ALTER TABLE products ADD COLUMN weight_kg REAL NOT NULL DEFAULT 0');
+  console.log('✅ Đã thêm cột weight_kg vào bảng products.');
+}
+{
+  // Suy khối lượng từ tên đơn vị ("bao 10kg" → 10). Chỉ điền cho những dòng
+  // còn bỏ trống, để cửa hàng sửa tay rồi thì không bị ghi đè.
+  const rows = db.prepare('SELECT id, unit FROM products WHERE weight_kg <= 0').all();
+  if (rows.length) {
+    const setWeight = db.prepare('UPDATE products SET weight_kg = ? WHERE id = ?');
+    db.transaction(() => {
+      for (const row of rows) {
+        const kg = parseWeightKg(row.unit);
+        if (kg > 0) setWeight.run(kg, row.id);
+      }
+    })();
+  }
+}
+
+// Mức phần trăm nhân viên đã nhập cho hoá đơn tại quầy. Lưu lại để mở hoá đơn
+// cũ vẫn thấy đúng cửa hàng đã giảm bao nhiêu phần trăm.
+if (!db.prepare('PRAGMA table_info(retail_invoices)').all().some((c) => c.name === 'discount_percent')) {
+  db.exec('ALTER TABLE retail_invoices ADD COLUMN discount_percent REAL NOT NULL DEFAULT 0');
+  console.log('✅ Đã thêm cột discount_percent vào bảng retail_invoices.');
+}
+
+// Tổng khối lượng của hoá đơn tại quầy, để đối chiếu mốc 50kg về sau.
+if (!db.prepare('PRAGMA table_info(retail_invoices)').all().some((c) => c.name === 'total_kg')) {
+  db.exec('ALTER TABLE retail_invoices ADD COLUMN total_kg REAL NOT NULL DEFAULT 0');
+  console.log('✅ Đã thêm cột total_kg vào bảng retail_invoices.');
 }
 
 export default db;

@@ -78,18 +78,23 @@ export const localDate = (column) => `date(${column}, '${REPORT_TIME_SHIFT}')`;
 export const localMonth = (column) => `strftime('%Y-%m', ${column}, '${REPORT_TIME_SHIFT}')`;
 
 /* ------------------------------------------------------------------ *
- * Bán lẻ tại quầy: giảm giá và tích điểm
+ * Chính sách giảm giá và tích điểm
+ *
+ * Hai kênh bán có hai chính sách giảm giá KHÁC NHAU:
+ *   - Đặt online: đơn ĐẦU TIÊN của mỗi tài khoản được giảm 20.000đ.
+ *   - Mua tại quầy: chỉ giảm khi hoá đơn đạt 50kg trở lên, mức phần trăm
+ *     do nhân viên tự nhập cho từng hoá đơn.
+ * Tích điểm thì giống nhau ở cả hai kênh.
  * ------------------------------------------------------------------ */
 
-/**
- * Giảm giá tự động theo giá trị hoá đơn — khách không cần tích luỹ trước.
- * Xếp từ mức cao xuống thấp; mức đầu tiên khớp sẽ được áp dụng.
- * Muốn đổi chính sách thì chỉ sửa ở đây.
- */
-export const RETAIL_DISCOUNT_TIERS = [
-  { minSubtotal: 500_000, discount: 20_000 },
-  { minSubtotal: 300_000, discount: 10_000 },
-];
+/** Đơn online đầu tiên của mỗi tài khoản được giảm cố định 20.000đ. */
+export const FIRST_ORDER_DISCOUNT = 20_000;
+
+/** Mua tại quầy chỉ được giảm khi hoá đơn đạt mức khối lượng này. */
+export const RETAIL_DISCOUNT_MIN_KG = 50;
+
+/** Chặn trên cho mức phần trăm nhân viên nhập tay, tránh gõ nhầm. */
+export const RETAIL_DISCOUNT_MAX_PERCENT = 50;
 
 /** Số tiền (đồng) tương ứng 1 điểm tích luỹ. 1.000đ = 1 điểm. */
 export const RETAIL_VND_PER_POINT = 1_000;
@@ -111,10 +116,25 @@ export const RETAIL_PAYMENT_METHODS = {
   transfer: 'Chuyển khoản',
 };
 
-/** Số tiền được giảm cho một hoá đơn có tiền hàng `subtotal`. */
-export function retailDiscountFor(subtotal) {
-  const tier = RETAIL_DISCOUNT_TIERS.find((t) => subtotal >= t.minSubtotal);
-  return tier ? tier.discount : 0;
+/**
+ * Đọc số kg từ tên đơn vị: "bao 10kg" → 10, "túi 1kg" → 1.
+ * Trả về 0 khi không đọc được; khi đó cửa hàng tự nhập khối lượng cho sản phẩm.
+ */
+export function parseWeightKg(unit) {
+  const match = String(unit || '').match(/(\d+(?:[.,]\d+)?)\s*kg/i);
+  if (!match) return 0;
+  const kg = Number(match[1].replace(',', '.'));
+  return Number.isFinite(kg) && kg > 0 ? kg : 0;
+}
+
+/**
+ * Số tiền giảm cho một hoá đơn tại quầy.
+ * Chỉ giảm khi đủ khối lượng tối thiểu; phần trăm do cửa hàng nhập.
+ */
+export function retailDiscountFor(subtotal, { percent = 0, totalKg = 0 } = {}) {
+  if (!(percent > 0) || totalKg < RETAIL_DISCOUNT_MIN_KG) return 0;
+  const capped = Math.min(percent, RETAIL_DISCOUNT_MAX_PERCENT);
+  return Math.min(subtotal, Math.floor((subtotal * capped) / 100));
 }
 
 /** Điểm tích được từ số tiền khách thực trả. */

@@ -13,7 +13,8 @@
 - Đặt hàng tới địa chỉ trong tỉnh Bắc Ninh (kiểm tra ở cả trình duyệt và máy chủ)
 - Chọn khung giờ giao trong ngày (sáng 07h00–11h30 hoặc chiều 14h00–18h00), giao hàng miễn phí
 - Chọn thanh toán khi nhận hàng hoặc chuyển khoản
-- **Được giảm giá và tích điểm y như mua tại quầy**: giỏ hàng và trang đặt hàng hiện sẵn số tiền được giảm; đơn hoàn thành sẽ cộng điểm vào chính số điện thoại của tài khoản
+- **Ưu đãi 20.000₫ cho đơn đầu tiên** của mỗi tài khoản; giỏ hàng và trang đặt hàng hiện sẵn số tiền được giảm
+- **Tích điểm cho mọi đơn**: đơn giao xong sẽ cộng điểm vào chính số điện thoại của tài khoản (1.000₫ = 1 điểm)
 - Theo dõi trạng thái và tự huỷ đơn còn chờ xác nhận
 - Cài ứng dụng lên màn hình chính từ trình duyệt hỗ trợ PWA
 
@@ -23,6 +24,7 @@
 - Mở trang là thấy ngay số đơn đang chờ xác nhận
 - Nút thao tác theo từng bước: xác nhận → giao hàng → hoàn thành
 - Thêm, sửa, ẩn và mở bán lại sản phẩm (ẩn là soft delete, đơn cũ giữ nguyên)
+- **Đưa ảnh sản phẩm vào theo cách nào cũng được**: chọn tệp, kéo thả vào ô ảnh, dán bằng Ctrl+V, hoặc bấm *Chọn từ ảnh đã có* để lấy lại ảnh trong thư viện của cửa hàng. Ảnh tự thu nhỏ và hiện ngay ô xem trước.
 - Theo dõi tồn kho, cảnh báo loại gạo sắp hết và doanh thu của đơn đã hoàn thành
 - Cảnh báo ngay số loại gạo **chưa nhập giá bán**
 - **Quản lý tài khoản khách**: xem, tìm theo tên/SĐT/email, đặt lại mật khẩu khi khách quên, khoá và mở khoá tài khoản
@@ -36,17 +38,20 @@ Khu vực `/quan-tri/ban-hang` dành cho nhân viên đứng quầy:
 
 - Nhập số điện thoại để **tra cứu khách quen**: hiện tên, điểm tích luỹ, số lần mua và các hoá đơn gần đây. Số chưa từng mua sẽ được báo là khách mới và tạo hồ sơ khi lưu hoá đơn.
 - Bấm vào loại gạo để thêm vào hoá đơn, chỉnh số lượng, chọn tiền mặt hoặc chuyển khoản.
-- **Giảm giá tự động theo giá trị hoá đơn** — khách không cần tích luỹ trước:
-  - từ 300.000₫ → giảm 10.000₫
-  - từ 500.000₫ → giảm 20.000₫
+- **Giảm giá theo khối lượng, mức phần trăm do cửa hàng tự nhập**: chỉ hoá đơn từ **50kg** trở lên mới mở ô nhập %, tối đa 50%. Dưới 50kg thì ô này bị khoá và máy chủ cũng từ chối. Màn hình hiện sẵn tổng khối lượng của hoá đơn.
+- **Không có giảm giá tự động theo giá trị hoá đơn** — mốc 300k/500k trước đây đã bỏ.
 - **Tích điểm**: 1.000₫ thực trả = 1 điểm, cộng vào hồ sơ theo số điện thoại. Khách vãng lai không cho số thì không tích điểm.
 - **Đổi quà**: đủ **1.000 điểm** đổi được **1 túi 1kg** — gạo nếp, gạo lứt hoặc kê vàng. Quà tính 0₫, điểm bị trừ ngay khi lưu hoá đơn.
 - **Đăng ký tài khoản đặt hàng online ngay tại quầy**: tra số điện thoại xong, nếu số đó chưa có tài khoản thì nhân viên bấm *Tạo tài khoản*, nhập tên khách và bấm *Gợi ý* để hệ thống sinh mật khẩu dễ đọc, rồi đọc số điện thoại và mật khẩu cho khách. Nếu số đã có tài khoản, màn hình báo sẵn kèm số đơn giao tận nhà khách đã đặt.
 - Tab **Hoá đơn cũ** tra theo mã hoá đơn (`HD000012`), số điện thoại, tên khách hoặc khoảng ngày; mở ra xem lại đúng tên và giá lúc bán.
 
+Mốc 50kg tính theo cột `products.weight_kg`. Cột này tự suy từ tên đơn vị khi tạo sản phẩm ("bao 10kg" → 10) và sửa được trong form sản phẩm ở trang quản trị. Quà đổi điểm không tính vào khối lượng.
+
 **Số điện thoại tích điểm chính là số đăng nhập đặt hàng online.** Khách mua tại quầy hay đặt "đơn hàng online – giao hàng tận nhà" đều cộng vào cùng một hồ sơ điểm, nên không còn cảnh một khách có hai sổ điểm. Đơn online chỉ được cộng điểm **một lần duy nhất**, vào lúc cửa hàng bấm *Hoàn thành*; đơn bị huỷ hoặc còn đang giao thì chưa cộng.
 
-Muốn đổi chính sách giảm giá hoặc tỉ lệ tích điểm thì sửa `RETAIL_DISCOUNT_TIERS` và `RETAIL_VND_PER_POINT` trong `backend/src/constants.js`. Cả đơn online lẫn hoá đơn quầy đều dùng chung mốc này.
+Hai kênh bán có **hai chính sách giảm giá khác nhau**: đặt online được giảm 20.000₫ cho đơn đầu tiên của mỗi tài khoản; mua tại quầy chỉ giảm khi hoá đơn từ 50kg, theo phần trăm nhân viên nhập tay. **Tích điểm thì giống nhau ở cả hai kênh.**
+
+Muốn đổi chính sách thì sửa `FIRST_ORDER_DISCOUNT`, `RETAIL_DISCOUNT_MIN_KG`, `RETAIL_DISCOUNT_MAX_PERCENT` và `RETAIL_VND_PER_POINT` trong `backend/src/constants.js`.
 
 **Bán tại quầy không trừ tồn kho của cửa hàng online** — hai bên theo dõi riêng, đúng như cửa hàng yêu cầu.
 
@@ -96,12 +101,24 @@ Khi API đang chạy, mở một cửa sổ khác:
 
 ```bash
 cd backend
+# Ba bộ này gọi vào API đang chạy nên cần đúng tài khoản quản trị của bạn.
+export ADMIN_EMAIL=... ADMIN_PASSWORD=...     # Windows PowerShell: $env:ADMIN_EMAIL="..."
 npm run test:smoke     # cửa hàng online
 npm run test:retail    # bán lẻ tại quầy + doanh thu
-npm run test:manage    # tài khoản khách, nhập kho, giá nhập
+npm run test:manage    # tài khoản khách, nhập kho, giá nhập, ảnh sản phẩm
 ```
 
-Ba bộ này đều tạo tài khoản mới nên chạy liên tiếp sẽ **chạm giới hạn 20 lần đăng ký / 15 phút**
+Thiếu hai biến trên thì bước đăng nhập quản trị hỏng và bộ kiểm thử dừng giữa chừng.
+
+Hai bộ còn lại tự dựng API riêng nên chạy được bất cứ lúc nào, không cần biến môi trường
+và cũng không đụng vào cơ sở dữ liệu đang dùng:
+
+```bash
+npm run test:security  # JWT, seed, đổi tài khoản quản trị, giới hạn tần suất
+npm run test:isolated  # chạy lại bộ quản lý trên một cơ sở dữ liệu sạch
+```
+
+Ba bộ đầu đều tạo tài khoản mới nên chạy liên tiếp sẽ **chạm giới hạn 20 lần đăng ký / 15 phút**
 và báo lỗi giả. Khởi động lại API trước mỗi bộ, hoặc chờ vài phút giữa các lần chạy.
 
 Bộ kiểm thử đi qua các luồng chính: đăng ký, đăng nhập, sổ địa chỉ, phân quyền, tạo đơn, giới hạn Bắc Ninh, tồn kho, huỷ đơn và hoàn kho, quy trình trạng thái đơn, quản lý sản phẩm.

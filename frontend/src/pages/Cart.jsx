@@ -1,18 +1,26 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
-import { api, formatVND, orderDiscountFor, ORDER_DISCOUNT_TIERS } from '../api';
+import { api, formatVND, pointsFor } from '../api';
 
 export default function Cart() {
   const { items, total, count, hasUnavailable, setQuantity, remove, clear, syncWithProducts } = useCart();
   const [syncError, setSyncError] = useState('');
 
-  // Hiển thị trước mức giảm cho khách; máy chủ vẫn tính lại khi tạo đơn.
-  const discount = orderDiscountFor(total);
-  const nextTier = [...ORDER_DISCOUNT_TIERS]
-    .sort((a, b) => a.minSubtotal - b.minSubtotal)
-    .find((t) => total < t.minSubtotal) || null;
+  // Ưu đãi đơn đầu tiên: hỏi máy chủ xem tài khoản này còn được giảm không.
+  // Chỉ để xem trước; máy chủ vẫn tự quyết khi tạo đơn.
+  const [firstOrder, setFirstOrder] = useState(null);
+  const discount = firstOrder?.available ? Math.min(firstOrder.amount, total) : 0;
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let cancelled = false;
+    api.orderDiscount()
+      .then((r) => { if (!cancelled) setFirstOrder(r); })
+      // Chưa đăng nhập hoặc lỗi mạng thì đơn giản là không hiện ưu đãi.
+      .catch(() => { if (!cancelled) setFirstOrder({ available: false, amount: 0 }); });
+    return () => { cancelled = true; };
+  }, []);
 
   // Lấy giá và tồn kho mới nhất để khách không đặt nhầm hàng đã hết.
   useEffect(() => {
@@ -103,15 +111,11 @@ export default function Cart() {
           <p className="eyebrow dark"><span></span>Tóm tắt</p>
           <h2>Đơn hàng</h2>
           <div className="summary-row"><span>Tiền hàng</span><strong>{formatVND(total)}</strong></div>
-          {discount > 0 ? (
+          {discount > 0 && (
             <div className="summary-row">
-              <span>Giảm giá <small>hoá đơn từ {formatVND(300000)}</small></span>
+              <span>Giảm giá <small>ưu đãi đơn đầu tiên</small></span>
               <strong className="free-tag">− {formatVND(discount)}</strong>
             </div>
-          ) : nextTier && (
-            <p className="pos-hint">
-              Mua thêm {formatVND(nextTier.minSubtotal - total)} nữa để được giảm {formatVND(nextTier.discount)}.
-            </p>
           )}
           <div className="summary-row"><span>Phí giao hàng</span><strong className="free-tag">Miễn phí</strong></div>
           <div className="summary-note">
@@ -119,6 +123,7 @@ export default function Cart() {
             <p>Giao hoả tốc trong ngày, miễn phí giao hàng. Cửa hàng gọi xác nhận địa chỉ trước khi giao.</p>
           </div>
           <div className="summary-row grand-total"><span>Tạm tính</span><strong>{formatVND(total - discount)}</strong></div>
+          <p className="pos-hint">Đơn này cộng {pointsFor(total - discount)} điểm tích luỹ khi giao xong.</p>
           <button
             className="btn btn-primary btn-block btn-large"
             disabled={hasUnavailable || count === 0}

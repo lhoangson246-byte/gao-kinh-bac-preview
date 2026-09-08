@@ -1,4 +1,4 @@
-// Kiểm thử hệ thống bán lẻ tại quầy: tích điểm, giảm giá theo bậc, tra cứu hoá đơn.
+// Kiểm thử hệ thống bán lẻ tại quầy: tích điểm, giảm giá theo khối lượng, tra cứu hoá đơn.
 // Cách chạy:  npm run test:retail   (API phải đang chạy)
 const BASE = process.env.BASE || 'http://localhost:4000';
 
@@ -54,17 +54,18 @@ const admin = login.data.token;
 /* ---------- Chính sách ---------- */
 {
   const r = await call('/retail/policy', { token: admin });
-  check('Lấy được chính sách giảm giá', r.status === 200 && r.data.policy.tiers.length === 2);
-  check('Mốc giảm đúng: 500k→20k, 300k→10k',
-    r.data.policy.tiers[0].minSubtotal === 500000 && r.data.policy.tiers[0].discount === 20000 &&
-    r.data.policy.tiers[1].minSubtotal === 300000 && r.data.policy.tiers[1].discount === 10000,
-    JSON.stringify(r.data.policy.tiers));
+  check('Lấy được chính sách tại quầy', r.status === 200 && !!r.data.policy);
+  check('Chính sách nêu mốc 50kg mới được giảm',
+    r.data.policy.minKgForDiscount === 50, String(r.data.policy.minKgForDiscount));
+  check('Chính sách nêu trần phần trăm giảm',
+    r.data.policy.maxDiscountPercent === 50, String(r.data.policy.maxDiscountPercent));
+  check('Không còn giảm giá tự động theo mốc tiền', r.data.policy.tiers === undefined);
 }
 
 /* ---------- Chuẩn bị sản phẩm để bán ---------- */
 const products = (await call('/products')).data.products.filter((p) => p.price > 0);
 const p145 = products.find((p) => p.image_url === '/products/lvs-gao-sach-st25-5kg.jpg');
-const p150 = products.find((p) => p.price === 150000);   // Dùng thử đúng mốc giảm giá
+const p150 = products.find((p) => p.price === 150000);
 const p35 = products.find((p) => p.price === 35000);     // Gạo nếp / gạo lứt
 check('Gạo ST25 LVS túi 5kg đã giảm còn 145.000₫', p145?.price === 145000, String(p145?.price));
 check('Có sản phẩm để bán tại quầy', !!p145 && !!p150 && !!p35);
@@ -79,7 +80,7 @@ check('Có sản phẩm để bán tại quầy', !!p145 && !!p150 && !!p35);
   check('SĐT sai định dạng bị từ chối (400)', bad.status === 400);
 }
 
-/* ---------- Hoá đơn dưới 300k: không giảm ---------- */
+/* ---------- Hoá đơn nhỏ: không giảm ---------- */
 {
   const r = await call('/retail/invoices', {
     method: 'POST', token: admin,
@@ -94,54 +95,75 @@ check('Có sản phẩm để bán tại quầy', !!p145 && !!p150 && !!p35);
   check('Khách mới được tạo kèm tên', r.data.customer?.full_name === 'Cô Lan' && r.data.customer?.points === 70);
 }
 
-/* ---------- Hoá đơn 300k–499k: giảm 10k ---------- */
+/* ---------- Hoá đơn to tiền nhưng chưa đủ 50kg: vẫn không giảm ---------- */
 let invoice10k;
 {
+  // 2 túi 5kg + 2 túi 1kg = 360.000₫ nhưng mới 12kg.
   const r = await call('/retail/invoices', {
     method: 'POST', token: admin,
     body: { phone, items: [{ product_id: p145.id, quantity: 2 }, { product_id: p35.id, quantity: 2 }] },
   });
   invoice10k = r.data.invoice;
-  check('Hoá đơn 360.000₫ được giảm 10.000₫',
-    invoice10k?.subtotal === 360000 && invoice10k?.discount === 10000 && invoice10k?.total === 350000,
+  check('Hoá đơn 360.000₫ nhưng mới 12kg thì không được giảm',
+    invoice10k?.subtotal === 360000 && invoice10k?.discount === 0 && invoice10k?.total === 360000,
     JSON.stringify({ s: invoice10k?.subtotal, d: invoice10k?.discount, t: invoice10k?.total }));
-  check('Điểm tính trên số tiền thực trả (350)', invoice10k?.points_earned === 350, String(invoice10k?.points_earned));
-  check('Điểm cộng dồn vào khách cũ (70 + 350 = 420)', r.data.customer?.points === 420, String(r.data.customer?.points));
+  check('Hoá đơn ghi lại tổng khối lượng', invoice10k?.total_kg === 12, String(invoice10k?.total_kg));
+  check('Điểm tính trên số tiền thực trả (360)', invoice10k?.points_earned === 360, String(invoice10k?.points_earned));
+  check('Điểm cộng dồn vào khách cũ (70 + 360 = 430)', r.data.customer?.points === 430, String(r.data.customer?.points));
   check('Số lần mua tăng lên 2', r.data.customer?.visit_count === 2, String(r.data.customer?.visit_count));
 }
 
-/* ---------- Hoá đơn từ 500k: giảm 20k ---------- */
+/* ---------- Chưa đủ 50kg mà nhập % giảm thì bị từ chối ---------- */
 {
   const r = await call('/retail/invoices', {
     method: 'POST', token: admin,
-    body: { phone, items: [{ product_id: p145.id, quantity: 4 }] },
+    body: { items: [{ product_id: p145.id, quantity: 4 }], discount_percent: 10 },   // 20kg
   });
-  const inv = r.data.invoice;
-  check('Hoá đơn 580.000₫ được giảm 20.000₫',
-    inv?.subtotal === 580000 && inv?.discount === 20000 && inv?.total === 560000,
-    JSON.stringify({ s: inv?.subtotal, d: inv?.discount, t: inv?.total }));
+  check('Chưa đủ 50kg mà nhập % giảm bị từ chối (400)', r.status === 400, `status=${r.status}`);
+  check('Báo lỗi nói rõ mốc 50kg', /50kg/.test(r.data.message || ''), r.data.message);
 }
 
-/* ---------- Đúng mốc 300k và 500k ---------- */
+/* ---------- Từ 50kg: giảm theo phần trăm cửa hàng nhập ---------- */
 {
-  const exact300 = await call('/retail/invoices', {
+  // 10 túi 5kg = 50kg, 1.450.000₫; giảm 10% = 145.000₫.
+  const r = await call('/retail/invoices', {
     method: 'POST', token: admin,
-    body: { items: [{ product_id: p150.id, quantity: 2 }] },   // 300.000₫
+    body: { phone, items: [{ product_id: p145.id, quantity: 10 }], discount_percent: 10 },
   });
-  check('Đúng 300.000₫ được giảm 10.000₫', exact300.data.invoice?.discount === 10000,
-    String(exact300.data.invoice?.discount));
+  const inv = r.data.invoice;
+  check('Hoá đơn đủ 50kg được giảm theo % (201)', r.status === 201, JSON.stringify(r.data).slice(0, 200));
+  check('Giảm 10% của 1.450.000₫ = 145.000₫',
+    inv?.subtotal === 1450000 && inv?.discount === 145000 && inv?.total === 1305000,
+    JSON.stringify({ s: inv?.subtotal, d: inv?.discount, t: inv?.total }));
+  check('Hoá đơn lưu lại mức phần trăm đã giảm', inv?.discount_percent === 10, String(inv?.discount_percent));
+  check('Hoá đơn lưu lại 50kg', inv?.total_kg === 50, String(inv?.total_kg));
+  check('Điểm tính trên số tiền sau giảm (1305)', inv?.points_earned === 1305, String(inv?.points_earned));
+}
 
-  const p50 = products.find((p) => p.price === 50000);
-  if (p50) {
-    const exact500 = await call('/retail/invoices', {
-      method: 'POST', token: admin,
-      body: { items: [{ product_id: p150.id, quantity: 3 }, { product_id: p50.id, quantity: 1 }] }, // 500.000₫
-    });
-    check('Đúng 500.000₫ được giảm 20.000₫', exact500.data.invoice?.discount === 20000,
-      String(exact500.data.invoice?.discount));
-  } else {
-    check('Đúng 500.000₫ được giảm 20.000₫', false, 'không tìm được sản phẩm 50.000₫');
-  }
+/* ---------- Đủ 50kg nhưng không nhập % thì không giảm ---------- */
+{
+  const r = await call('/retail/invoices', {
+    method: 'POST', token: admin,
+    body: { items: [{ product_id: p145.id, quantity: 10 }] },
+  });
+  check('Đủ 50kg nhưng không nhập % thì không giảm',
+    r.data.invoice?.discount === 0 && r.data.invoice?.discount_percent === 0,
+    JSON.stringify({ d: r.data.invoice?.discount, p: r.data.invoice?.discount_percent }));
+}
+
+/* ---------- Phần trăm vượt trần bị từ chối ---------- */
+{
+  const r = await call('/retail/invoices', {
+    method: 'POST', token: admin,
+    body: { items: [{ product_id: p145.id, quantity: 10 }], discount_percent: 80 },
+  });
+  check('Mức giảm vượt trần bị từ chối (400)', r.status === 400, `status=${r.status}`);
+
+  const neg = await call('/retail/invoices', {
+    method: 'POST', token: admin,
+    body: { items: [{ product_id: p145.id, quantity: 10 }], discount_percent: -5 },
+  });
+  check('Mức giảm âm bị từ chối (400)', neg.status === 400, `status=${neg.status}`);
 }
 
 /* ---------- Khách vãng lai: không số điện thoại thì không tích điểm ---------- */

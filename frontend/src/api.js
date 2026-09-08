@@ -33,6 +33,42 @@ async function request(path, { method = 'GET', body, auth = false } = {}) {
   return data;
 }
 
+/**
+ * Tải ảnh sản phẩm lên. Gửi thẳng nội dung tệp (không phải JSON) nên không
+ * dùng chung hàm request() ở trên.
+ */
+async function uploadImage(blob) {
+  let res;
+  try {
+    res = await fetch(`${BASE}/api/admin/images`, {
+      method: 'POST',
+      // Cùng cách xác thực bằng cookie phiên như request() ở trên.
+      headers: {
+        'Content-Type': blob.type || 'image/jpeg',
+        'X-Session-Mode': 'cookie',
+        'X-CSRF-Protection': '1',
+      },
+      credentials: 'include',
+      body: blob,
+    });
+  } catch {
+    const err = new Error('Không gửi được ảnh lên cửa hàng. Vui lòng kiểm tra kết nối mạng.');
+    err.status = 0;
+    throw err;
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(
+      res.status === 413
+        ? 'Ảnh quá nặng. Vui lòng chọn ảnh khác nhẹ hơn.'
+        : data.message || 'Chưa tải được ảnh lên. Vui lòng thử lại.'
+    );
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+
 export const api = {
   register: (payload) => request('/auth/register', { method: 'POST', body: payload }),
   login: (payload) => request('/auth/login', { method: 'POST', body: payload }),
@@ -59,6 +95,7 @@ export const api = {
   createOrder: (payload) => request('/orders', { method: 'POST', body: payload, auth: true }),
   myOrders: () => request('/orders', { auth: true }),
   cancelOrder: (id) => request(`/orders/${id}/cancel`, { method: 'PATCH', auth: true }),
+  orderDiscount: () => request('/orders/discount', { auth: true }),
 
   adminStats: () => request('/admin/stats', { auth: true }),
   adminOrders: (status) =>
@@ -70,6 +107,8 @@ export const api = {
   adminUpdateProduct: (id, payload) =>
     request(`/admin/products/${id}`, { method: 'PUT', body: payload, auth: true }),
   adminDeleteProduct: (id) => request(`/admin/products/${id}`, { method: 'DELETE', auth: true }),
+  adminUploadImage: uploadImage,
+  adminImageLibrary: () => request('/admin/images', { auth: true }),
   /* --- Quản lý tài khoản khách --- */
   adminCustomers: ({ q = '', locked = '', limit = 20, offset = 0 } = {}) => {
     const params = new URLSearchParams();
@@ -128,18 +167,18 @@ export const api = {
 /* ---- Hằng số và kiểm tra dùng chung với máy chủ ---- */
 
 /**
- * Mốc giảm giá áp dụng cho CẢ đơn online lẫn mua tại quầy.
- * Chỉ để hiển thị trước cho khách — máy chủ luôn tính lại khi tạo đơn.
+ * Giảm giá đơn online: mỗi tài khoản được giảm 20.000đ cho ĐƠN ĐẦU TIÊN.
+ * Chỉ để hiển thị trước cho khách — máy chủ luôn tự quyết khi tạo đơn.
+ * Mua tại quầy dùng chính sách khác (giảm % khi hoá đơn từ 50kg).
  */
-export const ORDER_DISCOUNT_TIERS = [
-  { minSubtotal: 500000, discount: 20000 },
-  { minSubtotal: 300000, discount: 10000 },
-];
+export const FIRST_ORDER_DISCOUNT = 20000;
 
-/** Số tiền được giảm cho một đơn có tiền hàng bằng subtotal. */
-export function orderDiscountFor(subtotal) {
-  const tier = ORDER_DISCOUNT_TIERS.find((t) => subtotal >= t.minSubtotal);
-  return tier ? tier.discount : 0;
+/** 1.000đ khách trả = 1 điểm tích luỹ. Giống nhau ở cả đơn online và mua tại quầy. */
+export const VND_PER_POINT = 1000;
+
+/** Số điểm khách được cộng khi trả `amountPaid` đồng. */
+export function pointsFor(amountPaid) {
+  return Math.floor(Math.max(0, amountPaid) / VND_PER_POINT);
 }
 
 export const DELIVERY_AREA_CODE = 'bac-ninh';

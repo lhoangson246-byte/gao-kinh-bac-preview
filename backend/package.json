@@ -23,6 +23,7 @@
     "express-rate-limit": "^8.7.0",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
+    "libsql": "^0.5.29",
     "zod": "^4.5.4"
   }
 }

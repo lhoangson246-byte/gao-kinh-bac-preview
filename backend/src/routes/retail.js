@@ -4,8 +4,8 @@ import bcrypt from 'bcryptjs';
 import db from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import {
-  LIMITS, RETAIL_DISCOUNT_TIERS, RETAIL_PAYMENT_METHODS, RETAIL_POINTS_PER_REWARD,
-  RETAIL_VND_PER_POINT, retailRewardsAffordable,
+  LIMITS, RETAIL_DISCOUNT_MIN_KG, RETAIL_DISCOUNT_MAX_PERCENT, RETAIL_PAYMENT_METHODS,
+  RETAIL_POINTS_PER_REWARD, RETAIL_VND_PER_POINT, retailRewardsAffordable,
   localDate, retailDiscountFor, retailPointsFor,
 } from '../constants.js';
 import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../validate.js';
@@ -40,7 +40,8 @@ function withItems(invoice) {
 router.get('/policy', (req, res) => {
   res.json({
     policy: {
-      tiers: RETAIL_DISCOUNT_TIERS,
+      minKgForDiscount: RETAIL_DISCOUNT_MIN_KG,
+      maxDiscountPercent: RETAIL_DISCOUNT_MAX_PERCENT,
       vndPerPoint: RETAIL_VND_PER_POINT,
       paymentMethods: RETAIL_PAYMENT_METHODS,
       pointsPerReward: RETAIL_POINTS_PER_REWARD,
@@ -241,7 +242,7 @@ function normalizeRewards(rewards) {
  */
 router.post('/invoices', (req, res, next) => {
   try {
-    const { phone, full_name, items, rewards, payment_method, note } = req.body || {};
+    const { phone, full_name, items, rewards, payment_method, note, discount_percent } = req.body || {};
 
     // Khách vãng lai không cần số điện thoại; có số thì mới tích được điểm.
     const rawPhone = cleanText(phone, LIMITS.phone);
@@ -289,8 +290,8 @@ router.post('/invoices', (req, res, next) => {
         subtotal += product.price * quantity;
       }
 
-      // Quà đổi điểm: giá tính 0đ nên KHÔNG cộng vào tiền hàng, do đó cũng không
-      // giúp khách đạt mốc giảm giá và không sinh thêm điểm.
+      // Quà đổi điểm: giá tính 0đ nên KHÔNG cộng vào tiền hàng, cũng không tính
+      // vào khối lượng để đạt mốc giảm giá, và không sinh thêm điểm.
       const rewardLines = [];
       let rewardCount = 0;
       for (const [productId, quantity] of wantedRewards) {
@@ -304,7 +305,17 @@ router.post('/invoices', (req, res, next) => {
       }
       const pointsUsed = rewardCount * RETAIL_POINTS_PER_REWARD;
 
-      const discount = retailDiscountFor(subtotal);
+      // Mua tại quầy chỉ được giảm khi hoá đơn đạt 50kg trở lên; mức phần trăm
+      // do nhân viên nhập cho từng hoá đơn. Máy chủ tự tính lại số tiền giảm.
+      const totalKg = lines.reduce((sum, l) => sum + (l.product.weight_kg || 0) * l.quantity, 0);
+      const percent = Number(discount_percent) || 0;
+      if (percent > 0 && totalKg < RETAIL_DISCOUNT_MIN_KG) {
+        throw new HttpError(400,
+          `Hoá đơn mới được ${totalKg}kg. Cửa hàng chỉ giảm giá cho hoá đơn từ ${RETAIL_DISCOUNT_MIN_KG}kg trở lên.`,
+          { discount_percent: `Cần từ ${RETAIL_DISCOUNT_MIN_KG}kg trở lên.` });
+      }
+      const discount = retailDiscountFor(subtotal, { percent, totalKg });
+      const appliedPercent = discount > 0 ? Math.min(percent, RETAIL_DISCOUNT_MAX_PERCENT) : 0;
       const total = subtotal - discount;
       const pointsEarned = customerPhone ? retailPointsFor(total) : 0;
 
@@ -349,12 +360,12 @@ router.post('/invoices', (req, res, next) => {
 
       const invoiceId = db.prepare(`
         INSERT INTO retail_invoices
-          (customer_id, customer_phone, customer_name, subtotal, discount, total,
-           points_earned, points_used, payment_method, note, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (customer_id, customer_phone, customer_name, subtotal, discount, discount_percent,
+           total_kg, total, points_earned, points_used, payment_method, note, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        customerId, customerPhone, customerName, subtotal, discount, total,
-        pointsEarned, pointsUsed, paymentMethod, invoiceNote, req.user.id
+        customerId, customerPhone, customerName, subtotal, discount, appliedPercent,
+        totalKg, total, pointsEarned, pointsUsed, paymentMethod, invoiceNote, req.user.id
       ).lastInsertRowid;
 
       db.prepare('UPDATE retail_invoices SET code = ? WHERE id = ?').run(invoiceCode(invoiceId), invoiceId);

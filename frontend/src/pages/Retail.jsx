@@ -75,12 +75,9 @@ export default function Retail() {
           </button>
           {policy && (
             <div className="admin-help">
-              <strong>Chính sách giảm giá</strong>
-              {policy.tiers.map((t) => (
-                <p key={t.minSubtotal}>
-                  Hoá đơn từ {formatVND(t.minSubtotal)} → giảm <b>{formatVND(t.discount)}</b>
-                </p>
-              ))}
+              <strong>Chính sách tại quầy</strong>
+              <p>Giảm giá: chỉ hoá đơn từ <b>{policy.minKgForDiscount}kg</b> trở lên,
+                 mức % do cửa hàng tự nhập (tối đa {policy.maxDiscountPercent}%).</p>
               <p>Tích điểm: {formatVND(policy.vndPerPoint)} = 1 điểm</p>
               <p>Đổi quà: <b>{policy.pointsPerReward?.toLocaleString("vi-VN")} điểm</b> = 1 túi 1kg (nếp / lứt / kê)</p>
             </div>
@@ -127,6 +124,12 @@ export default function Retail() {
 /* ================================================================== *
  * Tab 1 — Bán hàng
  * ================================================================== */
+/** Hiện khối lượng gọn: 50kg, 52,5kg. */
+function formatKg(kg) {
+  const n = Math.round((Number(kg) || 0) * 10) / 10;
+  return `${n.toLocaleString('vi-VN')}kg`;
+}
+
 function SellTab({ products, policy, onDone, notify }) {
   const [phone, setPhone] = useState('');
   const [customer, setCustomer] = useState(null);
@@ -143,6 +146,7 @@ function SellTab({ products, policy, onDone, notify }) {
   const [search, setSearch] = useState('');
   const [payment, setPayment] = useState('cash');
   const [note, setNote] = useState('');
+  const [discountPercent, setDiscountPercent] = useState('');
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState('');
   const [receipt, setReceipt] = useState(null);
@@ -151,20 +155,21 @@ function SellTab({ products, policy, onDone, notify }) {
     () => lines.reduce((sum, l) => sum + l.product.price * l.quantity, 0),
     [lines]
   );
-  // Tính giảm giá y hệt máy chủ để nhân viên thấy trước; máy chủ vẫn tính lại khi lưu.
-  const discount = useMemo(() => {
-    if (!policy) return 0;
-    const tier = policy.tiers.find((t) => subtotal >= t.minSubtotal);
-    return tier ? tier.discount : 0;
-  }, [policy, subtotal]);
-  const total = subtotal - discount;
+  // Quà đổi điểm tính 0đ và không tính vào khối lượng, giống hệt máy chủ.
+  const totalKg = useMemo(
+    () => lines.reduce((sum, l) => sum + (Number(l.product.weight_kg) || 0) * l.quantity, 0),
+    [lines]
+  );
+  const minKg = policy?.minKgForDiscount ?? 50;
+  const maxPercent = policy?.maxDiscountPercent ?? 50;
+  const canDiscount = totalKg >= minKg;
 
-  const nextTier = useMemo(() => {
-    if (!policy) return null;
-    const better = [...policy.tiers].sort((a, b) => a.minSubtotal - b.minSubtotal)
-      .find((t) => subtotal < t.minSubtotal);
-    return better || null;
-  }, [policy, subtotal]);
+  // Tính giảm giá y hệt máy chủ để nhân viên thấy trước; máy chủ vẫn tính lại khi lưu.
+  const percent = Number(String(discountPercent).replace(',', '.')) || 0;
+  const discount = canDiscount && percent > 0
+    ? Math.min(subtotal, Math.floor((subtotal * Math.min(percent, maxPercent)) / 100))
+    : 0;
+  const total = subtotal - discount;
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -218,7 +223,7 @@ function SellTab({ products, policy, onDone, notify }) {
   const removeLine = (id) => setLines((prev) => prev.filter((l) => l.product.id !== id));
 
   const resetBill = () => {
-    setLines([]); setNote(''); setPayment('cash');
+    setLines([]); setNote(''); setPayment('cash'); setDiscountPercent('');
     setPhone(''); setCustomer(null); setCustomerHistory([]);
     setLookupState('idle'); setLookupError(''); setGuestName('');
     setGiftLines([]); setRewardsAffordable(0);
@@ -243,6 +248,7 @@ function SellTab({ products, policy, onDone, notify }) {
           : undefined,
         payment_method: payment,
         note: note.trim() || undefined,
+        discount_percent: discount > 0 ? percent : undefined,
       });
       setReceipt(r);
       notify(`Đã lưu hoá đơn ${r.invoice.code}.`);
@@ -423,15 +429,38 @@ function SellTab({ products, policy, onDone, notify }) {
           <div className="pos-totals">
             <div className="summary-row"><span>Tiền hàng</span><strong>{formatVND(subtotal)}</strong></div>
             <div className="summary-row">
-              <span>Giảm giá</span>
+              <span>Khối lượng</span>
+              <strong className={canDiscount ? 'free-tag' : ''}>{formatKg(totalKg)}</strong>
+            </div>
+
+            {/* Giảm giá tại quầy: cửa hàng tự nhập %, chỉ mở khi đủ khối lượng. */}
+            <div className="pos-discount">
+              <label>
+                Giảm giá <span className="optional">%</span>
+                <input
+                  className="input"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  max={maxPercent}
+                  step="1"
+                  value={discountPercent}
+                  disabled={!canDiscount}
+                  placeholder={canDiscount ? `0 – ${maxPercent}` : `Cần ${minKg}kg`}
+                  onChange={(e) => setDiscountPercent(e.target.value)}
+                />
+              </label>
               <strong className={discount > 0 ? 'free-tag' : ''}>
                 {discount > 0 ? `− ${formatVND(discount)}` : '0₫'}
               </strong>
             </div>
-            {nextTier && lines.length > 0 && (
+            {lines.length > 0 && !canDiscount && (
               <p className="pos-hint">
-                Mua thêm {formatVND(nextTier.minSubtotal - subtotal)} nữa để được giảm {formatVND(nextTier.discount)}.
+                Hoá đơn phải từ <b>{minKg}kg</b> trở lên mới được giảm giá. Còn thiếu {formatKg(minKg - totalKg)}.
               </p>
+            )}
+            {percent > maxPercent && (
+              <p className="pos-hint">Mức giảm tối đa là {maxPercent}%.</p>
             )}
             <div className="summary-row grand-total"><span>Khách trả</span><strong>{formatVND(total)}</strong></div>
             {phone.trim() && isPhone(phone) && policy && (

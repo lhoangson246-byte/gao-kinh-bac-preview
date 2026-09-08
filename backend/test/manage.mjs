@@ -336,7 +336,7 @@ const posPhone = phoneOf(8);
   check('Tra cứu kèm số đơn online', typeof after.data.onlineOrders === 'number');
 }
 
-/* --- Đơn online được giảm giá theo mốc --- */
+/* --- Đơn online: ưu đãi 20.000đ cho đơn ĐẦU TIÊN của mỗi tài khoản --- */
 {
   const login = await call('/auth/login', {
     method: 'POST', body: { identifier: posPhone, password: 'matkhau123!test' },
@@ -353,29 +353,87 @@ const posPhone = phoneOf(8);
     delivery_area: 'bac-ninh', payment_method: 'cod',
   };
 
-  /* Dưới 300k: không giảm */
-  const small = await call('/orders', {
+  /* Đơn ĐẦU TIÊN của tài khoản: giảm 20.000đ */
+  const first = await call('/orders', {
     method: 'POST', token, body: { ...order, items: [{ product_id: item.id, quantity: 1 }] },
   });
-  check('Đơn online dưới 300k không được giảm',
-    small.data.order?.discount === 0 && small.data.order?.total === small.data.order?.subtotal,
-    JSON.stringify({ s: small.data.order?.subtotal, d: small.data.order?.discount }));
+  const firstOrder = first.data.order;
+  check('Đơn online đầu tiên được giảm 20.000₫',
+    firstOrder?.discount === 20000 && firstOrder?.total === firstOrder.subtotal - 20000,
+    JSON.stringify({ s: firstOrder?.subtotal, d: firstOrder?.discount, t: firstOrder?.total }));
 
-  /* Từ 300k: giảm 10k */
+  /* Đơn thứ hai: không còn được giảm */
   const mid = await call('/orders', {
     method: 'POST', token, body: { ...order, items: [{ product_id: item.id, quantity: 3 }] },
   });
   const midOrder = mid.data.order;
-  check('Đơn online từ 300k được giảm 10.000₫',
-    midOrder?.discount === 10000 && midOrder?.total === midOrder.subtotal - 10000,
+  check('Đơn online thứ hai không còn được giảm',
+    midOrder?.discount === 0 && midOrder?.total === midOrder.subtotal,
     JSON.stringify({ s: midOrder?.subtotal, d: midOrder?.discount, t: midOrder?.total }));
 
-  /* Từ 500k: giảm 20k */
+  /* Mua nhiều cũng không được giảm nữa — ưu đãi chỉ dành cho đơn đầu */
   const big = await call('/orders', {
     method: 'POST', token, body: { ...order, items: [{ product_id: item.id, quantity: 4 }] },
   });
-  check('Đơn online từ 500k được giảm 20.000₫', big.data.order?.discount === 20000,
+  check('Đơn online lớn về sau vẫn không được giảm', big.data.order?.discount === 0,
     String(big.data.order?.discount));
+
+  /* Tài khoản khác vẫn được ưu đãi đơn đầu của mình */
+  {
+    const otherPhone = phoneOf(2);
+    const reg = await call('/auth/register', {
+      method: 'POST',
+      body: { full_name: 'Khách Mới Toanh', phone: otherPhone, password: 'matkhau123!test' },
+    });
+    const other = await call('/orders', {
+      method: 'POST', token: reg.data.token,
+      body: { ...order, phone: otherPhone, items: [{ product_id: item.id, quantity: 1 }] },
+    });
+    check('Tài khoản khác vẫn được giảm cho đơn đầu của mình',
+      other.data.order?.discount === 20000,
+      `reg=${reg.status} order=${other.status} ${JSON.stringify(other.data).slice(0, 200)}`);
+
+    /* Huỷ đơn đầu thì ưu đãi vẫn còn cho lần đặt sau */
+    await call(`/orders/${other.data.order.id}/cancel`, { method: 'PATCH', token: reg.data.token });
+    const retry = await call('/orders', {
+      method: 'POST', token: reg.data.token,
+      body: { ...order, phone: otherPhone, items: [{ product_id: item.id, quantity: 1 }] },
+    });
+    check('Huỷ đơn đầu rồi đặt lại vẫn được giảm',
+      retry.data.order?.discount === 20000, String(retry.data.order?.discount));
+
+    /* API xem trước ưu đãi khớp với thực tế */
+    const preview = await call('/orders/discount', { token: reg.data.token });
+    check('API xem trước báo đã hết ưu đãi sau khi đã có đơn',
+      preview.status === 200 && preview.data.available === false, JSON.stringify(preview.data));
+  }
+
+  /* Tiền giảm không bao giờ vượt quá tiền hàng */
+  {
+    const cheapPhone = phoneOf(3);
+    const reg = await call('/auth/register', {
+      method: 'POST',
+      body: { full_name: 'Khách Mua Ít', phone: cheapPhone, password: 'matkhau123!test' },
+    });
+    const before = await call('/orders/discount', { token: reg.data.token });
+    check('API xem trước báo còn ưu đãi cho tài khoản mới',
+      before.data.available === true && before.data.amount === 20000, JSON.stringify(before.data));
+
+    const cheap = (await call('/products')).data.products
+      .filter((p) => p.price > 0 && p.price < 20000 && p.stock > 0)
+      .sort((a, b) => a.price - b.price)[0];
+    if (cheap) {
+      const tiny = await call('/orders', {
+        method: 'POST', token: reg.data.token,
+        body: { ...order, phone: cheapPhone, items: [{ product_id: cheap.id, quantity: 1 }] },
+      });
+      check('Đơn rẻ hơn 20.000₫ thì chỉ giảm bằng đúng tiền hàng',
+        tiny.data.order?.discount === cheap.price && tiny.data.order?.total === 0,
+        JSON.stringify({ p: cheap.price, d: tiny.data.order?.discount, t: tiny.data.order?.total }));
+    } else {
+      check('Đơn rẻ hơn 20.000₫ thì chỉ giảm bằng đúng tiền hàng', true, 'không có loại gạo dưới 20.000₫');
+    }
+  }
 
   /* --- Điểm chỉ cộng khi đơn HOÀN THÀNH --- */
   const pointsBefore = (await call(`/retail/customers?phone=${posPhone}`, { token: admin }))
@@ -429,6 +487,78 @@ const posPhone = phoneOf(8);
   await call(`/orders/${made.data.order.id}/cancel`, { method: 'PATCH', token: login.data.token });
   const after = (await call(`/retail/customers?phone=${posPhone}`, { token: admin })).data.customer.points;
   check('Đơn bị huỷ không cộng điểm', after === before, `${before} -> ${after}`);
+}
+
+/* --- Tải ảnh sản phẩm lên --- */
+{
+  const { readFileSync } = await import('node:fs');
+  const jpg = readFileSync(new URL('../../frontend/public/products/lvs-gao-sach-st25-5kg.jpg', import.meta.url));
+
+  const send = (body, tok, type = 'image/jpeg') => fetch(`${BASE}/api/admin/images`, {
+    method: 'POST',
+    headers: { 'Content-Type': type, ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
+    body,
+  });
+
+  const up = await send(jpg, admin);
+  const upBody = await up.json().catch(() => ({}));
+  check('Quản trị tải được ảnh lên', up.status === 201 || up.status === 200, `status=${up.status}`);
+  check('Trả về đường dẫn /api/images/…',
+    /^\/api\/images\/[0-9a-f]{32}\.jpg$/.test(upBody.url || ''), JSON.stringify(upBody));
+
+  const got = await fetch(`${BASE}${upBody.url}`);
+  const bytes = Buffer.from(await got.arrayBuffer());
+  check('Xem lại ảnh đúng nguyên vẹn',
+    got.status === 200 && bytes.equals(jpg), `status=${got.status} ${bytes.length}/${jpg.length}`);
+  check('Ảnh trả đúng kiểu image/jpeg', (got.headers.get('content-type') || '').startsWith('image/jpeg'));
+
+  // Tải lại đúng tấm ảnh đó thì dùng lại bản cũ, không lưu thêm một bản nữa.
+  const again = await send(jpg, admin);
+  const againBody = await again.json().catch(() => ({}));
+  check('Tải trùng ảnh thì dùng lại bản cũ',
+    againBody.url === upBody.url && againBody.reused === true, JSON.stringify(againBody));
+
+  const lib = await call('/admin/images', { token: admin });
+  check('Thư viện ảnh liệt kê ảnh vừa tải lên',
+    lib.status === 200 && lib.data.uploaded?.some((i) => i.url === upBody.url),
+    `status=${lib.status}`);
+  check('Thư viện ảnh không lặp ảnh trùng nội dung',
+    new Set((lib.data.uploaded || []).map((i) => i.url)).size === (lib.data.uploaded || []).length);
+  check('Thư viện ảnh kèm ảnh các loại gạo đang dùng',
+    Array.isArray(lib.data.inUse) && lib.data.inUse.length > 0, JSON.stringify(lib.data.inUse?.length));
+  const libGuest = await fetch(`${BASE}/api/admin/images`);
+  check('Khách không xem được thư viện ảnh (401)', libGuest.status === 401, `status=${libGuest.status}`);
+
+  // Nhận dạng bằng byte đầu tệp, không tin Content-Type trình duyệt gửi lên.
+  const fake = await send(Buffer.from('<html><script>alert(1)</script></html>'), admin);
+  check('Tệp giả danh ảnh bị từ chối (400)', fake.status === 400, `status=${fake.status}`);
+
+  const anon = await send(jpg, null);
+  check('Chưa đăng nhập không tải ảnh được (401)', anon.status === 401, `status=${anon.status}`);
+
+  const guest = await call('/auth/register', {
+    method: 'POST',
+    body: { full_name: 'Khách Thử Ảnh', phone: phoneOf(7), password: 'matkhau123!test' },
+  });
+  const asGuest = await send(jpg, guest.data.token);
+  check('Khách thường không tải ảnh được (403)', asGuest.status === 403, `status=${asGuest.status}`);
+
+  const missing = await fetch(`${BASE}/api/images/${'0'.repeat(32)}.jpg`);
+  check('Ảnh không tồn tại trả 404', missing.status === 404, `status=${missing.status}`);
+  const badId = await fetch(`${BASE}/api/images/..%2F..%2Fetc%2Fpasswd`);
+  check('Id ảnh bất thường trả 404', badId.status === 404, `status=${badId.status}`);
+
+  // Gắn ảnh vừa tải lên vào một sản phẩm rồi trả lại như cũ.
+  const list = await call('/admin/products', { token: admin });
+  const target = list.data.products[0];
+  const set = await call(`/admin/products/${target.id}`, {
+    method: 'PUT', token: admin, body: { image_url: upBody.url },
+  });
+  check('Gắn ảnh vào sản phẩm', set.data.product?.image_url === upBody.url,
+    JSON.stringify(set.data.product?.image_url));
+  await call(`/admin/products/${target.id}`, {
+    method: 'PUT', token: admin, body: { image_url: target.image_url || '' },
+  });
 }
 
 console.log(results.join('\n'));

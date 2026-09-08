@@ -4,7 +4,7 @@ import db from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
   DELIVERY_AREA_CODE, DELIVERY_AREA_LABEL, DELIVERY_SLOT_CODES, LIMITS,
-  mentionsOtherProvince, normalizeBacNinhAddress, retailDiscountFor,
+  mentionsOtherProvince, normalizeBacNinhAddress, FIRST_ORDER_DISCOUNT,
 } from '../constants.js';
 import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../validate.js';
 
@@ -127,8 +127,15 @@ router.post('/', requireAuth, (req, res, next) => {
         subtotal += product.price * quantity;
       }
 
-      // Đơn online hưởng cùng mốc giảm giá với mua tại quầy.
-      const discount = retailDiscountFor(subtotal);
+      // Đơn ĐẦU TIÊN của mỗi tài khoản được giảm 20.000đ. Đơn đã huỷ không tính là
+      // đã mua, nhưng đơn còn chờ xác nhận thì có, nên khách không thể đặt liền hai
+      // đơn để ăn giảm giá hai lần. Câu lệnh này nằm trong cùng transaction với
+      // INSERT bên dưới nên hai yêu cầu song song cũng chỉ một đơn được giảm.
+      const boughtBefore = db
+        .prepare("SELECT 1 FROM orders WHERE user_id = ? AND status <> 'cancelled' LIMIT 1")
+        .get(req.user.id);
+      // Không để tiền giảm vượt quá tiền hàng.
+      const discount = boughtBefore ? 0 : Math.min(FIRST_ORDER_DISCOUNT, subtotal);
       const total = subtotal - discount;
 
       const orderId = insOrder.run(
@@ -157,6 +164,18 @@ router.post('/', requireAuth, (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+/**
+ * GET /api/orders/discount — tài khoản này còn được giảm giá đơn đầu tiên không.
+ * Chỉ để giỏ hàng hiển thị trước cho khách; máy chủ vẫn tự quyết khi tạo đơn.
+ * Khai báo trước '/:id' để không bị nuốt bởi tuyến đó.
+ */
+router.get('/discount', requireAuth, (req, res) => {
+  const boughtBefore = db
+    .prepare("SELECT 1 FROM orders WHERE user_id = ? AND status <> 'cancelled' LIMIT 1")
+    .get(req.user.id);
+  res.json({ available: !boughtBefore, amount: FIRST_ORDER_DISCOUNT });
 });
 
 /** GET /api/orders — Lịch sử đơn hàng của tôi */
