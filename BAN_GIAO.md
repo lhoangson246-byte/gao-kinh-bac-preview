@@ -512,10 +512,12 @@ là sửa ở `backend/src/routes/orders.js` chỗ tính `discount`.
 ## Việc bạn cần tự làm trước khi chạy thật
 
 1. **Đổi `JWT_SECRET`** thành chuỗi dài ngẫu nhiên và **đổi mật khẩu quản trị mẫu**.
-2. Đặt `NODE_ENV=production` và `CLIENT_ORIGIN` đúng địa chỉ Vercel ở backend.
-3. Đặt `TRUST_PROXY=1` nếu backend chạy sau proxy (Railway, Render, Nginx).
-4. Đặt `VITE_API_URL` và `VITE_SITE_URL` trong phần Environment Variables của Vercel.
-5. Chuẩn bị host có ổ đĩa bền vững cho SQLite và **lên lịch sao lưu `backend/data/app.db`**.
+2. Nếu chạy toàn bộ trên Vercel, kết nối Turso Cloud trong Marketplace và kiểm tra project
+   có `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`; thêm biến xong phải redeploy.
+3. Đặt `NODE_ENV=production`; `CLIENT_ORIGIN` chỉ cần khai báo thêm khi frontend khác tên miền API.
+4. Để trống `VITE_API_URL` khi frontend/API cùng project Vercel và đặt `VITE_SITE_URL`.
+5. Nếu backend chạy riêng trên Railway/Render/VPS, đặt `TRUST_PROXY=1`, dùng `DATA_DIR`
+   trên ổ đĩa bền vững và lên lịch sao lưu `backend/data/app.db`.
 6. Điền các thông tin kinh doanh còn để trống (xem mục dưới).
 7. Ảnh sản phẩm hiện nhận qua URL; có thể bổ sung Cloudinary hoặc dịch vụ lưu ảnh ở giai đoạn sau.
 
@@ -531,17 +533,15 @@ Những mục sau **cố tình không có dữ liệu giả**. Khi bạn cung c�
 - **Tài khoản ngân hàng**: khách chọn chuyển khoản chỉ được báo "cửa hàng sẽ gửi thông tin". Chưa có số tài khoản nào trong mã nguồn.
 - **Chính sách đổi trả / thời gian giao**: chưa có trang nào.
 
-## Nếu muốn chuyển backend lên serverless
+## Backend serverless trên Vercel
 
-Hiện tại **chưa chuyển** và cũng không nên chuyển khi chưa cần. Nếu sau này thật sự cần, thứ tự đúng là:
+Backend đã có entrypoint `api/index.js` và dùng Turso/libSQL làm database SQLite từ xa.
+Vercel Marketplace đặt tên biến là `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`; mã cũng nhận
+tên cũ `LIBSQL_URL`, `LIBSQL_AUTH_TOKEN`. Không được bỏ cả hai bộ biến vì filesystem của
+Vercel Function không phải nơi lưu database bền vững.
 
-1. Đổi SQLite sang PostgreSQL (Neon, Supabase hoặc Vercel Postgres) **trước**.
-2. Chuyển `better-sqlite3` sang một driver hỗ trợ kết nối gộp (`postgres.js` hoặc `pg`) — lưu ý mọi truy vấn sẽ thành bất đồng bộ.
-3. Giữ nguyên các transaction đang có: tạo đơn/trừ kho và huỷ đơn/hoàn kho phải nằm trong `BEGIN … COMMIT`, kèm điều kiện `WHERE stock >= ?` và `WHERE status = ?` như hiện nay.
-4. Chuyển giới hạn tần suất sang bộ nhớ dùng chung (Upstash Redis) vì mỗi function là một tiến trình riêng.
-5. Viết script chuyển dữ liệu từ `app.db` sang PostgreSQL và chạy thử trên bản sao trước.
-
-Trước khi làm bước nào, chạy `npm run test:smoke` để chắc chắn hành vi không đổi.
+Giới hạn tần suất hiện còn nằm trong bộ nhớ từng Function. Nếu lượng truy cập tăng hoặc cần
+giới hạn tuyệt đối giữa nhiều instance, chuyển phần này sang Redis dùng chung như Upstash.
 
 ## Tài khoản mẫu
 

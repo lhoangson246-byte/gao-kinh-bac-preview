@@ -140,11 +140,22 @@ Tệp `vercel.json` ở thư mục gốc đã cấu hình sẵn quá trình buil
 
 1. Đưa mã nguồn lên GitHub và Import project vào Vercel.
 2. Giữ Root Directory là thư mục gốc của dự án.
-3. Thêm biến `VITE_API_URL` là địa chỉ API thật, ví dụ `https://api.tenmien.vn`.
-4. Thêm biến `VITE_SITE_URL` là địa chỉ ứng dụng, ví dụ `https://gao-kinh-bac.vercel.app`.
-5. Deploy.
+3. Trong Vercel Marketplace, tạo hoặc kết nối **Turso Cloud** với project. Integration sẽ
+   tự thêm `TURSO_DATABASE_URL` và `TURSO_AUTH_TOKEN` cho project.
+4. Thêm `JWT_SECRET` (chuỗi bí mật ngẫu nhiên dài ít nhất 32 byte) và
+   `VITE_SITE_URL`, ví dụ `https://gao-kinh-bac.vercel.app`.
+5. Để trống `VITE_API_URL` khi frontend và API cùng nằm trong project này. Nếu biến này
+   từng trỏ tới backend cũ, hãy xoá nó.
+6. Redeploy production sau khi thêm hoặc sửa biến môi trường. Vercel không áp dụng biến
+   mới cho deployment đã có.
 
-Frontend/PWA chạy trên Vercel. Backend hiện dùng SQLite nên cần một dịch vụ có ổ đĩa lưu lâu dài như Railway, Render hoặc VPS. **Không chạy file SQLite trực tiếp trong Vercel Functions** vì dữ liệu có thể mất khi function khởi động lại. Nếu muốn cả frontend và backend cùng hệ sinh thái serverless, phải đổi cơ sở dữ liệu sang PostgreSQL trước — xem kế hoạch trong `BAN_GIAO.md`.
+API chạy cùng project Vercel tại `/api`. Dữ liệu được lưu bền vững trong Turso; ứng dụng
+cũng tiếp tục hỗ trợ tên biến cũ `LIBSQL_URL` và `LIBSQL_AUTH_TOKEN` nếu cấu hình thủ công.
+Ứng dụng sẽ chủ động từ chối khởi động trên Vercel nếu không có database bền vững, thay vì
+âm thầm ghi vào file SQLite tạm rồi làm mất thông tin khách hàng.
+
+Nếu dùng backend riêng trên Railway, Render hoặc VPS, có thể tiếp tục dùng SQLite với
+`DATA_DIR` trỏ tới ổ đĩa bền vững và đặt `VITE_API_URL` thành tên miền backend đó.
 
 ### Biến môi trường
 
@@ -161,13 +172,14 @@ Backend (`backend/.env`):
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Lần seed đầu | Không có giá trị mặc định; mật khẩu 12+ ký tự, tối đa 72 byte UTF-8. |
 | `COOKIE_SAME_SITE` | Khi frontend/API khác site | Mặc định `lax`; dùng `none` với HTTPS và `CLIENT_ORIGIN` chính xác. Trình duyệt chặn cookie bên thứ ba có thể yêu cầu đưa API về cùng site. |
 | `DATA_DIR` | Không | Thư mục SQLite riêng; mặc định `backend/data`. Dùng ổ đĩa bền vững khi triển khai thật. |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | Có trên Vercel | Database bền vững. Vercel Turso integration tự tạo hai biến này. Tên cũ `LIBSQL_URL`, `LIBSQL_AUTH_TOKEN` vẫn dùng được. |
 | `REPORT_TIME_SHIFT` | Không | Múi giờ tính báo cáo doanh thu, mặc định `+7 hours` (giờ Việt Nam). |
 
 Frontend (biến của Vercel):
 
 | Biến | Bắt buộc | Ý nghĩa |
 |---|---|---|
-| `VITE_API_URL` | Có khi deploy | Địa chỉ API thật. Để trống khi chạy dev vì Vite đã proxy `/api`. |
+| `VITE_API_URL` | Tuỳ cách deploy | Để trống khi frontend/API cùng project Vercel; chỉ điền khi backend ở tên miền khác. |
 | `VITE_SITE_URL` | Nên đặt | Địa chỉ ứng dụng, dùng để tạo thẻ ảnh xem trước khi chia sẻ. |
 
 ## Cấu trúc

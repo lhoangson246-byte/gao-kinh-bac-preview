@@ -12,6 +12,7 @@
     "test:retail": "node test/retail.mjs",
     "test:manage": "node test/manage.mjs",
     "test:security": "node test/security.mjs",
+    "test:db-config": "node --test test/database-config.mjs",
     "test:isolated": "node test/isolated.mjs"
   },
   "dependencies": {

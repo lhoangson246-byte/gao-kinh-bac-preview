@@ -1,23 +1,25 @@
 import { createHash } from 'node:crypto';
 import { parseWeightKg } from './constants.js';
+import BetterSqlite3 from 'better-sqlite3';
+import Libsql from 'libsql';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { resolveDatabaseConfig } from './database-config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const remoteDatabaseUrl = process.env.LIBSQL_URL;
-const { default: Database } = await import(remoteDatabaseUrl ? 'libsql' : 'better-sqlite3');
+const databaseConfig = resolveDatabaseConfig();
 
 let db;
-if (remoteDatabaseUrl) {
-  db = new Database(remoteDatabaseUrl, { authToken: process.env.LIBSQL_AUTH_TOKEN });
+if (databaseConfig.isRemote) {
+  db = new Libsql(databaseConfig.url, { authToken: databaseConfig.authToken });
   // libsql deliberately has no .pragma() helper. Sending the SQL statement
   // directly preserves the cascading constraints used by the application.
   db.exec('PRAGMA foreign_keys = ON');
 } else {
   const dataDir = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, '..', 'data');
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-  db = new Database(path.join(dataDir, 'app.db'));
+  db = new BetterSqlite3(path.join(dataDir, 'app.db'));
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 }
