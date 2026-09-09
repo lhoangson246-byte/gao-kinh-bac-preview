@@ -32,17 +32,16 @@ export default function Login() {
       {error && <p className="alert error">{error}</p>}
 
       <form onSubmit={onSubmit}>
-        <label>Số điện thoại
+        <label>Số điện thoại hoặc email
           <input
             className="input"
-            type="tel"
+            type="text"
             name="identifier"
             value={form.identifier}
             onChange={onChange}
             required
-            inputMode="tel"
-            autoComplete="tel"
-            placeholder="0912345678"
+            autoComplete="username"
+            placeholder="0912345678 hoặc email"
           />
         </label>
 

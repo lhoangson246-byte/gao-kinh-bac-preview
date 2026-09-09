@@ -86,8 +86,11 @@ router.post('/', requireAuth, (req, res, next) => {
       }
       const info = db.prepare(`
         INSERT INTO delivery_addresses (user_id, label, receiver_name, phone, address, is_default)
-        VALUES (@user_id, @label, @receiver_name, @phone, @address, @is_default)
-      `).run({ ...data, user_id: req.user.id, is_default: shouldDefault ? 1 : 0 });
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        req.user.id, data.label, data.receiver_name, data.phone, data.address,
+        shouldDefault ? 1 : 0
+      );
       if (shouldDefault) {
         db.prepare('UPDATE users SET address = ? WHERE id = ?').run(data.address, req.user.id);
       }
@@ -111,10 +114,10 @@ router.put('/:id', requireAuth, (req, res, next) => {
     db.transaction(() => {
       db.prepare(`
         UPDATE delivery_addresses
-        SET label = @label, receiver_name = @receiver_name, phone = @phone,
-            address = @address, updated_at = datetime('now')
-        WHERE id = @id AND user_id = @user_id
-      `).run({ ...data, id, user_id: req.user.id });
+        SET label = ?, receiver_name = ?, phone = ?,
+            address = ?, updated_at = datetime('now')
+        WHERE id = ? AND user_id = ?
+      `).run(data.label, data.receiver_name, data.phone, data.address, id, req.user.id);
       if (req.body?.is_default === true || req.body?.is_default === 1) makeDefault(id, req.user.id);
       else if (addressForUser(id, req.user.id).is_default) {
         db.prepare('UPDATE users SET address = ? WHERE id = ?').run(data.address, req.user.id);

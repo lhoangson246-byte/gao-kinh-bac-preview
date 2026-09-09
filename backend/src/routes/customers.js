@@ -35,25 +35,28 @@ router.get('/', (req, res, next) => {
     const locked = req.query.locked;
 
     const where = ["u.role = 'customer'"];
-    const params = { limit, offset };
+    const filterParams = [];
 
     if (q) {
       const escaped = q.replace(/[\\%_]/g, (ch) => `\\${ch}`);
       const phone = normalizePhone(q);
       where.push(`(
-        u.full_name LIKE @like ESCAPE '\\'
-        OR IFNULL(u.email, '') LIKE @like ESCAPE '\\'
-        OR IFNULL(u.phone, '') LIKE @like ESCAPE '\\'
-        OR (@phone <> '' AND u.phone = @phone)
+        u.full_name LIKE ? ESCAPE '\\'
+        OR IFNULL(u.email, '') LIKE ? ESCAPE '\\'
+        OR IFNULL(u.phone, '') LIKE ? ESCAPE '\\'
+        OR (? <> '' AND u.phone = ?)
       )`);
-      params.like = `%${escaped}%`;
-      params.phone = phone || '';
+      const like = `%${escaped}%`;
+      const normalizedPhone = phone || '';
+      filterParams.push(like, like, like, normalizedPhone, normalizedPhone);
     }
     if (locked === '1') where.push('u.is_locked = 1');
     if (locked === '0') where.push('u.is_locked = 0');
 
     const clause = `WHERE ${where.join(' AND ')}`;
-    const total = db.prepare(`SELECT COUNT(*) c FROM users u ${clause}`).get(params).c;
+    // Positional bindings work consistently with both better-sqlite3 locally and
+    // the remote libSQL protocol used by Turso.
+    const total = db.prepare(`SELECT COUNT(*) c FROM users u ${clause}`).get(...filterParams).c;
 
     const customers = db.prepare(`
       SELECT ${PUBLIC.split(', ').map((c) => `u.${c}`).join(', ')},
@@ -62,8 +65,8 @@ router.get('/', (req, res, next) => {
                WHERE o.user_id = u.id AND o.status = 'completed') AS spent,
              (SELECT MAX(o.created_at) FROM orders o WHERE o.user_id = u.id) AS last_order_at
       FROM users u ${clause}
-      ORDER BY u.id DESC LIMIT @limit OFFSET @offset
-    `).all(params);
+      ORDER BY u.id DESC LIMIT ? OFFSET ?
+    `).all(...filterParams, limit, offset);
 
     res.json({ customers, total, limit, offset });
   } catch (err) {
