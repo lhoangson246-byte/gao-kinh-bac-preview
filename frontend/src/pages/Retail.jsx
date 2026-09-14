@@ -4,6 +4,7 @@ import { api, formatDateTime, formatVND, isPhone, normalizePhone } from '../api'
 import { useAuth } from '../context/AuthContext.jsx';
 import ReturnManager from '../components/ReturnManager.jsx';
 import AccountSignup from '../components/AccountSignup.jsx';
+import ProductImage from '../components/ProductImage.jsx';
 
 const PAYMENT_LABEL = { cash: 'Tiền mặt', transfer: 'Chuyển khoản' };
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -294,7 +295,7 @@ function SellTab({ products, policy, onDone, notify }) {
             <div className="pos-grid">
               {visible.map((p) => (
                 <button key={p.id} type="button" className="pos-item" onClick={() => addLine(p)}>
-                  <img src={p.image_url || '/logo-mark.png'} alt="" loading="lazy" />
+                  <ProductImage src={p.image_url} sizes="120px" />
                   <span className="pos-item-name">{p.name}</span>
                   <span className="pos-item-unit">{p.unit}</span>
                   <strong>{formatVND(p.price)}</strong>

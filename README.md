@@ -23,7 +23,9 @@
 - Khu vực `/quan-tri` tách biệt với ứng dụng khách hàng, chỉ tài khoản `admin` vào được
 - Mở trang là thấy ngay số đơn đang chờ xác nhận
 - Nút thao tác theo từng bước: xác nhận → giao hàng → hoàn thành
-- Thêm, sửa, ẩn và mở bán lại sản phẩm (ẩn là soft delete, đơn cũ giữ nguyên)
+- Thêm, sửa, ẩn và mở bán lại sản phẩm (ẩn chỉ tắt hiển thị, đơn cũ giữ nguyên)
+- **Xoá hẳn sản phẩm** khỏi cơ sở dữ liệu khi không cần nữa; đơn và hoá đơn cũ vẫn giữ đúng tên và giá lúc bán
+- **Xoá hẳn tài khoản khách** chưa từng đặt đơn nào; khách đã có đơn thì chỉ khoá được, để không làm mất đơn và sai doanh thu
 - **Đưa ảnh sản phẩm vào theo cách nào cũng được**: chọn tệp, kéo thả vào ô ảnh, dán bằng Ctrl+V, hoặc bấm *Chọn từ ảnh đã có* để lấy lại ảnh trong thư viện của cửa hàng. Ảnh tự thu nhỏ và hiện ngay ô xem trước.
 - Theo dõi tồn kho, cảnh báo loại gạo sắp hết và doanh thu của đơn đã hoàn thành
 - Cảnh báo ngay số loại gạo **chưa nhập giá bán**
@@ -168,7 +170,7 @@ Backend (`backend/.env`):
 | `CLIENT_ORIGIN` | Nên đặt | Địa chỉ frontend được phép gọi API, nhiều địa chỉ ngăn cách bằng dấu phẩy. |
 | `PORT` | Không | Mặc định `4000`. |
 | Thời hạn phiên | Cố định | 1 giờ; đổi mật khẩu, khoá/mở khoá và đăng xuất thu hồi các phiên cũ. |
-| `TRUST_PROXY` | Khi chạy sau proxy | Đặt `1` trên Railway/Render/Nginx để giới hạn tần suất đọc đúng IP. |
+| `TRUST_PROXY` | Khi chạy sau proxy | Đặt `1` trên Railway/Render/Nginx để giới hạn tần suất đọc đúng IP. Trên Vercel ứng dụng **tự bật sẵn**, chỉ đặt `0` nếu muốn tắt. |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Lần seed đầu | Không có giá trị mặc định; mật khẩu 12+ ký tự, tối đa 72 byte UTF-8. |
 | `COOKIE_SAME_SITE` | Khi frontend/API khác site | Mặc định `lax`; dùng `none` với HTTPS và `CLIENT_ORIGIN` chính xác. Trình duyệt chặn cookie bên thứ ba có thể yêu cầu đưa API về cùng site. |
 | `DATA_DIR` | Không | Thư mục SQLite riêng; mặc định `backend/data`. Dùng ổ đĩa bền vững khi triển khai thật. |
@@ -216,3 +218,25 @@ npm --prefix frontend run build
 ```
 
 These test commands start temporary databases and generate test administrator credentials. They do not use `backend/data/app.db`. Existing sessions are intentionally invalidated by the security upgrade. Browser login now uses HttpOnly cookies; API clients can still request bearer tokens without `X-Session-Mode: cookie`. Logout revokes all sessions for that account.
+
+## Triển khai Vercel và migration (09/2026)
+
+Production dùng `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` (hoặc hai biến `LIBSQL_*` tương ứng). Không dùng SQLite tạm trong Vercel. Frontend cùng project API thì để trống `VITE_API_URL`. Vercel tự mặc định `TRUST_PROXY=1`; giá trị `0` tắt tin proxy một cách có chủ đích.
+
+Lệnh build trong `vercel.json` chạy `npm --prefix backend run migrate -- --deploy` trước build frontend. Migration chỉ chạy khi `VERCEL_ENV=production`; lỗi migration làm build thất bại, không quảng bá bản mới. Không chạy `seed` trên database thật đang có dữ liệu. Boot chỉ đọc phiên bản schema, không tự sửa schema Production; khi schema cũ, API báo lỗi yêu cầu migrate.
+
+Preview không chạy migration và không được dùng database Production. Cần cấp riêng `PREVIEW_TURSO_DATABASE_URL` và `PREVIEW_TURSO_AUTH_TOKEN`, URL khác Production. Nếu chưa có database riêng, API Preview chủ động từ chối khởi động. Để chuẩn bị database Preview, chạy `npm --prefix backend run migrate` bên ngoài Vercel build với hai biến `TURSO_*` chỉ đến database Preview, không đặt `VERCEL_ENV`. Không sao chép dữ liệu khách thật sang Preview.
+
+Đối với local, `npm run dev` tự migrate SQLite local; `npm run seed` migrate trước khi tạo dữ liệu. Chỉ chạy seed với dữ liệu thử/khởi tạo cửa hàng mới và thông tin quản trị do người vận hành cung cấp.
+
+## Xuất Excel và xoá hẳn
+
+Quản trị → Đơn hàng có “Xuất đơn hôm nay”; Báo cáo doanh thu có nút Excel theo bộ lọc ngày/tháng/khoảng. `/api/admin/export/orders` dùng cùng tham số với `/api/admin/revenue`, mặc định hôm nay tại Việt Nam. Tệp có ba sheet: đơn hàng, chi tiết mặt hàng và tổng hợp theo ngày. Chỉ đơn online hoàn thành và hoá đơn quầy được tính vào tổng; đơn huỷ vẫn có trong chi tiết. Tối đa 366 ngày, 50.000 dòng (kể cả tiêu đề/tổng hợp), tệp dưới 4 MB. Khi quá giới hạn, chọn khoảng ngắn hơn. Đây là dữ liệu nội bộ có giá nhập; chỉ admin tải được, không cache.
+
+“Ẩn” sản phẩm và “Khoá” khách vẫn giữ nguyên. “Xoá hẳn” sản phẩm giữ tên/giá/giá vốn trên hoá đơn cũ, chỉ bỏ liên kết sản phẩm. Tài khoản khách chỉ được xoá khi chưa có đơn nào; khách có đơn kể cả huỷ phải dùng Khoá. Hồ sơ tích điểm quầy không bị xoá theo tài khoản online. Xoá hẳn không có chức năng khôi phục; kiểm tra kỹ hộp xác nhận.
+
+## Kiểm tra hiệu năng
+
+Chạy `node backend/test/performance.mjs` từ thư mục gốc hoặc `node test/performance.mjs` từ backend: database thử được tạo riêng, đo số lời gọi SQL lúc boot, bảo vệ bcrypt và số truy vấn trang đơn. `npm --prefix backend run test:db-config` kiểm tra cách ly môi trường.
+
+Ảnh WebP được tạo thủ công bằng `node frontend/scripts/optimize-images.mjs`, không xử lý trong build Vercel. Commit cả ảnh và manifest tạo ra. Biến thể lớn giữ nguyên độ phân giải gốc nếu nhỏ hơn 960 px; `srcset` lấy chiều rộng thật trong manifest. Admin/POS tải bằng chunk riêng. Cache CDN chỉ áp dụng danh mục công khai 30 giây và ảnh upload bất biến; đặt hàng luôn kiểm tra giá/tồn kho trong transaction. Các API tài khoản/đơn hàng/quản trị giữ `no-store`.

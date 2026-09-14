@@ -70,7 +70,8 @@ router.post('/register', async (req, res, next) => {
 /** POST /api/auth/login — Đăng nhập bằng số điện thoại HOẶC email
  *  body: { identifier, password }  (vẫn nhận `email` / `phone` để tương thích ngược)
  */
-const dummyHash = bcrypt.hashSync('dummy-credential-never-a-user', 12);
+// Hash cost 12 đã tính một lần; vẫn so mật khẩu khi không có tài khoản để tránh dò SĐT.
+const dummyHash = '$2a$12$D0bUr9R22fvxnUM1nBy9D.xrEwCTKzmjt5aJ7GzS4N.ur4ngeeuki';
 router.post('/login', async (req, res, next) => {
   try {
     const { email, phone, identifier, password } = req.body || {};

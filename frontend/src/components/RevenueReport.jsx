@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, formatVND } from '../api';
+import OrdersExportButton from './OrdersExportButton.jsx';
 
 /** Ngày hôm nay theo giờ máy của người dùng, dạng YYYY-MM-DD. */
 function todayLocal() {
@@ -97,6 +98,7 @@ export default function RevenueReport() {
         </div>
 
         <div className="revenue-inputs">
+          <OrdersExportButton filters={filters} />
           <label>Xem theo
             <select className="input" value={mode} onChange={(e) => setMode(e.target.value)}>
               <option value="day">Một ngày</option>

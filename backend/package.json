@@ -2,11 +2,15 @@
   "name": "gao-shop-backend",
   "version": "1.0.0",
   "private": true,
+  "overrides": {
+    "exceljs": { "uuid": "^11.1.1" }
+  },
   "type": "module",
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "seed": "node src/seed.js",
+    "migrate": "node src/migrate-cli.js",
     "rotate:admin": "node src/rotate-admin.js",
     "test:smoke": "node test/smoke.mjs",
     "test:retail": "node test/retail.mjs",
@@ -20,6 +24,7 @@
     "better-sqlite3": "^13.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
     "helmet": "^8.3.0",

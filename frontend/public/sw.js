@@ -1,7 +1,7 @@
 // Service worker cho PWA "Gạo Kinh Bắc".
 // Nguyên tắc: KHÔNG bao giờ lưu đệm dữ liệu API — giá, tồn kho và đơn hàng
 // phải luôn lấy mới từ máy chủ.
-const CACHE_NAME = 'gao-kinh-bac-v4';
+const CACHE_NAME = 'gao-kinh-bac-v5';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -37,7 +37,9 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Bỏ qua: không phải GET, request tới API, và các giao thức khác http(s).
-  if (request.method !== 'GET' || isApiRequest(url) || !url.protocol.startsWith('http')) return;
+  // Ngoại lệ duy nhất: ảnh upload có ID ngẫu nhiên, nội dung bất biến và công khai.
+  const uploadedImage = url.origin === self.location.origin && /^\/api\/images\/[a-f0-9]{32}\.(jpg|png|webp)$/.test(url.pathname);
+  if (request.method !== 'GET' || (isApiRequest(url) && !uploadedImage) || !url.protocol.startsWith('http')) return;
 
   // Điều hướng trang: ưu tiên mạng, khi mất mạng mới dùng bản đã lưu.
   // Nhờ vậy mọi đường dẫn React Router đều mở được khi offline.
@@ -64,16 +66,24 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Tài nguyên tĩnh cùng tên miền: dùng bản đã lưu trước, đồng thời tải bản mới.
+  // Assets có hash và ảnh upload bất biến: cache-first.
+  // Ảnh/icon không có hash: trả cache sớm và thực sự cập nhật nền.
   if (url.origin === self.location.origin) {
+    const immutable = url.pathname.startsWith('/assets/') || uploadedImage;
+    const refresh = async () => {
+      const response = await fetch(request);
+      if (response.ok && response.type === 'basic') {
+        const cache = await caches.open(CACHE_NAME);
+        await cache.put(request, response.clone());
+      }
+      return response;
+    };
+    const cachedPromise = caches.match(request);
+    // Đăng ký waitUntil ngay trong sự kiện để worker sống tới khi cập nhật xong.
+    const network = cachedPromise.then(cached => !cached || !immutable ? refresh() : null);
+    event.waitUntil(network.catch(() => {}));
     event.respondWith(
-      caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-        if (response.ok && response.type === 'basic') {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-        }
-        return response;
-      }))
+      cachedPromise.then(cached => cached || network)
     );
   }
 });

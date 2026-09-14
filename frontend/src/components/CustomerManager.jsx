@@ -72,6 +72,28 @@ export default function CustomerManager() {
     }
   };
 
+  const destroy = async (customer) => {
+    const warning = [
+      `XOÁ HẲN tài khoản “${customer.full_name}” (${customer.phone || 'chưa có số'})?`,
+      '',
+      'Tài khoản và sổ địa chỉ của khách sẽ biến mất, không khôi phục lại được.',
+      'Điểm tích luỹ theo số điện thoại vẫn được giữ.',
+    ].join('\n');
+    if (!window.confirm(warning)) return;
+
+    setBusyId(customer.id);
+    setError('');
+    try {
+      const r = await api.adminDeleteCustomer(customer.id);
+      notify(r.message || 'Đã xoá hẳn tài khoản.');
+      await load(offset);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const rename = async (customer) => {
     const name = window.prompt('Tên khách hàng:', customer.full_name);
     if (name === null || name.trim() === customer.full_name) return;
@@ -184,6 +206,14 @@ export default function CustomerManager() {
                           disabled={busyId === c.id} onClick={() => toggleLock(c)}>
                     {c.is_locked ? 'Mở khoá' : 'Khoá'}
                   </button>
+                  {/* Khách đã có đơn thì không xoá được: xoá tài khoản sẽ kéo theo
+                      đơn hàng của họ và làm sai doanh thu đã ghi nhận. */}
+                  <button type="button" className="btn btn-danger"
+                          disabled={busyId === c.id || c.order_count > 0}
+                          title={c.order_count > 0
+                            ? `Khách đã đặt ${c.order_count} đơn nên không xoá được. Hãy dùng nút Khoá.`
+                            : 'Xoá hẳn tài khoản khỏi hệ thống'}
+                          onClick={() => destroy(c)}>Xoá hẳn</button>
                 </div>
 
                 {opened === c.id && (

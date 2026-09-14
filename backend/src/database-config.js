@@ -14,9 +14,20 @@ const firstValue = (...values) => {
  * deployments and backwards compatibility.
  */
 export function resolveDatabaseConfig(env = process.env) {
-  const url = firstValue(env.TURSO_DATABASE_URL, env.LIBSQL_URL);
-  const authToken = firstValue(env.TURSO_AUTH_TOKEN, env.LIBSQL_AUTH_TOKEN);
+  let url = firstValue(env.TURSO_DATABASE_URL, env.LIBSQL_URL);
+  let authToken = firstValue(env.TURSO_AUTH_TOKEN, env.LIBSQL_AUTH_TOKEN);
   const isVercel = firstValue(env.VERCEL, env.VERCEL_ENV) !== '';
+  if (env.VERCEL_ENV === 'preview') {
+    const previewUrl = firstValue(env.PREVIEW_TURSO_DATABASE_URL);
+    if (!previewUrl || previewUrl.replace(/\/$/, '').toLowerCase() === url.replace(/\/$/, '').toLowerCase()) {
+      throw new Error('Preview cần database riêng. Set PREVIEW_TURSO_DATABASE_URL and PREVIEW_TURSO_AUTH_TOKEN; never reuse the Production database.');
+    }
+    url = previewUrl;
+    authToken = firstValue(env.PREVIEW_TURSO_AUTH_TOKEN);
+  }
+  if (['production', 'preview'].includes(env.VERCEL_ENV) && url && !/^(libsql|https):\/\//.test(url)) {
+    throw new Error('Không dùng SQLite tạm trên Vercel. A persistent remote database is required.');
+  }
 
   if (isVercel && !url) {
     throw new Error(

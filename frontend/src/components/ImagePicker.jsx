@@ -149,7 +149,7 @@ export default function ImagePicker({ value, onChange, error }) {
           onDrop={onDrop}
         >
           {value && !busy
-            ? <img src={value} alt="" onError={(e) => { e.currentTarget.src = '/logo-mark.png'; }} />
+            ? <img src={value} alt="" width="900" height="900" onError={(e) => { e.currentTarget.src = '/logo-mark.png'; }} />
             : <span className="image-drop-hint">{busy ? 'Đang tải ảnh…' : 'Thả ảnh vào đây'}</span>}
         </div>
 
@@ -203,7 +203,7 @@ export default function ImagePicker({ value, onChange, error }) {
                     onClick={() => choose(item.url)}
                     title={item.label}
                   >
-                    <img src={item.url} alt="" loading="lazy" />
+                    <img src={item.url} alt="" width="900" height="900" loading="lazy" />
                     <small>{item.label}</small>
                   </button>
                 ))}

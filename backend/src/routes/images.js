@@ -127,7 +127,7 @@ router.get('/images/:file', (req, res) => {
 
   // Ảnh không bao giờ đổi nội dung (mỗi lần tải lên sinh id mới) nên cho phép
   // trình duyệt giữ lại lâu. Ghi đè Cache-Control "no-store" đặt chung cho /api.
-  res.set('Cache-Control', 'public, max-age=31536000, immutable');
+  res.set('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
   res.type(row.mime);
   return res.send(row.bytes);
 });

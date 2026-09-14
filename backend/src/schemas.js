@@ -71,16 +71,18 @@ add('customers', 'GET', /^\/[^/]+\/?$/);
 add('customers', 'POST', /^\/[^/]+\/reset-password\/?$/, obj({ password: newPassword }));
 add('customers', 'PATCH', /^\/[^/]+\/lock\/?$/, obj({ is_locked: flag }));
 add('customers', 'PUT', /^\/[^/]+\/?$/, obj({ full_name: name }));
-add('admin', 'GET', /^\/orders\/?$/, empty, obj({ status: z.enum(ORDER_STATUSES).optional() }));
+add('customers', 'DELETE', /^\/[^/]+\/?$/);
+add('admin', 'GET', /^\/orders\/?$/, empty, obj({ ...page, status: z.enum(ORDER_STATUSES).optional() }));
 add('admin', 'PATCH', /^\/orders\/[^/]+\/status\/?$/, obj({ status: z.enum(ORDER_STATUSES) }));
 add('admin', 'GET', /^\/(products|stats)\/?$/);
 add('admin', 'POST', /^\/products\/?$/, obj(product));
 add('admin', 'PUT', /^\/products\/[^/]+\/?$/, obj(product).partial());
 add('admin', 'DELETE', /^\/products\/[^/]+\/?$/);
+add('admin', 'DELETE', /^\/products\/[^/]+\/permanent\/?$/);
 add('admin', 'POST', /^\/products\/[^/]+\/stock\/?$/, obj({ quantity: integer(1, 100000), cost_price: product.cost_price, note }));
 add('admin', 'GET', /^\/products\/[^/]+\/stock\/?$/);
 add('admin', 'GET', /^\/(stock-entries|activity)\/?$/, empty, obj({ limit: page.limit }));
-add('admin', 'GET', /^\/revenue\/?$/, empty, obj({
+add('admin', 'GET', /^\/(revenue|export\/orders)\/?$/, empty, obj({
   period: z.enum(['day', 'month', 'range']).optional(), date: day.optional(),
   month: text(7).regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(), from: day.optional(), to: day.optional(),
 }));

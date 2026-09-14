@@ -7,6 +7,7 @@ import {
   mentionsOtherProvince, normalizeBacNinhAddress, FIRST_ORDER_DISCOUNT,
 } from '../constants.js';
 import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../validate.js';
+import { attachItems } from '../order-lists.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -183,8 +184,10 @@ router.get('/', requireAuth, (req, res) => {
   const orders = db
     .prepare('SELECT * FROM orders WHERE user_id = ? ORDER BY id DESC')
     .all(req.user.id);
-  const getItems = db.prepare(`SELECT ${ORDER_ITEM_COLUMNS} FROM order_items WHERE order_id = ? ORDER BY id`);
-  res.json({ orders: orders.map((o) => ({ ...o, items: getItems.all(o.id) })) });
+  const items = db.prepare(`SELECT ${ORDER_ITEM_COLUMNS} FROM order_items
+    WHERE order_id IN (SELECT id FROM orders WHERE user_id = ?)
+    ORDER BY order_id, id`).all(req.user.id);
+  res.json({ orders: attachItems(orders, items, 'order_id') });
 });
 
 /** PATCH /api/orders/:id/cancel — Khách tự huỷ khi đơn còn chờ xác nhận */

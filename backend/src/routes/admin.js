@@ -7,6 +7,8 @@ import { creditPoints, loyaltyPhoneForOrder } from '../loyalty.js';
 import { ALLOWED_TRANSITIONS, ORDER_STATUSES, LIMITS, localDate, parseWeightKg } from '../constants.js';
 import { HttpError, cleanImageUrl, cleanText, toInteger } from '../validate.js';
 import { writeAdminAudit } from '../audit.js';
+import { listAdminOrders } from '../order-lists.js';
+import { buildOrdersWorkbook } from '../orders-export.js';
 
 const router = Router();
 
@@ -23,13 +25,9 @@ router.get('/orders', (req, res, next) => {
       throw new HttpError(400, `Trạng thái phải thuộc: ${ORDER_STATUSES.join(', ')}.`);
     }
 
-    const sql = `SELECT o.*, u.email AS user_email, u.full_name AS user_name
-                 FROM orders o JOIN users u ON u.id = o.user_id
-                 ${status ? 'WHERE o.status = ?' : ''}
-                 ORDER BY o.id DESC`;
-    const orders = status ? db.prepare(sql).all(status) : db.prepare(sql).all();
-    const getItems = db.prepare('SELECT * FROM order_items WHERE order_id = ? ORDER BY id');
-    res.json({ orders: orders.map((o) => ({ ...o, items: getItems.all(o.id) })) });
+    const limit = toInteger(req.query.limit, { min: 1, max: 100 }) ?? 30;
+    const offset = toInteger(req.query.offset, { min: 0, max: 100000 }) ?? 0;
+    res.json(listAdminOrders({ status, limit, offset }));
   } catch (err) {
     next(err);
   }
@@ -352,6 +350,45 @@ router.delete('/products/:id', (req, res, next) => {
   }
 });
 
+/**
+ * DELETE /api/admin/products/:id/permanent — Xoá hẳn loại gạo khỏi hệ thống.
+ *
+ * Khác với "Ẩn" ở trên: dòng sản phẩm biến mất thật. Làm được việc này an toàn
+ * vì đơn hàng và hoá đơn đều đã chụp lại tên, đơn vị và giá lúc bán
+ * (order_items / retail_invoice_items, khoá ngoại ON DELETE SET NULL), nên lịch
+ * sử mua bán và doanh thu vẫn nguyên vẹn. Lịch sử nhập kho của riêng loại gạo
+ * này thì mất theo, vì nó không còn ý nghĩa.
+ */
+router.delete('/products/:id/permanent', (req, res, next) => {
+  try {
+    const productId = toInteger(req.params.id, { min: 1 });
+    if (!productId) throw new HttpError(404, 'Không tìm thấy loại gạo.');
+    const { before, sold } = db.transaction(() => {
+      const before = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
+      if (!before) throw new HttpError(404, 'Không tìm thấy loại gạo.');
+      const sold = db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM order_items WHERE product_id = ?) +
+        (SELECT COUNT(*) FROM retail_invoice_items WHERE product_id = ?) AS n
+    `).get(productId, productId).n;
+
+      const info = db.prepare('DELETE FROM products WHERE id = ?').run(productId);
+      if (!info.changes) throw new HttpError(404, 'Không tìm thấy loại gạo.');
+      return { before, sold };
+    })();
+
+    writeAdminAudit(req, {
+      action: 'delete', entityType: 'product', entityId: productId, before, after: null,
+    });
+    res.json({
+      ok: true,
+      message: `Đã xoá hẳn “${before.name}”. ${sold} dòng trong đơn và hoá đơn cũ vẫn giữ nguyên tên và giá lúc bán.`,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 /** GET /api/admin/stats — Thống kê nhanh cho dashboard */
 router.get('/stats', (req, res) => {
   const countOrders = db.prepare('SELECT COUNT(*) c FROM orders WHERE status = ?');
@@ -405,7 +442,11 @@ const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v);
 const isMonth = (v) => /^\d{4}-\d{2}$/.test(v);
 
 /** Đổi bộ lọc người dùng chọn thành khoảng ngày [from, to] theo giờ Việt Nam. */
-function resolvePeriod(query) {
+export function resolvePeriod(query) {
+  if (Object.keys(query).length === 0) {
+    const today = db.prepare(`SELECT ${localDate("'now'")} AS day`).get().day;
+    return { type: 'day', from: today, to: today, label: `Ngày ${today.split('-').reverse().join('/')}` };
+  }
   const type = query.period || 'month';
 
   if (type === 'day') {
@@ -443,6 +484,20 @@ function resolvePeriod(query) {
 
   throw new HttpError(400, 'Kiểu lọc phải là day, month hoặc range.');
 }
+
+router.get('/export/orders', async (req, res, next) => {
+  try {
+    const period = resolvePeriod(req.query);
+    const buffer = await buildOrdersWorkbook(period);
+    const filename = `don-hang-${period.from}_${period.to}.xlsx`;
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      'Cache-Control': 'no-store',
+    });
+    res.send(Buffer.from(buffer));
+  } catch (err) { next(err); }
+});
 
 /** GET /api/admin/revenue?period=day|month|range&date=&month=&from=&to=
  *  Gộp doanh thu đơn online đã hoàn thành và hoá đơn bán tại quầy.

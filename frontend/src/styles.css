@@ -76,6 +76,10 @@ main.container { min-height: 66vh; padding-block: 28px 72px; }
 .btn-admin { background: var(--white); color: var(--green-950); }
 .btn-install { border-color: rgba(255,255,255,.25); color: var(--white); }
 .btn-danger-ghost { border-color: #dfbcb5; color: var(--danger); }
+/* Nút xoá vĩnh viễn — tô đặc để phân biệt rõ với “Ẩn” và “Khoá”. */
+.btn-danger { border-color: var(--danger); background: var(--danger); color: #fff; }
+.btn-danger:hover:not(:disabled) { filter: brightness(.92); }
+.btn-danger:disabled { border-color: var(--border); background: var(--cream); color: var(--muted); cursor: not-allowed; }
 .btn-block { width: 100%; }
 .btn-large { min-height: 50px; padding: 13px 20px; }
 .link-button { padding: 0; border: 0; background: none; color: var(--green-900); font-weight: 750; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
@@ -800,8 +804,10 @@ label b { color: var(--danger); }
   .mobile-submit { display: inline-flex; margin-top: 22px; }
   .admin-topbar { padding: 10px 14px; }
   .admin-account > span { display: none; }
-  .admin-layout { grid-template-columns: 1fr; }
-  .admin-sidebar { position: sticky; top: 66px; z-index: 40; display: flex; gap: 7px; padding: 8px 12px; border-right: 0; border-bottom: 1px solid #d9d7cf; }
+  .admin-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  .admin-sidebar { position: sticky; top: 66px; z-index: 40; display: flex; gap: 7px; min-width: 0; overflow-x: auto; align-items: center; padding: 8px 12px; border-right: 0; border-bottom: 1px solid #d9d7cf; }
+  .admin-sidebar > button, .admin-sidebar-link { flex: 0 0 auto; width: auto; white-space: nowrap; }
+  .admin-content { min-width: 0; }
   .admin-nav-label, .admin-help { display: none; }
   .admin-sidebar > button { grid-template-columns: 24px 1fr auto; margin: 0; padding: 8px 10px; }
   .admin-sidebar button small { display: none; }

@@ -29,6 +29,8 @@ router.get('/', (req, res) => {
     )
     .all(pattern, pattern, pattern);
 
+  // Chỉ danh mục công khai: đơn hàng vẫn tự đọc lại giá và tồn kho trong transaction.
+  res.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=300');
   res.json({ products: rows });
 });
 

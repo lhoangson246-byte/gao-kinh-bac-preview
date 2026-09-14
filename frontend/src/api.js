@@ -98,8 +98,11 @@ export const api = {
   orderDiscount: () => request('/orders/discount', { auth: true }),
 
   adminStats: () => request('/admin/stats', { auth: true }),
-  adminOrders: (status) =>
-    request(`/admin/orders${status && status !== 'all' ? `?status=${encodeURIComponent(status)}` : ''}`, { auth: true }),
+  adminOrders: (status, { limit = 30, offset = 0 } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (status && status !== 'all') params.set('status', status);
+    return request(`/admin/orders?${params}`, { auth: true });
+  },
   adminSetOrderStatus: (id, status) =>
     request(`/admin/orders/${id}/status`, { method: 'PATCH', body: { status }, auth: true }),
   adminProducts: () => request('/admin/products', { auth: true }),
@@ -107,6 +110,8 @@ export const api = {
   adminUpdateProduct: (id, payload) =>
     request(`/admin/products/${id}`, { method: 'PUT', body: payload, auth: true }),
   adminDeleteProduct: (id) => request(`/admin/products/${id}`, { method: 'DELETE', auth: true }),
+  /** Xoá hẳn khỏi cơ sở dữ liệu, khác với adminDeleteProduct chỉ ẩn đi. */
+  adminDestroyProduct: (id) => request(`/admin/products/${id}/permanent`, { method: 'DELETE', auth: true }),
   adminUploadImage: uploadImage,
   adminImageLibrary: () => request('/admin/images', { auth: true }),
   /* --- Quản lý tài khoản khách --- */
@@ -123,6 +128,8 @@ export const api = {
     request(`/admin/customers/${id}`, { method: 'PUT', body: { full_name }, auth: true }),
   adminResetPassword: (id, password) =>
     request(`/admin/customers/${id}/reset-password`, { method: 'POST', body: { password }, auth: true }),
+  /** Xoá hẳn tài khoản khách. Máy chủ từ chối nếu khách đã từng đặt đơn. */
+  adminDeleteCustomer: (id) => request(`/admin/customers/${id}`, { method: 'DELETE', auth: true }),
   adminLockCustomer: (id, is_locked) =>
     request(`/admin/customers/${id}/lock`, { method: 'PATCH', body: { is_locked }, auth: true }),
 
@@ -135,6 +142,27 @@ export const api = {
   adminRevenue: (filters) => {
     const params = new URLSearchParams(filters);
     return request(`/admin/revenue?${params}`, { auth: true });
+  },
+  adminExportOrders: async (filters = {}) => {
+    let response;
+    try {
+      response = await fetch(`${BASE}/api/admin/export/orders?${new URLSearchParams(filters)}`, {
+        credentials: 'include', headers: { 'X-Session-Mode': 'cookie', 'X-CSRF-Protection': '1' },
+      });
+    } catch { throw new Error('Không kết nối được tới cửa hàng. Vui lòng thử tải lại.'); }
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.message || 'Chưa tạo được tệp Excel. Vui lòng thử lại.');
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = response.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1] || 'don-hang.xlsx';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
   adminActivity: (limit = 50) => request(`/admin/activity?limit=${limit}`, { auth: true }),
 

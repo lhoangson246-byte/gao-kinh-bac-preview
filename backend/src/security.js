@@ -30,8 +30,15 @@ export function deliverSession(req, res, user, token, status = 200) {
   return res.status(status).json({ user, token });
 }
 
-export function trustedProxy(value) {
-  if (!value || value === '0' || value === 'false') return false;
+export function trustedProxy(value, env = process.env) {
+  // Vercel luôn đặt đúng một tầng proxy trước hàm serverless và tự viết lại
+  // X-Forwarded-For/Proto. Không tin tầng đó thì req.protocol luôn là "http"
+  // (trong khi trình duyệt gửi Origin "https://…") nên mọi yêu cầu ghi bị chặn,
+  // và giới hạn tần suất gom tất cả khách vào chung một địa chỉ IP nội bộ.
+  if (value === undefined || value === null || value === '') {
+    return env.VERCEL || env.VERCEL_ENV ? 1 : false;
+  }
+  if (value === '0' || value === 'false') return false;
   if (!/^[1-9]\d*$/.test(value) || Number(value) > 10) {
     throw new Error('TRUST_PROXY must be 0/false or an explicit hop count from 1 to 10.');
   }
@@ -46,8 +53,25 @@ for (const origin of origins) {
     throw new Error('CLIENT_ORIGIN must list exact origins (HTTPS in production).');
   }
 }
+/**
+ * true khi Origin trỏ về đúng tên miền đang phục vụ yêu cầu này.
+ * So theo host chứ không so cả "giao thức://host": sau một proxy kết thúc TLS
+ * (Vercel, Render, Nginx) thì req.protocol có thể là "http" trong khi trình
+ * duyệt gửi Origin "https://…". Việc chống CSRF vẫn nguyên vẹn vì trang của
+ * kẻ tấn công ở tên miền khác luôn gửi Origin với host khác.
+ */
+function sameHostOrigin(req, origin) {
+  const host = req.get('host');
+  if (!host) return false;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
 export function originAllowed(req, origin) {
-  return !origin || origins.includes(origin) || origin === `${req.protocol}://${req.get('host')}`;
+  return !origin || origins.includes(origin) || sameHostOrigin(req, origin);
 }
 
 // Custom headers force cross-origin browser requests through CORS preflight.

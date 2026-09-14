@@ -1,0 +1,314 @@
+[
+  {
+    "src": "/products/co-may-4-mua-5kg.jpg",
+    "variants": [
+      {
+        "src": "/products/co-may-4-mua-5kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/co-may-4-mua-5kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/co-may-gao-lut-do-2kg.jpg",
+    "variants": [
+      {
+        "src": "/products/co-may-gao-lut-do-2kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/co-may-gao-lut-do-2kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/co-may-st25-cao-cap-5kg.jpg",
+    "variants": [
+      {
+        "src": "/products/co-may-st25-cao-cap-5kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/co-may-st25-cao-cap-5kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/co-may-thom-deo-vua-25kg.jpg",
+    "variants": [
+      {
+        "src": "/products/co-may-thom-deo-vua-25kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/co-may-thom-deo-vua-25kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/co-may-thom-deo-vua-5kg.jpg",
+    "variants": [
+      {
+        "src": "/products/co-may-thom-deo-vua-5kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/co-may-thom-deo-vua-5kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/gao-thom-com-deo-10kg.jpg",
+    "variants": [
+      {
+        "src": "/products/gao-thom-com-deo-10kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/gao-thom-com-deo-10kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/gao-thom-que-25kg.jpg",
+    "variants": [
+      {
+        "src": "/products/gao-thom-que-25kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/gao-thom-que-25kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/khanh-vy-gao-vip-10kg.jpg",
+    "variants": [
+      {
+        "src": "/products/khanh-vy-gao-vip-10kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/khanh-vy-gao-vip-10kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/khanh-vy-thom-lai-mien-10kg.jpg",
+    "variants": [
+      {
+        "src": "/products/khanh-vy-thom-lai-mien-10kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/khanh-vy-thom-lai-mien-10kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/khanh-vy-thom-lai-mien-25kg.jpg",
+    "variants": [
+      {
+        "src": "/products/khanh-vy-thom-lai-mien-25kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/khanh-vy-thom-lai-mien-25kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/lvs-g9-bac-huong-10kg.jpg",
+    "variants": [
+      {
+        "src": "/products/lvs-g9-bac-huong-10kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/lvs-g9-bac-huong-10kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/lvs-g9-dien-bien-10kg.jpg",
+    "variants": [
+      {
+        "src": "/products/lvs-g9-dien-bien-10kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/lvs-g9-dien-bien-10kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/lvs-g9-hai-hau-10kg.jpg",
+    "variants": [
+      {
+        "src": "/products/lvs-g9-hai-hau-10kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/lvs-g9-hai-hau-10kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/lvs-g9-khang-dan-10kg.jpg",
+    "variants": [
+      {
+        "src": "/products/lvs-g9-khang-dan-10kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/lvs-g9-khang-dan-10kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/lvs-g9-st25-hong-5kg.jpg",
+    "variants": [
+      {
+        "src": "/products/lvs-g9-st25-hong-5kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/lvs-g9-st25-hong-5kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/lvs-g9-st25-xanh-5kg.jpg",
+    "variants": [
+      {
+        "src": "/products/lvs-g9-st25-xanh-5kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/lvs-g9-st25-xanh-5kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/lvs-gao-lut-den-1kg.jpg",
+    "variants": [
+      {
+        "src": "/products/lvs-gao-lut-den-1kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/lvs-gao-lut-den-1kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/lvs-gao-nep-1kg.jpg",
+    "variants": [
+      {
+        "src": "/products/lvs-gao-nep-1kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/lvs-gao-nep-1kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/lvs-gao-sach-st25-5kg.jpg",
+    "variants": [
+      {
+        "src": "/products/lvs-gao-sach-st25-5kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/lvs-gao-sach-st25-5kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/lvs-st25-vang-5kg.jpg",
+    "variants": [
+      {
+        "src": "/products/lvs-st25-vang-5kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/lvs-st25-vang-5kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/lvs-thom-thai-do-5kg.jpg",
+    "variants": [
+      {
+        "src": "/products/lvs-thom-thai-do-5kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/lvs-thom-thai-do-5kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/lvs-thom-thai-vang-5kg.jpg",
+    "variants": [
+      {
+        "src": "/products/lvs-thom-thai-vang-5kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/lvs-thom-thai-vang-5kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/st25-tinh-hoa-gao-viet-10kg.jpg",
+    "variants": [
+      {
+        "src": "/products/st25-tinh-hoa-gao-viet-10kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/st25-tinh-hoa-gao-viet-10kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  },
+  {
+    "src": "/products/st25-tinh-tuy-gao-viet-10kg.jpg",
+    "variants": [
+      {
+        "src": "/products/st25-tinh-tuy-gao-viet-10kg-v1-480.webp",
+        "width": 480
+      },
+      {
+        "src": "/products/st25-tinh-tuy-gao-viet-10kg-v1-960.webp",
+        "width": 900
+      }
+    ]
+  }
+]

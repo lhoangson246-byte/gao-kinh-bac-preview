@@ -509,6 +509,99 @@ khách trả 0₫. Nếu muốn chặn, thêm mức tối thiểu (ví dụ ch�
 là sửa ở `backend/src/routes/orders.js` chỗ tính `discount`.
 
 
+## Sửa lỗi trên Vercel: mọi thao tác lưu đều bị chặn
+
+Cửa hàng báo "lưu thông tin khách hàng trên Vercel không hoạt động", "sửa sản phẩm
+không thay đổi được". Đọc thì thấy trang web vẫn hiện đủ dữ liệu, chỉ có lưu là hỏng.
+
+### Nguyên nhân
+
+Vercel kết thúc HTTPS ở lớp proxy rồi gọi hàm serverless bằng HTTP nội bộ. Express chỉ
+đọc `X-Forwarded-Proto` khi được bật `trust proxy`, mà `TRUST_PROXY` không được đặt, nên
+`req.protocol` luôn là `http`. Lớp chống CSRF lại so Origin theo cả giao thức:
+
+```js
+origin === `${req.protocol}://${req.get('host')}`   // "http://…" vs "https://…"
+```
+
+Trình duyệt gửi `Origin: https://<tên miền>`, không khớp `http://<tên miền>` → **403
+"Nguồn yêu cầu không được phép."** cho *mọi* POST/PUT/PATCH/DELETE.
+
+Đọc dữ liệu thì không sao: trình duyệt không gửi Origin cho GET cùng nguồn, nên trang
+web trông vẫn bình thường và lỗi chỉ lộ ra khi bấm nút lưu.
+
+Tái hiện được bằng một lệnh curl:
+
+```
+POST /api/auth/login  + Origin: https://host   ->  403
+POST /api/auth/login  + Origin: http://host    ->  200
+```
+
+### Đã sửa hai chỗ
+
+1. **Tin đúng một tầng proxy khi chạy trên Vercel.** `trustedProxy()` nay trả về `1` khi
+   thấy biến `VERCEL`/`VERCEL_ENV` mà `TRUST_PROXY` bỏ trống. Đặt `TRUST_PROXY=0` vẫn tắt
+   được. Việc này còn sửa luôn một lỗi thứ hai chưa ai để ý: khi không tin proxy,
+   `express-rate-limit` lấy địa chỉ IP nội bộ của Vercel cho *tất cả* khách, nên giới hạn
+   20 lần đăng ký / 15 phút bị gom chung và cả cửa hàng có thể bị khoá vì vài người dùng.
+
+2. **So Origin theo host thay vì theo "giao thức://host".** Sau một proxy kết thúc TLS
+   (Vercel, Render, Nginx) thì giao thức mà ứng dụng thấy không còn đáng tin để so sánh.
+   Việc chống CSRF không hề yếu đi: trang của kẻ tấn công nằm ở tên miền khác nên Origin
+   luôn có host khác.
+
+### Kiểm thử
+
+`npm run test:security` có thêm 5 phép thử dựng hẳn một bản chạy giả lập Vercel
+(`VERCEL=1`, không đặt `TRUST_PROXY`, không đặt `CLIENT_ORIGIN`):
+
+- trình duyệt trên chính tên miền đó đăng nhập được;
+- quản trị viên tạo được sản phẩm qua phiên cookie;
+- quản trị viên **sửa được** sản phẩm và số liệu lưu đúng;
+- yêu cầu ghi từ tên miền lạ vẫn bị chặn 403;
+- `trustedProxy()` trả đúng giá trị cho từng trường hợp.
+
+Bản giả lập này chạy bằng **driver libSQL** đúng như production, nên từ nay bộ kiểm thử
+bảo vệ cả đường đi Turso chứ không chỉ better-sqlite3.
+
+Đã thử khôi phục mã cũ để chắc chắn bộ kiểm thử bắt được lỗi — nó fail đúng ở phép thử
+đầu tiên.
+
+## Xoá hẳn sản phẩm và tài khoản khách
+
+Trước đây trang quản trị chỉ có "Ẩn" (sản phẩm) và "Khoá" (tài khoản). Nay có thêm nút
+**Xoá hẳn** màu đỏ, xoá thật khỏi cơ sở dữ liệu.
+
+### Sản phẩm — `DELETE /api/admin/products/:id/permanent`
+
+Xoá được cả loại đã từng bán. An toàn vì đơn hàng và hoá đơn đều đã **chụp lại tên, đơn
+vị và giá lúc bán** (`order_items`, `retail_invoice_items`, khoá ngoại `ON DELETE SET
+NULL`), nên lịch sử mua bán và doanh thu vẫn nguyên vẹn — chỉ mất liên kết tới dòng sản
+phẩm. Lịch sử nhập kho của riêng loại đó thì mất theo vì không còn ý nghĩa.
+
+Thông báo sau khi xoá nói rõ còn bao nhiêu dòng lịch sử được giữ lại. Nút "Ẩn" vẫn còn
+cho trường hợp chỉ muốn tạm ngừng bán.
+
+### Tài khoản khách — `DELETE /api/admin/customers/:id`
+
+**Chỉ xoá được tài khoản chưa từng đặt đơn nào.** Khoá ngoại `orders.user_id` là
+`ON DELETE CASCADE`, nên xoá một khách đã mua sẽ kéo theo toàn bộ đơn của họ và làm hụt
+doanh thu đã ghi nhận. Trường hợp đó máy chủ trả 409 kèm câu nhắc dùng nút *Khoá*.
+
+Trong danh sách khách, nút *Xoá hẳn* tự mờ đi với những khách đã có đơn, kèm chú thích
+nói rõ vì sao — người dùng biết trước thay vì bấm rồi mới nhận lỗi.
+
+Điểm tích luỹ nằm ở bảng riêng theo số điện thoại nên **không mất** khi xoá tài khoản
+đăng nhập.
+
+### Kiểm thử
+
+`npm run test:manage` thêm 13 phép thử: ẩn khác xoá hẳn, xoá hẳn thì biến mất, xoá lần
+nữa trả 404, khách thường không xoá được (403), xoá hẳn loại đã bán mà hoá đơn cũ vẫn giữ
+đúng tên và giá, xoá tài khoản chưa mua gì, và khách đã có đơn thì bị từ chối mà không mất
+tài khoản lẫn đơn hàng.
+
+
 ## Việc bạn cần tự làm trước khi chạy thật
 
 1. **Đổi `JWT_SECRET`** thành chuỗi dài ngẫu nhiên và **đổi mật khẩu quản trị mẫu**.
@@ -546,3 +639,6 @@ giới hạn tuyệt đối giữa nhiều instance, chuyển phần này sang R
 ## Tài khoản mẫu
 
 Không còn tài khoản mặc định. Đặt `ADMIN_EMAIL` và `ADMIN_PASSWORD` riêng trước lần seed đầu. Xem `SECURITY_AUDIT.md` để biết các thay đổi bảo mật và việc cần làm khi triển khai.
+# Bổ sung triển khai 14/09/2026
+
+Xem phần “Triển khai Vercel và migration (09/2026)” trong README trước khi deploy. Migration đã tách khỏi boot, Production build chạy migrate có kiểm tra môi trường; Preview thiếu DB riêng sẽ không phục vụ API. Không seed lại dữ liệu thật. Đã thêm xuất Excel có giới hạn, phân trang đơn quản trị và tải ảnh WebP/chunk Admin-POS riêng. Các thay đổi xoá hẳn và sửa ghi 403 trong working tree được giữ lại và bổ sung transaction, kiểm thử hồi quy.

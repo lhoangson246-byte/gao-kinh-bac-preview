@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { fixture, run } from './fixture.mjs';
+import { trustedProxy } from '../src/security.js';
 
 let passed = 0;
 const check = (name, condition) => { assert.ok(condition, name); passed++; console.log(`PASS ${name}`); };
@@ -31,7 +35,8 @@ try {
   const pid = product.data.product.id;
   const list = await call('/products');
   check('Public catalog and detail exclude cost_price', list.data.products.every((p) => !('cost_price' in p)) && !('cost_price' in (await call(`/products/${pid}`)).data.product));
-  check('API has no-store, CSP and nosniff', list.headers.get('cache-control') === 'no-store' && list.headers.get('content-security-policy') && list.headers.get('x-content-type-options') === 'nosniff');
+  check('Public catalog opts into edge cache without cookies', list.headers.get('cache-control') === 'public, s-maxage=30, stale-while-revalidate=300' && !list.headers.has('set-cookie'));
+  check('Authenticated APIs retain no-store, CSP and nosniff', (await call('/auth/me', { token })).headers.get('cache-control') === 'no-store' && list.headers.get('content-security-policy') && list.headers.get('x-content-type-options') === 'nosniff');
   for (const route of ['/admin/products', '/admin/customers', '/admin/activity', '/retail/customers?phone=0912345678']) {
     check(`Anonymous/customer authorization: ${route}`, (await call(route)).status === 401 && (await call(route, { token })).status === 403);
   }
@@ -124,4 +129,52 @@ try {
   }
   check('Account limiter covers normalized phone variants across different IPs', last.status === 429);
 } finally { await accountApp.close(); }
+// Vercel kết thúc TLS ở proxy rồi gọi hàm serverless qua HTTP. Nếu ứng dụng
+// không tin proxy đó thì req.protocol là "http" trong khi trình duyệt gửi
+// Origin "https://…", và mọi yêu cầu ghi bị chặn 403 dù cùng một tên miền.
+// Trên Vercel ứng dụng chạy bằng driver libSQL (Turso) chứ không phải better-sqlite3,
+// nên khối này cũng là phép kiểm tra cho chính driver đó.
+const vercelDir = await mkdtemp(path.join(tmpdir(), 'gao-vercel-'));
+const vercelApp = await fixture({
+  VERCEL: '1', TRUST_PROXY: '', CLIENT_ORIGIN: '',
+  LIBSQL_URL: path.join(vercelDir, 'app.db'),
+});
+try {
+  const host = new URL(vercelApp.base).host;
+  const browser = {
+    'X-Session-Mode': 'cookie', 'X-CSRF-Protection': '1',
+    Origin: `https://${host}`, 'X-Forwarded-Proto': 'https',
+  };
+  const login = await vercelApp.call('/auth/login', {
+    method: 'POST', headers: browser,
+    body: { identifier: vercelApp.env.ADMIN_EMAIL, password: vercelApp.env.ADMIN_PASSWORD },
+  });
+  check('Vercel: browser write from the site itself is accepted', login.status === 200);
+
+  const cookie = login.headers.get('set-cookie')?.split(';')[0];
+  const write = await vercelApp.call('/admin/products', {
+    method: 'POST', headers: { ...browser, Cookie: cookie },
+    body: { name: 'Vercel product', price: 50000, stock: 5 },
+  });
+  check('Vercel: admin can create through the browser session', write.status === 201);
+
+  const edit = await vercelApp.call(`/admin/products/${write.data.product.id}`, {
+    method: 'PUT', headers: { ...browser, Cookie: cookie }, body: { price: 61000 },
+  });
+  check('Vercel: admin edit is saved', edit.status === 200 && edit.data.product.price === 61000);
+
+  const foreign = await vercelApp.call('/admin/products', {
+    method: 'POST', headers: { ...browser, Cookie: cookie, Origin: 'https://evil.example' },
+    body: { name: 'Evil product', price: 1000 },
+  });
+  check('Vercel: cross-site write is still rejected', foreign.status === 403);
+
+  check('Vercel: client IP comes from the proxy header, not the proxy itself',
+    trustedProxy('', { VERCEL: '1' }) === 1 && trustedProxy('', {}) === false
+    && trustedProxy('0', { VERCEL: '1' }) === false);
+} finally {
+  await vercelApp.close();
+  await rm(vercelDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+}
+
 console.log(`${passed} security checks passed.`);

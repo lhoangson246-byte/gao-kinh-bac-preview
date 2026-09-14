@@ -561,6 +561,154 @@ const posPhone = phoneOf(8);
   });
 }
 
+/* --- Tài khoản khách dùng để thử phân quyền xoá --- */
+const guestToken = (await call('/auth/register', {
+  method: 'POST',
+  body: { full_name: 'Khách Thử Quyền', phone: phoneOf(6), password: 'matkhau123!test' },
+})).data.token;
+
+/* --- Xoá hẳn loại gạo --- */
+{
+  const made = await call('/admin/products', {
+    method: 'POST', token: admin,
+    body: { name: `Gạo thử xoá ${suffix}`, price: 12000, unit: 'túi 1kg', stock: 3 },
+  });
+  const pid = made.data.product?.id;
+  check('Tạo loại gạo để thử xoá', made.status === 201, `status=${made.status}`);
+
+  // "Ẩn" chỉ tắt hiển thị, dòng sản phẩm vẫn còn.
+  const hidden = await call(`/admin/products/${pid}`, { method: 'DELETE', token: admin });
+  const afterHide = (await call('/admin/products', { token: admin })).data.products.find((p) => p.id === pid);
+  check('Ẩn sản phẩm thì vẫn còn trong danh sách quản trị',
+    hidden.status === 200 && afterHide?.is_active === 0, JSON.stringify(afterHide?.is_active));
+
+  const gone = await call(`/admin/products/${pid}/permanent`, { method: 'DELETE', token: admin });
+  const afterDelete = (await call('/admin/products', { token: admin })).data.products.some((p) => p.id === pid);
+  check('Xoá hẳn thì sản phẩm biến mất', gone.status === 200 && afterDelete === false,
+    `status=${gone.status} còn=${afterDelete}`);
+  check('Xoá hẳn lần nữa trả 404',
+    (await call(`/admin/products/${pid}/permanent`, { method: 'DELETE', token: admin })).status === 404);
+  check('Khách thường không xoá hẳn được sản phẩm (403)',
+    (await call(`/admin/products/${pid}/permanent`, { method: 'DELETE', token: guestToken })).status === 403);
+}
+
+/* --- Xoá hẳn loại gạo ĐÃ BÁN: hoá đơn cũ phải còn nguyên --- */
+{
+  const made = await call('/admin/products', {
+    method: 'POST', token: admin,
+    body: { name: `Gạo đã bán ${suffix}`, price: 45000, unit: 'túi 1kg', stock: 10 },
+  });
+  const pid = made.data.product.id;
+  const inv = await call('/retail/invoices', {
+    method: 'POST', token: admin, body: { items: [{ product_id: pid, quantity: 2 }] },
+  });
+  const code = inv.data.invoice?.code;
+
+  const gone = await call(`/admin/products/${pid}/permanent`, { method: 'DELETE', token: admin });
+  check('Xoá hẳn được cả loại đã bán', gone.status === 200, `status=${gone.status}`);
+  check('Thông báo nhắc rằng lịch sử vẫn giữ', /vẫn giữ nguyên/.test(gone.data.message || ''), gone.data.message);
+
+  const reread = await call(`/retail/invoices/${code}`, { token: admin });
+  const line = reread.data.invoice?.items?.[0];
+  check('Hoá đơn cũ vẫn giữ đúng tên và giá lúc bán',
+    reread.status === 200 && line?.product_name === `Gạo đã bán ${suffix}` && line?.price === 45000,
+    JSON.stringify(line));
+  check('Dòng hoá đơn cũ bỏ liên kết tới sản phẩm đã xoá', line?.product_id === null, String(line?.product_id));
+}
+
+/* --- Xoá hẳn tài khoản khách --- */
+{
+  const phone = phoneOf(4);
+  await call('/auth/register', {
+    method: 'POST', body: { full_name: 'Khách Xoá Thử', phone, password: 'matkhau123!test' },
+  });
+  const found = (await call(`/admin/customers?q=${phone}`, { token: admin })).data.customers?.[0];
+  check('Tìm được khách vừa tạo', !!found, JSON.stringify(found));
+
+  const gone = await call(`/admin/customers/${found.id}`, { method: 'DELETE', token: admin });
+  const left = (await call(`/admin/customers?q=${phone}`, { token: admin })).data.customers?.length ?? -1;
+  check('Xoá hẳn tài khoản chưa đặt đơn nào', gone.status === 200 && left === 0,
+    `status=${gone.status} còn=${left}`);
+  check('Xoá lần nữa trả 404',
+    (await call(`/admin/customers/${found.id}`, { method: 'DELETE', token: admin })).status === 404);
+}
+
+/* --- Khách ĐÃ đặt đơn thì không xoá được, và không mất gì --- */
+{
+  const phone = phoneOf(5);
+  const reg = await call('/auth/register', {
+    method: 'POST', body: { full_name: 'Khách Có Đơn', phone, password: 'matkhau123!test' },
+  });
+  const prod = (await call('/products')).data.products.find((p) => p.price > 0 && p.stock > 0);
+  const order = await call('/orders', {
+    method: 'POST', token: reg.data.token,
+    body: {
+      receiver_name: 'Khách Có Đơn', phone,
+      address: 'Số 9, đường Ngô Gia Tự, phường Tiền An',
+      delivery_area: 'bac-ninh', items: [{ product_id: prod.id, quantity: 1 }],
+    },
+  });
+  const found = (await call(`/admin/customers?q=${phone}`, { token: admin })).data.customers?.[0];
+
+  const refused = await call(`/admin/customers/${found.id}`, { method: 'DELETE', token: admin });
+  check('Khách đã đặt đơn thì không xoá được (409)', refused.status === 409, `status=${refused.status}`);
+  check('Báo lỗi khuyên khoá tài khoản thay vì xoá', /kho[áa] t[àa]i kho[ảa]n/i.test(refused.data.message || ''),
+    refused.data.message);
+
+  const stillThere = (await call(`/admin/customers?q=${phone}`, { token: admin })).data.customers?.length ?? 0;
+  const orderKept = (await call('/admin/orders', { token: admin })).data.orders
+    .some((o) => o.id === order.data.order?.id);
+  check('Từ chối xong tài khoản vẫn còn', stillThere === 1, String(stillThere));
+  check('Từ chối xong đơn hàng vẫn còn', orderKept === true, String(orderKept));
+
+  check('Khách thường không xoá được tài khoản người khác (403)',
+    (await call(`/admin/customers/${found.id}`, { method: 'DELETE', token: reg.data.token })).status === 403);
+}
+
+/* --- Excel thực: đọc ngược tệp và đối chiếu số với báo cáo cùng kỳ --- */
+{
+  const { default: ExcelJS } = await import('exceljs');
+  const requestExport = (query, token = admin) => fetch(`${BASE}/api/admin/export/orders${query ? '?' + query : ''}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  check('Xuất Excel yêu cầu đăng nhập (401)', (await requestExport('', null)).status === 401);
+  check('Khách thường không xuất được giá nhập (403)', (await requestExport('', guestToken)).status === 403);
+  check('Ngày không tồn tại bị chặn (400)', (await requestExport('period=day&date=2026-02-30')).status === 400);
+  check('Khoảng quá 366 ngày bị chặn (400)', (await requestExport('period=range&from=2025-01-01&to=2026-09-01')).status === 400);
+  const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+  for (const query of ['', `period=day&date=${today}`, `period=month&month=${today.slice(0, 7)}`, `period=range&from=${today}&to=${today}`]) {
+    const response = await requestExport(query);
+    check('Excel trả đúng kiểu tệp và no-store: ' + (query || 'hôm nay'), response.status === 200
+      && response.headers.get('content-type')?.includes('spreadsheetml.sheet')
+      && response.headers.get('cache-control') === 'no-store'
+      && response.headers.get('content-disposition')?.includes("filename*=UTF-8''"));
+    if (response.status !== 200) continue;
+    const workbook = new ExcelJS.Workbook();
+    const bytes = await response.arrayBuffer();
+    await workbook.xlsx.load(bytes);
+    const summary = workbook.getWorksheet('Tổng hợp theo ngày');
+    const report = (await call('/admin/revenue' + (query ? '?' + query : ''), { token: admin })).data;
+    const sums = Array(9).fill(0);
+    summary.eachRow((row, index) => { if (index > 1) for (let column = 2; column <= 8; column++) sums[column] += row.getCell(column).value; });
+    check('Tổng Excel khớp báo cáo doanh thu: ' + (query || 'hôm nay'), sums[2] === report.online.orders
+      && sums[3] === report.online.revenue && sums[4] === report.retail.invoices
+      && sums[5] === report.retail.revenue && sums[7] === report.total.revenue && sums[8] === report.profit.gross);
+    check('Tệp có ba sheet, số thực và hàng tiêu đề cố định', bytes.byteLength > 1000
+      && workbook.worksheets.length === 3 && typeof summary.getCell('G2').value === 'number'
+      && summary.views[0].ySplit === 1 && summary.getCell('G2').numFmt === '#,##0');
+  }
+  const first = await call('/admin/orders?limit=1&offset=0', { token: admin });
+  const second = await call('/admin/orders?limit=1&offset=1', { token: admin });
+  check('Phân trang đơn không lặp và giữ tổng', first.data.orders.length === 1 && second.data.orders.length === 1
+    && first.data.orders[0].id !== second.data.orders[0].id && first.data.total === second.data.total);
+  check('Số lượng từng trạng thái cộng lại đúng tổng', Object.entries(first.data.counts)
+    .filter(([key]) => key !== 'all').reduce((sum, [, value]) => sum + value, 0) === first.data.total);
+  const completed = await call('/admin/orders?status=completed&limit=1', { token: admin });
+  check('Lọc trạng thái kết hợp phân trang', completed.data.total === first.data.counts.completed
+    && completed.data.orders.every(order => order.status === 'completed'));
+  check('Giới hạn phân trang không hợp lệ bị chặn', (await call('/admin/orders?limit=101', { token: admin })).status === 400);
+}
+
 console.log(results.join('\n'));
 console.log(`\n${pass} PASS · ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

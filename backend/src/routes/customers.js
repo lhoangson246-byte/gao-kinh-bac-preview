@@ -175,4 +175,46 @@ router.put('/:id', (req, res, next) => {
   }
 });
 
+/**
+ * DELETE /api/admin/customers/:id — xoá hẳn tài khoản khách khỏi hệ thống.
+ *
+ * Chỉ xoá được tài khoản CHƯA từng đặt đơn nào. Đơn hàng gắn với tài khoản qua
+ * khoá ngoại ON DELETE CASCADE, nên xoá một khách đã mua sẽ kéo theo toàn bộ đơn
+ * của họ và làm hụt doanh thu đã ghi nhận. Trường hợp đó phải khoá tài khoản.
+ *
+ * Điểm tích luỹ nằm ở bảng riêng theo số điện thoại nên không mất khi xoá tài khoản.
+ */
+router.delete('/:id', (req, res, next) => {
+  try {
+    const id = toInteger(req.params.id, { min: 1 });
+    if (!id) throw new HttpError(404, 'Không tìm thấy tài khoản.');
+    if (id === req.user.id) throw new HttpError(400, 'Không thể tự xoá tài khoản của mình.');
+    const before = db.transaction(() => {
+      const customer = findCustomer(id);
+      // Đếm và xoá cùng transaction: không có đơn mới chen vào giữa hai bước.
+      const orders = db.prepare('SELECT COUNT(*) AS n FROM orders WHERE user_id = ?').get(id).n;
+      if (orders > 0) {
+        throw new HttpError(409,
+          `Khách này đã đặt ${orders} đơn. Xoá tài khoản sẽ xoá luôn những đơn đó và làm sai doanh thu. `
+          + 'Hãy khoá tài khoản thay vì xoá.',
+          { orders });
+      }
+      db.prepare('DELETE FROM delivery_addresses WHERE user_id = ?').run(id);
+      const info = db.prepare("DELETE FROM users WHERE id = ? AND role = 'customer'").run(id);
+      if (!info.changes) throw new HttpError(404, 'Không tìm thấy tài khoản.');
+      return customer;
+    })();
+
+    writeAdminAudit(req, {
+      action: 'delete', entityType: 'customer_account', entityId: id, before, after: null,
+    });
+    res.json({
+      ok: true,
+      message: `Đã xoá hẳn tài khoản của ${before.full_name}. Điểm tích luỹ theo số điện thoại vẫn được giữ.`,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

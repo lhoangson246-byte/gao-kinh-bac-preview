@@ -11,6 +11,7 @@ import {
 import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../validate.js';
 import { writeAdminAudit } from '../audit.js';
 import { loyaltyProfile, onlineAccount } from '../loyalty.js';
+import { attachItems } from '../order-lists.js';
 
 const router = Router();
 
@@ -88,7 +89,9 @@ router.get('/customers', (req, res, next) => {
         : 0,
       rewardsAffordable: retailRewardsAffordable(customer.points),
       pointsPerReward: RETAIL_POINTS_PER_REWARD,
-      invoices: invoices.map(withItems),
+      invoices: attachItems(invoices, db.prepare(`SELECT * FROM retail_invoice_items WHERE invoice_id IN
+        (SELECT id FROM retail_invoices WHERE customer_id = ? ORDER BY id DESC LIMIT 20)
+        ORDER BY invoice_id, id`).all(customer.id), 'invoice_id'),
       isNew: false,
     });
   } catch (err) {
@@ -413,6 +416,7 @@ router.post('/invoices', (req, res, next) => {
  */
 router.get('/invoices', (req, res, next) => {
   try {
+    const result = db.transaction(() => {
     const limit = toInteger(req.query.limit, { min: 1, max: 100 }) ?? 20;
     const offset = toInteger(req.query.offset, { min: 0, max: 100_000 }) ?? 0;
     const q = cleanText(req.query.q, 60);
@@ -454,7 +458,12 @@ router.get('/invoices', (req, res, next) => {
       .prepare(`SELECT * FROM retail_invoices ${clause} ORDER BY id DESC LIMIT @limit OFFSET @offset`)
       .all({ ...params, limit, offset });
 
-    res.json({ invoices: invoices.map(withItems), total, limit, offset });
+    const items = db.prepare(`SELECT * FROM retail_invoice_items WHERE invoice_id IN
+      (SELECT id FROM retail_invoices ${clause} ORDER BY id DESC LIMIT @limit OFFSET @offset)
+      ORDER BY invoice_id, id`).all({ ...params, limit, offset });
+      return { invoices: attachItems(invoices, items, 'invoice_id'), total, limit, offset };
+    })();
+    res.json(result);
   } catch (err) {
     next(err);
   }

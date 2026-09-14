@@ -46,3 +46,15 @@ test('allows local development to use the SQLite file', () => {
     isRemote: false,
   });
 });
+
+test('Preview fails closed without a separate database or when it reuses Production', () => {
+  assert.throws(() => resolveDatabaseConfig({ VERCEL_ENV: 'preview', LIBSQL_URL: 'libsql://prod.turso.io', LIBSQL_AUTH_TOKEN: 'x' }), /Preview/);
+  assert.throws(() => resolveDatabaseConfig({ VERCEL_ENV: 'preview', LIBSQL_URL: 'libsql://prod.turso.io', PREVIEW_TURSO_DATABASE_URL: 'libsql://prod.turso.io/' }), /Preview/);
+  assert.deepEqual(resolveDatabaseConfig({ VERCEL_ENV: 'preview', LIBSQL_URL: 'libsql://prod.turso.io', LIBSQL_AUTH_TOKEN: 'prod-token',
+    PREVIEW_TURSO_DATABASE_URL: 'libsql://preview.turso.io', PREVIEW_TURSO_AUTH_TOKEN: 'preview-token' }),
+  { url: 'libsql://preview.turso.io', authToken: 'preview-token', isRemote: true });
+});
+
+test('Actual Vercel deployments reject local database files', () => {
+  assert.throws(() => resolveDatabaseConfig({ VERCEL_ENV: 'production', LIBSQL_URL: 'file:temp.db' }), /persistent remote/);
+});

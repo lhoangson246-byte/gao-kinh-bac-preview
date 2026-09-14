@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, formatVND } from '../api';
 import { useCart } from '../context/CartContext.jsx';
+import ProductImage from '../components/ProductImage.jsx';
 
 // Ảnh dự phòng nằm trong thư mục public, không phụ thuộc dịch vụ bên ngoài.
 const FALLBACK_IMAGE = '/logo-mark.png';
@@ -109,14 +110,14 @@ export default function Home() {
         )}
 
         <div className="product-grid">
-          {products.map((product) => {
+          {products.map((product, index) => {
             const unpriced = product.price <= 0;          // cửa hàng chưa nhập giá
             const soldOut = product.stock <= 0;
             const canBuy = !unpriced && !soldOut;
             return (
               <article key={product.id} className="product-card">
                 <div className="product-image">
-                  <img src={product.image_url || FALLBACK_IMAGE} alt={product.name} loading="lazy" />
+                  <ProductImage src={product.image_url || FALLBACK_IMAGE} alt={product.name} first={index === 0} eager={index < 2} />
                   {unpriced
                     ? <span className="stock-tag pending">Đang cập nhật giá</span>
                     : soldOut

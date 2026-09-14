@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import db from './db.js';
+import { parseWeightKg } from './constants.js';
 import { isEmail } from './validate.js';
 import { newPassword } from './schemas.js';
 
@@ -141,8 +142,8 @@ const tx = db.transaction(() => {
   // Cùng tên nhưng khác quy cách đóng gói vẫn là hai sản phẩm khác nhau.
   const existed = db.prepare('SELECT id FROM products WHERE name = ? AND unit = ?');
   const ins = db.prepare(
-    `INSERT INTO products (name, description, origin, price, unit, stock, image_url, is_reward)
-     VALUES (@name, @description, @origin, @price, @unit, @stock, @image_url, @is_reward)`
+    `INSERT INTO products (name, description, origin, price, unit, stock, image_url, is_reward, weight_kg)
+     VALUES (@name, @description, @origin, @price, @unit, @stock, @image_url, @is_reward, @weight_kg)`
   );
 
   let added = 0;
@@ -154,6 +155,7 @@ const tx = db.transaction(() => {
       origin: p.origin,
       price: p.price,
       unit: p.unit,
+      weight_kg: parseWeightKg(p.unit),
       // Loại chưa có giá cũng chưa mở bán, để tồn kho 0 cho khỏi hiểu nhầm.
       stock: p.price > 0 ? STOCK_PLACEHOLDER : 0,
       image_url: p.image ? `/products/${p.image}.jpg` : null,

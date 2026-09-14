@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import ImagePicker from '../components/ImagePicker.jsx';
 import { api, formatDateTime, formatVND, pointsFor, STATUS_LABEL, DELIVERY_SLOT_LABEL } from '../api';
@@ -7,6 +7,8 @@ import RevenueReport from '../components/RevenueReport.jsx';
 import CustomerManager from '../components/CustomerManager.jsx';
 import StockReceive from '../components/StockReceive.jsx';
 import ActivityLog from '../components/ActivityLog.jsx';
+import ProductImage from '../components/ProductImage.jsx';
+import OrdersExportButton from '../components/OrdersExportButton.jsx';
 
 const EMPTY = { name: '', origin: '', price: '', cost_price: '', unit: 'kg', weight_kg: '', stock: '', description: '', image_url: '' };
 const FILTERS = [
@@ -24,6 +26,10 @@ export default function Admin() {
   const [filter, setFilter] = useState('pending');
   const [stats, setStats] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [offset, setOffset] = useState(0);
+  const [orderTotal, setOrderTotal] = useState(0);
+  const [counts, setCounts] = useState({});
+  const requestId = useRef(0);
   const [products, setProducts] = useState([]);
   const [form, setForm] = useState(EMPTY);
   const [editingId, setEditingId] = useState(null);
@@ -37,30 +43,36 @@ export default function Admin() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const reload = async () => {
+  const reload = useCallback(async () => {
+    const id = ++requestId.current;
+    setLoading(true);
     setError('');
     try {
       const [statsResult, ordersResult, productsResult] = await Promise.all([
-        api.adminStats(), api.adminOrders(), api.adminProducts(),
+        api.adminStats(), api.adminOrders(filter, { offset }), api.adminProducts(),
       ]);
+      if (id !== requestId.current) return;
+      if (!ordersResult.orders.length && offset > 0) {
+        setOffset(Math.max(0, offset - 30));
+        return;
+      }
       setStats(statsResult.stats);
       setOrders(ordersResult.orders);
+      setCounts(ordersResult.counts);
+      setOrderTotal(ordersResult.total);
       setProducts(productsResult.products);
     } catch (err) {
-      setError(err.message);
+      if (id === requestId.current) setError(err.message);
     } finally {
-      setLoading(false);
+      if (id === requestId.current) setLoading(false);
     }
-  };
+  }, [filter, offset]);
 
-  useEffect(() => { reload(); }, []);
+  useEffect(() => { reload(); return () => { requestId.current++; }; }, [reload]);
 
-  const visibleOrders = useMemo(
-    () => filter === 'all' ? orders : orders.filter((order) => order.status === filter),
-    [filter, orders]
-  );
+  const visibleOrders = orders;
 
-  const pendingCount = orders.filter((order) => order.status === 'pending').length;
+  const pendingCount = counts.pending || 0;
 
   const notify = (message) => {
     setMsg(message);
@@ -181,6 +193,28 @@ export default function Admin() {
     }
   };
 
+  const destroyProduct = async (product) => {
+    const warning = [
+      `XOÁ HẲN “${product.name}” khỏi hệ thống?`,
+      '',
+      'Loại gạo này sẽ biến mất, không khôi phục lại được.',
+      'Đơn hàng và hoá đơn cũ vẫn giữ nguyên tên và giá lúc bán.',
+      '',
+      'Chỉ muốn tạm ngừng bán thì bấm “Ẩn” thay vì xoá.',
+    ].join('\n');
+    if (!window.confirm(warning)) return;
+    setBusyId(product.id);
+    try {
+      const r = await api.adminDestroyProduct(product.id);
+      notify(r.message || 'Đã xoá hẳn loại gạo.');
+      await reload();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const restoreProduct = async (product) => {
     setBusyId(product.id);
     try {
@@ -281,10 +315,11 @@ export default function Admin() {
                 : tab === 'customers' ? <CustomerManager />
                 : tab === 'orders' ? (
                 <section>
+                  <OrdersExportButton>Xuất đơn hôm nay</OrdersExportButton>
                   <div className="filter-bar" aria-label="Lọc đơn theo trạng thái">
                     {FILTERS.map(([value, label]) => {
-                      const count = value === 'all' ? orders.length : orders.filter((order) => order.status === value).length;
-                      return <button key={value} className={filter === value ? 'active' : ''} onClick={() => setFilter(value)}>{label} <span>{count}</span></button>;
+                      const count = counts[value] || 0;
+                      return <button key={value} className={filter === value ? 'active' : ''} onClick={() => { setFilter(value); setOffset(0); }}>{label} <span>{count}</span></button>;
                     })}
                   </div>
 
@@ -346,6 +381,11 @@ export default function Admin() {
                       })}
                     </div>
                   )}
+                  {orderTotal > 30 && <nav className="filter-bar" aria-label="Phân trang đơn hàng">
+                    <button disabled={offset === 0 || loading} onClick={() => setOffset(Math.max(0, offset - 30))}>Trang trước</button>
+                    <span>{offset + 1}–{Math.min(offset + 30, orderTotal)} / {orderTotal} đơn</span>
+                    <button disabled={offset + 30 >= orderTotal || loading} onClick={() => setOffset(offset + 30)}>Trang sau</button>
+                  </nav>}
                 </section>
               ) : (
                 <section>
@@ -422,7 +462,7 @@ export default function Admin() {
                     {products.map((product) => (
                       <article key={product.id} className={`admin-product ${product.is_active ? '' : 'inactive'}`}>
                         <div className="admin-product-icon">
-                          <img src={product.image_url || '/logo-mark.png'} alt="" loading="lazy" />
+                          <ProductImage src={product.image_url} sizes="64px" />
                         </div>
                         <div className="admin-product-info">
                           <h2>{product.name}</h2>
@@ -450,6 +490,8 @@ export default function Admin() {
                           {product.is_active
                             ? <button className="btn btn-danger-ghost" disabled={busyId === product.id} onClick={() => hideProduct(product)}>Ẩn</button>
                             : <button className="btn btn-primary" disabled={busyId === product.id} onClick={() => restoreProduct(product)}>Bán lại</button>}
+                          <button className="btn btn-danger" disabled={busyId === product.id}
+                                  onClick={() => destroyProduct(product)}>Xoá hẳn</button>
                         </div>
                       </article>
                     ))}

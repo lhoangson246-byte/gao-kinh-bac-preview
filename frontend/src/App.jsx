@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
@@ -10,8 +10,8 @@ import Cart from './pages/Cart.jsx';
 import Checkout from './pages/Checkout.jsx';
 import Orders from './pages/Orders.jsx';
 import Profile from './pages/Profile.jsx';
-import Admin from './pages/Admin.jsx';
-import Retail from './pages/Retail.jsx';
+const Admin = lazy(() => import('./pages/Admin.jsx'));
+const Retail = lazy(() => import('./pages/Retail.jsx'));
 import NotFound from './pages/NotFound.jsx';
 
 const PAGE_TITLES = {
@@ -40,6 +40,7 @@ export default function App() {
   if (isAdminArea) {
     return (
       <main className="admin-main">
+        <Suspense fallback={<div className="loading-state" role="status"><span></span>Đang tải khu vực quản trị…</div>}>
         <Routes>
           <Route
             path="/quan-tri"
@@ -51,6 +52,7 @@ export default function App() {
           />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </Suspense>
       </main>
     );
   }
