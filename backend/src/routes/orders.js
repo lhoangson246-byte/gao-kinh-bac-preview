@@ -93,22 +93,25 @@ router.post('/', requireAuth, (req, res, next) => {
     const customerPhone = normalizePhone(receiverPhone);
     const deliverySlot = DELIVERY_SLOT_CODES.includes(delivery_slot) ? delivery_slot : null;
 
-    const getProduct = db.prepare('SELECT * FROM products WHERE id = ? AND is_active = 1');
-    const insOrder = db.prepare(
-      `INSERT INTO orders (user_id, receiver_name, phone, address, note, payment_method,
-                           subtotal, discount, total, delivery_slot)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    );
-    const insItem = db.prepare(
-      `INSERT INTO order_items (order_id, product_id, product_name, unit, price, quantity, cost_price)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    );
-    // Trừ kho có điều kiện: nếu người khác vừa mua trước thì không dòng nào đổi
-    // và cả transaction bị huỷ bỏ, tránh bán vượt tồn kho.
-    const decStock = db.prepare('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?');
-
     // Đọc giá, kiểm tra tồn kho, tạo đơn và trừ kho trong cùng một transaction.
     const createOrder = db.transaction(() => {
+      // Chuẩn bị câu lệnh BÊN TRONG transaction. Với Turso (libSQL qua HTTP), câu
+      // lệnh chuẩn bị trước khi BEGIN không chạy cùng phiên với transaction, nên
+      // tạo đơn trên Vercel báo "Lỗi máy chủ" dù chạy bình thường ở máy.
+      const getProduct = db.prepare('SELECT * FROM products WHERE id = ? AND is_active = 1');
+      const insOrder = db.prepare(
+        `INSERT INTO orders (user_id, receiver_name, phone, address, note, payment_method,
+                             subtotal, discount, total, delivery_slot)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      const insItem = db.prepare(
+        `INSERT INTO order_items (order_id, product_id, product_name, unit, price, quantity, cost_price)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      );
+      // Trừ kho có điều kiện: nếu người khác vừa mua trước thì không dòng nào đổi
+      // và cả transaction bị huỷ bỏ, tránh bán vượt tồn kho.
+      const decStock = db.prepare('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?');
+
       const lines = [];
       let subtotal = 0;
 

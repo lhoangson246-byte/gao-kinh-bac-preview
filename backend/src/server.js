@@ -111,7 +111,12 @@ app.use((err, req, res, next) => {
   }
   // Chỉ ghi log ở máy chủ, không trả chi tiết lỗi về cho trình duyệt.
   // Do not log request bodies, SQL values, cookies, or credentials.
-  console.error({ event: 'request_error', name: err?.name, code: err?.code });
+  // Route và thông báo lỗi của driver (không chứa giá trị tham số) đủ để tìm ra
+  // lỗi chỉ xảy ra trên Turso mà không cần chạy lại ở máy.
+  console.error({
+    event: 'request_error', method: req.method, path: req.path,
+    name: err?.name, code: err?.code, message: String(err?.message || '').slice(0, 200),
+  });
   res.status(500).json({ message: 'Lỗi máy chủ. Vui lòng thử lại.' });
 });
 

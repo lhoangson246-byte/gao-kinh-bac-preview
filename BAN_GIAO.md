@@ -602,6 +602,50 @@ nữa trả 404, khách thường không xoá được (403), xoá hẳn loại 
 tài khoản lẫn đơn hàng.
 
 
+## Sửa lỗi "Lỗi máy chủ" khi đặt hàng trên Vercel (14/09/2026)
+
+### Triệu chứng
+
+Trên trang Vercel, bấm *Xác nhận đặt hàng* báo **"Lỗi máy chủ. Vui lòng thử lại."**
+Cùng giỏ hàng, cùng địa chỉ đó chạy ở máy thì đặt được bình thường.
+
+### Nguyên nhân
+
+Trên Vercel ứng dụng dùng Turso (libSQL qua HTTP). Ở chế độ này, câu lệnh được
+`db.prepare()` **trước khi** mở transaction không chạy cùng phiên với transaction đó.
+Route tạo đơn chuẩn bị sẵn 4 câu lệnh (đọc sản phẩm, tạo đơn, tạo dòng hàng, trừ kho)
+ở ngoài rồi mới chạy bên trong `db.transaction()`, nên hỏng ngay câu đầu tiên.
+
+better-sqlite3 ở máy không phân biệt hai trường hợp này, vì vậy lỗi lọt qua cả 5 bộ
+kiểm thử. Route thêm địa chỉ không bị vì nó chuẩn bị câu lệnh ngay bên trong transaction.
+
+### Đã sửa
+
+- `backend/src/routes/orders.js` — đưa 4 câu lệnh vào trong transaction tạo đơn.
+- `backend/src/routes/retail.js` — lưu hoá đơn bán tại quầy mắc đúng lỗi này (câu đọc
+  sản phẩm); cũng đã sửa, dù chưa ai kịp gặp.
+- Logic, thứ tự và điều kiện chống bán vượt kho giữ nguyên.
+
+### Để lỗi này không lọt lại
+
+Biến môi trường `DB_STRICT_TRANSACTIONS=1` bật một lớp kiểm tra trong
+`backend/src/database.js`: câu lệnh chuẩn bị ngoài transaction mà chạy bên trong sẽ ném
+lỗi ngay ở máy, kể cả với better-sqlite3. Fixture kiểm thử bật sẵn, nên `test:security`
+và `test:isolated` luôn chạy ở chế độ này. Khi chạy tay `test:smoke` / `test:retail` /
+`test:manage`, khởi động API kèm biến này.
+
+Đã thử lại mã **trước khi sửa** ở chế độ nghiêm ngặt: lớp kiểm tra chặn đúng câu
+`SELECT * FROM products WHERE id = ? AND is_active = 1` của luồng đặt hàng.
+
+**Quy tắc khi viết route mới:** trong `db.transaction(() => { … })`, luôn gọi
+`db.prepare()` bên trong callback.
+
+### Log lỗi rõ hơn
+
+Log `request_error` phía máy chủ nay ghi thêm phương thức, đường dẫn và thông báo lỗi
+của driver (tối đa 200 ký tự, không có giá trị tham số). Nếu Vercel còn báo lỗi máy
+chủ ở đâu đó, mở **Vercel → Logs**, tìm `request_error` là thấy ngay nguyên nhân.
+
 ## Việc bạn cần tự làm trước khi chạy thật
 
 1. **Đổi `JWT_SECRET`** thành chuỗi dài ngẫu nhiên và **đổi mật khẩu quản trị mẫu**.

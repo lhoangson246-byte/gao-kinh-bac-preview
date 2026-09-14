@@ -275,11 +275,13 @@ router.post('/invoices', (req, res, next) => {
     }
     const invoiceNote = cleanText(note, LIMITS.note);
 
-    // Bán tại quầy KHÔNG trừ tồn kho của cửa hàng online (theo yêu cầu của cửa hàng),
-    // nên ở đây chỉ đọc giá hiện tại chứ không đụng vào cột stock.
-    const getProduct = db.prepare('SELECT * FROM products WHERE id = ?');
-
     const create = db.transaction(() => {
+      // Bán tại quầy KHÔNG trừ tồn kho của cửa hàng online (theo yêu cầu của cửa hàng),
+      // nên ở đây chỉ đọc giá hiện tại chứ không đụng vào cột stock.
+      // Chuẩn bị trong transaction: trên Turso, câu lệnh chuẩn bị trước BEGIN không
+      // chạy cùng phiên với transaction.
+      const getProduct = db.prepare('SELECT * FROM products WHERE id = ?');
+
       const lines = [];
       let subtotal = 0;
 
