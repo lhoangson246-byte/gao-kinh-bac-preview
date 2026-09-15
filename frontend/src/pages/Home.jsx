@@ -87,7 +87,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="catalog-section">
+      <section className="catalog-section" aria-busy={loading}>
         <div className="catalog-heading">
           <h2>Các loại gạo</h2>
           {!loading && !error && <span>{products.length} sản phẩm</span>}

@@ -104,6 +104,8 @@ main.container { min-height: 66vh; padding-block: 28px 72px; }
 .quick-filters button { flex: 0 0 auto; min-height: 38px; padding: 7px 13px; border: 1px solid var(--border); border-radius: 99px; background: white; color: var(--muted); font-size: .75rem; font-weight: 750; cursor: pointer; }
 .quick-filters button.active { border-color: var(--green-900); background: var(--green-900); color: white; }
 .catalog-heading { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 17px; }
+/* Giữ chỗ khi API đang tải để footer không nhảy khỏi vùng nhìn thấy khi có hàng. */
+.catalog-section[aria-busy="true"] { min-height: 100vh; min-height: 100svh; }
 .catalog-heading h2 { margin: 0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 1.1rem; letter-spacing: 0; }
 .catalog-heading > span { color: var(--muted); font-size: .75rem; }
 .hero { position: relative; display: grid; grid-template-columns: 1.05fr .95fr; min-height: 520px; margin-bottom: 0; overflow: hidden; border-radius: var(--radius-lg); background: var(--green-950); color: var(--white); }
