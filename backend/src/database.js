@@ -32,6 +32,10 @@ function guardTransactions(db) {
       const original = statement[method];
       if (typeof original !== 'function') continue;
       statement[method] = function guarded(...args) {
+        // Keep bindings portable: remote libSQL can silently ignore object bindings.
+        if (args.some((arg) => arg && Object.getPrototypeOf(arg) === Object.prototype)) {
+          throw new Error('Use positional SQL bindings for Turso compatibility.');
+        }
         if (depth > 0 && preparedIn !== generation) {
           throw new Error('Câu lệnh được chuẩn bị ngoài transaction nhưng chạy bên trong (sẽ lỗi trên Turso): '
             + String(sql).replace(/\s+/g, ' ').trim().slice(0, 90));

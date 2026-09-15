@@ -445,8 +445,8 @@ if (!db.prepare('PRAGMA table_info(products)').all().some((c) => c.name === 'wei
   // còn bỏ trống, để cửa hàng sửa tay rồi thì không bị ghi đè.
   const rows = db.prepare('SELECT id, unit FROM products WHERE weight_kg <= 0').all();
   if (rows.length) {
-    const setWeight = db.prepare('UPDATE products SET weight_kg = ? WHERE id = ?');
     db.transaction(() => {
+      const setWeight = db.prepare('UPDATE products SET weight_kg = ? WHERE id = ?');
       for (const row of rows) {
         const kg = parseWeightKg(row.unit);
         if (kg > 0) setWeight.run(kg, row.id);

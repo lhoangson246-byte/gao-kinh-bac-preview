@@ -176,9 +176,9 @@ router.put('/customers/:id', (req, res, next) => {
     const before = db.prepare('SELECT * FROM retail_customers WHERE id = ?').get(id);
     const info = db
       .prepare(`UPDATE retail_customers
-                SET ${fields.map((f) => `${f} = @${f}`).join(', ')}, updated_at = datetime('now')
-                WHERE id = @id`)
-      .run({ ...updates, id });
+                SET ${fields.map((f) => `${f} = ?`).join(', ')}, updated_at = datetime('now')
+                WHERE id = ?`)
+      .run(...fields.map((f) => updates[f]), id);
     if (!info.changes) throw new HttpError(404, 'Không tìm thấy khách hàng.');
 
     const customer = db.prepare('SELECT * FROM retail_customers WHERE id = ?').get(id);
@@ -431,38 +431,37 @@ router.get('/invoices', (req, res, next) => {
     }
 
     const where = [];
-    const params = {};
+    const params = [];
     if (q) {
       // Cho phép gõ "HD12", "12", số điện thoại hoặc tên khách.
       const digits = q.replace(/\D/g, '');
       const phone = normalizePhone(q);
       where.push(`(
-        code = @codeExact
-        OR code LIKE @like ESCAPE '\\'
-        OR (@phone <> '' AND customer_phone = @phone)
-        OR (@digits <> '' AND customer_phone LIKE @digitsLike ESCAPE '\\')
-        OR IFNULL(customer_name, '') LIKE @like ESCAPE '\\'
+        code = ?
+        OR code LIKE ? ESCAPE '\\'
+        OR (? <> '' AND customer_phone = ?)
+        OR (? <> '' AND customer_phone LIKE ? ESCAPE '\\')
+        OR IFNULL(customer_name, '') LIKE ? ESCAPE '\\'
       )`);
       const escaped = q.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-      params.codeExact = digits ? invoiceCode(Number(digits)) : q.toUpperCase();
-      params.like = `%${escaped}%`;
-      params.phone = phone || '';
-      params.digits = digits;
-      params.digitsLike = `%${digits.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+      const codeExact = digits ? invoiceCode(Number(digits)) : q.toUpperCase();
+      const like = `%${escaped}%`;
+      const digitsLike = `%${digits.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+      params.push(codeExact, like, phone || '', phone || '', digits, digitsLike, like);
     }
     // Lọc theo ngày ở Việt Nam, không phải ngày UTC lưu trong cơ sở dữ liệu.
-    if (from) { where.push(`${localDate('created_at')} >= @from`); params.from = from; }
-    if (to) { where.push(`${localDate('created_at')} <= @to`); params.to = to; }
+    if (from) { where.push(`${localDate('created_at')} >= ?`); params.push(from); }
+    if (to) { where.push(`${localDate('created_at')} <= ?`); params.push(to); }
 
     const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
-    const total = db.prepare(`SELECT COUNT(*) c FROM retail_invoices ${clause}`).get(params).c;
+    const total = db.prepare(`SELECT COUNT(*) c FROM retail_invoices ${clause}`).get(...params).c;
     const invoices = db
-      .prepare(`SELECT * FROM retail_invoices ${clause} ORDER BY id DESC LIMIT @limit OFFSET @offset`)
-      .all({ ...params, limit, offset });
+      .prepare(`SELECT * FROM retail_invoices ${clause} ORDER BY id DESC LIMIT ? OFFSET ?`)
+      .all(...params, limit, offset);
 
     const items = db.prepare(`SELECT * FROM retail_invoice_items WHERE invoice_id IN
-      (SELECT id FROM retail_invoices ${clause} ORDER BY id DESC LIMIT @limit OFFSET @offset)
-      ORDER BY invoice_id, id`).all({ ...params, limit, offset });
+      (SELECT id FROM retail_invoices ${clause} ORDER BY id DESC LIMIT ? OFFSET ?)
+      ORDER BY invoice_id, id`).all(...params, limit, offset);
       return { invoices: attachItems(invoices, items, 'invoice_id'), total, limit, offset };
     })();
     res.json(result);

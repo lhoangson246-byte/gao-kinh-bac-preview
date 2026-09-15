@@ -187,8 +187,8 @@ router.put('/me', requireAuth, (req, res, next) => {
     const fields = Object.keys(updates);
     if (fields.length) {
       db.prepare(
-        `UPDATE users SET ${fields.map((f) => `${f} = @${f}`).join(', ')} WHERE id = @id`
-      ).run({ ...updates, id: req.user.id });
+        `UPDATE users SET ${fields.map((f) => `${f} = ?`).join(', ')} WHERE id = ?`
+      ).run(...fields.map((f) => updates[f]), req.user.id);
     }
 
     const user = db

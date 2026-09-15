@@ -277,20 +277,13 @@ router.post('/products', (req, res, next) => {
     const info = db
       .prepare(
         `INSERT INTO products (name, description, origin, price, cost_price, unit, weight_kg, stock, image_url, is_active)
-         VALUES (@name, @description, @origin, @price, @cost_price, @unit, @weight_kg, @stock, @image_url, @is_active)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run({
-        name: data.name,
-        description: data.description ?? null,
-        origin: data.origin ?? null,
-        price: data.price,
-        cost_price: data.cost_price ?? 0,
-        unit: data.unit,
-        weight_kg: data.weight_kg ?? 0,
-        stock: data.stock ?? 0,
-        image_url: data.image_url ?? null,
-        is_active: data.is_active ?? 1,
-      });
+      .run(
+        data.name, data.description ?? null, data.origin ?? null, data.price,
+        data.cost_price ?? 0, data.unit, data.weight_kg ?? 0, data.stock ?? 0,
+        data.image_url ?? null, data.is_active ?? 1,
+      );
     const product = db.prepare('SELECT * FROM products WHERE id = ?').get(info.lastInsertRowid);
     writeAdminAudit(req, {
       action: 'create', entityType: 'product', entityId: product.id, after: product,
@@ -315,9 +308,9 @@ router.put('/products/:id', (req, res, next) => {
 
     const info = db
       .prepare(
-        `UPDATE products SET ${fields.map((f) => `${f} = @${f}`).join(', ')} WHERE id = @id`
+        `UPDATE products SET ${fields.map((f) => `${f} = ?`).join(', ')} WHERE id = ?`
       )
-      .run({ ...data, id: productId });
+      .run(...fields.map((f) => data[f]), productId);
     if (!info.changes) {
       const exists = db.prepare('SELECT id FROM products WHERE id = ?').get(productId);
       if (!exists) throw new HttpError(404, 'Không tìm thấy loại gạo.');
@@ -505,48 +498,48 @@ router.get('/export/orders', async (req, res, next) => {
 router.get('/revenue', (req, res, next) => {
   try {
     const period = resolvePeriod(req.query);
-    const range = { from: period.from, to: period.to };
+    const range = [period.from, period.to];
 
     // Đơn online chỉ tính khi đã hoàn thành — giống quy tắc doanh thu cũ.
     const online = db.prepare(`
       SELECT COUNT(*) c, COALESCE(SUM(total), 0) s
       FROM orders
       WHERE status = 'completed'
-        AND ${localDate('created_at')} BETWEEN @from AND @to
-    `).get(range);
+        AND ${localDate('created_at')} BETWEEN ? AND ?
+    `).get(...range);
 
     const retail = db.prepare(`
       SELECT COUNT(*) c, COALESCE(SUM(total), 0) s, COALESCE(SUM(discount), 0) d
       FROM retail_invoices
-      WHERE ${localDate('created_at')} BETWEEN @from AND @to
-    `).get(range);
+      WHERE ${localDate('created_at')} BETWEEN ? AND ?
+    `).get(...range);
 
     // Chi tiết theo từng ngày để thấy ngày nào bán được nhiều.
     const daily = db.prepare(`
       SELECT day, SUM(online) online, SUM(retail) retail FROM (
         SELECT ${localDate('created_at')} day, total online, 0 retail
         FROM orders
-        WHERE status = 'completed' AND ${localDate('created_at')} BETWEEN @from AND @to
+        WHERE status = 'completed' AND ${localDate('created_at')} BETWEEN ? AND ?
         UNION ALL
         SELECT ${localDate('created_at')} day, 0 online, total retail
         FROM retail_invoices
-        WHERE ${localDate('created_at')} BETWEEN @from AND @to
+        WHERE ${localDate('created_at')} BETWEEN ? AND ?
       )
       GROUP BY day ORDER BY day
-    `).all(range);
+    `).all(...range, ...range);
 
     // Giá vốn được chép vào từng dòng hàng lúc bán, nên đổi giá nhập về sau
     // không làm sai lãi của các đơn cũ.
     const onlineCost = db.prepare(`
       SELECT COALESCE(SUM(i.cost_price * i.quantity), 0) c
       FROM order_items i JOIN orders o ON o.id = i.order_id
-      WHERE o.status = 'completed' AND ${localDate('o.created_at')} BETWEEN @from AND @to
-    `).get(range).c;
+      WHERE o.status = 'completed' AND ${localDate('o.created_at')} BETWEEN ? AND ?
+    `).get(...range).c;
     const retailCost = db.prepare(`
       SELECT COALESCE(SUM(i.cost_price * i.quantity), 0) c
       FROM retail_invoice_items i JOIN retail_invoices v ON v.id = i.invoice_id
-      WHERE ${localDate('v.created_at')} BETWEEN @from AND @to
-    `).get(range).c;
+      WHERE ${localDate('v.created_at')} BETWEEN ? AND ?
+    `).get(...range).c;
 
     const cost = onlineCost + retailCost;
     const revenue = online.s + retail.s;

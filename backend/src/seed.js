@@ -143,24 +143,20 @@ const tx = db.transaction(() => {
   const existed = db.prepare('SELECT id FROM products WHERE name = ? AND unit = ?');
   const ins = db.prepare(
     `INSERT INTO products (name, description, origin, price, unit, stock, image_url, is_reward, weight_kg)
-     VALUES (@name, @description, @origin, @price, @unit, @stock, @image_url, @is_reward, @weight_kg)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   let added = 0;
   for (const p of products) {
     if (existed.get(p.name, p.unit)) continue;
-    ins.run({
-      name: p.name,
-      description: p.description,
-      origin: p.origin,
-      price: p.price,
-      unit: p.unit,
-      weight_kg: parseWeightKg(p.unit),
+    ins.run(
+      p.name, p.description, p.origin, p.price, p.unit,
       // Loại chưa có giá cũng chưa mở bán, để tồn kho 0 cho khỏi hiểu nhầm.
-      stock: p.price > 0 ? STOCK_PLACEHOLDER : 0,
-      image_url: p.image ? `/products/${p.image}.jpg` : null,
-      is_reward: /1kg/.test(p.unit) && /nếp|lứt|ê vàng/.test(p.name) ? 1 : 0,
-    });
+      p.price > 0 ? STOCK_PLACEHOLDER : 0,
+      p.image ? `/products/${p.image}.jpg` : null,
+      /1kg/.test(p.unit) && /nếp|lứt|ê vàng/.test(p.name) ? 1 : 0,
+      parseWeightKg(p.unit),
+    );
     added++;
   }
   console.log(`✅ Thêm ${added} loại gạo.`);
