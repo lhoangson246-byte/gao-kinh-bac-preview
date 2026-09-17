@@ -84,7 +84,10 @@ check('Có sản phẩm để bán tại quầy', !!p145 && !!p150 && !!p35);
 {
   const r = await call('/retail/invoices', {
     method: 'POST', token: admin,
-    body: { phone, full_name: 'Cô Lan', items: [{ product_id: p35.id, quantity: 2 }] },
+    body: {
+      phone, full_name: 'Cô Lan', customer_address: 'Số 12, đường Hoa Gạo, Bắc Ninh',
+      items: [{ product_id: p35.id, quantity: 2 }],
+    },
   });
   const inv = r.data.invoice;
   check('Tạo hoá đơn (201)', r.status === 201, JSON.stringify(r.data));
@@ -92,6 +95,11 @@ check('Có sản phẩm để bán tại quầy', !!p145 && !!p150 && !!p35);
     JSON.stringify({ s: inv?.subtotal, d: inv?.discount, t: inv?.total }));
   check('Điểm tích = 70 (1.000₫ = 1 điểm)', inv?.points_earned === 70, String(inv?.points_earned));
   check('Hoá đơn có mã dạng HD……', /^HD\d{6}$/.test(inv?.code || ''), inv?.code);
+  check('Hoá đơn lưu địa chỉ để in lại về sau',
+    inv?.customer_address === 'Số 12, đường Hoa Gạo, Bắc Ninh', inv?.customer_address);
+  const reopened = await call(`/retail/invoices/${inv?.code}`, { token: admin });
+  check('Mở lại hoá đơn cũ vẫn còn địa chỉ',
+    reopened.status === 200 && reopened.data.invoice?.customer_address === inv?.customer_address);
   check('Khách mới được tạo kèm tên', r.data.customer?.full_name === 'Cô Lan' && r.data.customer?.points === 70);
 }
 

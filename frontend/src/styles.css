@@ -489,6 +489,8 @@ label b { color: var(--danger); }
 .receipt-items { margin: 0 0 10px; padding: 0 0 10px; list-style: none; border-bottom: 1px solid rgba(0,0,0,.08); display: grid; gap: 6px; }
 .receipt-items li { display: flex; justify-content: space-between; gap: 12px; font-size: .85rem; }
 .receipt-items li small { display: block; color: var(--muted); font-size: .72rem; }
+.receipt-customer { display: grid; gap: 2px; margin: 0 0 10px; padding: 10px 12px; border-radius: 8px; background: rgba(255,255,255,.7); font-size: .8rem; }
+.receipt-customer span { color: var(--muted); }
 .receipt-points { margin: 10px 0; padding: 10px 12px; border-radius: 8px; background: rgba(255,255,255,.7); font-size: .82rem; }
 
 .pos-filter { display: grid; grid-template-columns: minmax(0,2fr) repeat(2, minmax(0,1fr)); gap: 12px; align-items: end; margin-bottom: 18px; padding: 16px; border: 1px solid #d9d7cf; border-radius: 12px; background: var(--white); }
@@ -509,6 +511,7 @@ label b { color: var(--danger); }
 .pos-invoice-detail { padding: 0 16px 16px; border-top: 1px solid #e5e3dc; }
 .pos-invoice-detail .receipt-items { padding-top: 12px; }
 .pos-invoice-meta { margin: 8px 0 0; color: var(--muted); font-size: .76rem; }
+.pos-invoice-address { margin: 6px 0 0; color: var(--ink); font-size: .76rem; }
 .pos-print-button { margin-right: 12px; white-space: nowrap; }
 .pos-pager { display: flex; justify-content: center; gap: 10px; margin-top: 16px; }
 
@@ -573,6 +576,8 @@ label b { color: var(--danger); }
   .print-only-receipt header p { margin: 2px 0 0; font-size: 12px; letter-spacing: .12em; }
   .print-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 24px; padding: 14px 0; }
   .print-meta p, .print-totals p { display: flex; justify-content: space-between; gap: 16px; margin: 0; font-size: 12px; }
+  .print-meta .print-address { grid-column: 1 / -1; }
+  .print-meta .print-address strong { max-width: 72%; text-align: right; }
   .print-only-receipt table { width: 100%; border-collapse: collapse; font-size: 12px; }
   .print-only-receipt th, .print-only-receipt td { padding: 8px 6px; border-bottom: 1px solid #bbb; text-align: right; }
   .print-only-receipt th:first-child, .print-only-receipt td:first-child { text-align: left; }

@@ -240,12 +240,14 @@ function normalizeRewards(rewards) {
 
 /** POST /api/retail/invoices
  *  body: { phone?, full_name?, items: [{product_id, quantity}],
- *          rewards?: [{product_id, quantity}], payment_method?, note? }
+ *          rewards?: [{product_id, quantity}], customer_address?, payment_method?, note? }
  *  Giá, giảm giá, điểm tích và điểm trừ đều do máy chủ tự tính.
  */
 router.post('/invoices', (req, res, next) => {
   try {
-    const { phone, full_name, items, rewards, payment_method, note, discount_percent } = req.body || {};
+    const {
+      phone, full_name, customer_address, items, rewards, payment_method, note, discount_percent,
+    } = req.body || {};
 
     // Khách vãng lai không cần số điện thoại; có số thì mới tích được điểm.
     const rawPhone = cleanText(phone, LIMITS.phone);
@@ -256,6 +258,7 @@ router.post('/invoices', (req, res, next) => {
     }
     const customerPhone = rawPhone ? normalizePhone(rawPhone) : null;
     const customerName = cleanText(full_name, LIMITS.name);
+    const customerAddress = cleanText(customer_address, LIMITS.address);
 
     const paymentMethod = payment_method || 'cash';
     if (!Object.keys(RETAIL_PAYMENT_METHODS).includes(paymentMethod)) {
@@ -365,11 +368,11 @@ router.post('/invoices', (req, res, next) => {
 
       const invoiceId = db.prepare(`
         INSERT INTO retail_invoices
-          (customer_id, customer_phone, customer_name, subtotal, discount, discount_percent,
-           total_kg, total, points_earned, points_used, payment_method, note, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (customer_id, customer_phone, customer_name, customer_address, subtotal, discount,
+           discount_percent, total_kg, total, points_earned, points_used, payment_method, note, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        customerId, customerPhone, customerName, subtotal, discount, appliedPercent,
+        customerId, customerPhone, customerName, customerAddress, subtotal, discount, appliedPercent,
         totalKg, total, pointsEarned, pointsUsed, paymentMethod, invoiceNote, req.user.id
       ).lastInsertRowid;
 

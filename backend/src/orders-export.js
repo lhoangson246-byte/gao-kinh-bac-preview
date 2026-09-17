@@ -75,7 +75,8 @@ export async function buildOrdersWorkbook(period) {
         online ? `DH${order.id}` : order.code, order.day, order.clock, channel,
         online ? statusNames[order.status] : 'Hoàn thành',
         (online ? order.receiver_name : order.customer_name) || 'Khách vãng lai',
-        String((online ? order.phone : order.customer_phone) || ''), online ? order.address : '',
+        String((online ? order.phone : order.customer_phone) || ''),
+        online ? order.address : (order.customer_address || ''),
         online ? (slotNames[order.delivery_slot] || '') : '', paymentNames[order.payment_method] || order.payment_method,
         order.subtotal, order.discount, order.total, order.points_earned,
       ]);

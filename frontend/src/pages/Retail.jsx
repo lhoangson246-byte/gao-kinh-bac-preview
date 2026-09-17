@@ -147,6 +147,7 @@ function SellTab({ products, policy, onDone, notify }) {
   const [search, setSearch] = useState('');
   const [payment, setPayment] = useState('cash');
   const [note, setNote] = useState('');
+  const [address, setAddress] = useState('');
   const [discountPercent, setDiscountPercent] = useState('');
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState('');
@@ -195,6 +196,7 @@ function SellTab({ products, policy, onDone, notify }) {
       const r = await api.retailFindCustomer(raw);
       setCustomer(r.customer);
       setAccount(r.account || null);
+      setAddress(r.account?.address || r.invoices?.[0]?.customer_address || '');
       setOnlineOrders(r.onlineOrders || 0);
       setRewardsAffordable(r.rewardsAffordable || 0);
       setGiftLines([]);
@@ -224,7 +226,7 @@ function SellTab({ products, policy, onDone, notify }) {
   const removeLine = (id) => setLines((prev) => prev.filter((l) => l.product.id !== id));
 
   const resetBill = () => {
-    setLines([]); setNote(''); setPayment('cash'); setDiscountPercent('');
+    setLines([]); setNote(''); setAddress(''); setPayment('cash'); setDiscountPercent('');
     setPhone(''); setCustomer(null); setCustomerHistory([]);
     setLookupState('idle'); setLookupError(''); setGuestName('');
     setGiftLines([]); setRewardsAffordable(0);
@@ -243,6 +245,7 @@ function SellTab({ products, policy, onDone, notify }) {
       const r = await api.retailCreateInvoice({
         phone: phone.trim() || undefined,
         full_name: (customer?.full_name || guestName).trim() || undefined,
+        customer_address: address.trim() || undefined,
         items: lines.map((l) => ({ product_id: l.product.id, quantity: l.quantity })),
         rewards: giftLines.length
           ? giftLines.map((g) => ({ product_id: g.product.id, quantity: g.quantity }))
@@ -375,6 +378,13 @@ function SellTab({ products, policy, onDone, notify }) {
                 />
               )
             )}
+
+            <label>Địa chỉ khách <span className="optional">Không bắt buộc · sẽ in trên hoá đơn</span>
+              <textarea className="input" rows={2} value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        placeholder="Số nhà, đường/thôn, phường/xã, tỉnh/thành"
+                        autoComplete="street-address" />
+            </label>
 
 
             {customerHistory.length > 0 && (
@@ -526,6 +536,13 @@ function Receipt({ data, onClose }) {
           </li>
         ))}
       </ul>
+      {(invoice.customer_name || invoice.customer_phone || invoice.customer_address) && (
+        <div className="receipt-customer">
+          <strong>{invoice.customer_name || 'Khách vãng lai'}</strong>
+          {invoice.customer_phone && <span>{invoice.customer_phone}</span>}
+          {invoice.customer_address && <span>Địa chỉ: {invoice.customer_address}</span>}
+        </div>
+      )}
       <div className="summary-row"><span>Tiền hàng</span><strong>{formatVND(invoice.subtotal)}</strong></div>
       {invoice.discount > 0 && (
         <div className="summary-row"><span>Giảm giá</span>
@@ -768,6 +785,7 @@ function InvoiceLookupTab() {
                       {inv.points_earned > 0 && ` · cộng ${inv.points_earned} điểm`}
                       {inv.note && ` · ${inv.note}`}
                     </p>
+                    {inv.customer_address && <p className="pos-invoice-address"><strong>Địa chỉ:</strong> {inv.customer_address}</p>}
                   </div>
                 )}
               </article>
@@ -801,6 +819,7 @@ function PrintableInvoice({ invoice }) {
         <p><span>Ngày bán</span><strong>{formatDateTime(invoice.created_at)}</strong></p>
         <p><span>Khách hàng</span><strong>{invoice.customer_name || 'Khách vãng lai'}</strong></p>
         {invoice.customer_phone && <p><span>Số điện thoại</span><strong>{invoice.customer_phone}</strong></p>}
+        {invoice.customer_address && <p className="print-address"><span>Địa chỉ</span><strong>{invoice.customer_address}</strong></p>}
       </div>
       <table>
         <thead><tr><th>Sản phẩm</th><th>SL</th><th>Đơn giá</th><th>Thành tiền</th></tr></thead>

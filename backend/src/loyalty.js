@@ -58,6 +58,12 @@ export function onlineAccount(phone) {
   const normalized = normalizePhone(phone);
   if (!normalized) return null;
   return db.prepare(
-    'SELECT id, full_name, email, phone, is_locked, created_at FROM users WHERE phone = ?'
+    `SELECT u.id, u.full_name, u.email, u.phone, u.is_locked, u.created_at,
+      COALESCE((
+        SELECT a.address FROM delivery_addresses a
+        WHERE a.user_id = u.id
+        ORDER BY a.is_default DESC, a.id DESC LIMIT 1
+      ), u.address) AS address
+     FROM users u WHERE u.phone = ?`
   ).get(normalized) || null;
 }

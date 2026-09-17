@@ -90,7 +90,7 @@ add('retail', 'GET', /^\/(policy|stats)\/?$/);
 add('retail', 'GET', /^\/customers\/?$/, empty, obj({ phone: text(LIMITS.phone) }));
 add('retail', 'POST', /^\/customers\/account\/?$/, obj({ phone: text(LIMITS.phone), full_name: name, password: newPassword }));
 add('retail', 'PUT', /^\/customers\/[^/]+\/?$/, obj({ full_name: name.optional(), note }));
-add('retail', 'POST', /^\/invoices\/?$/, obj({ phone, full_name: name.optional(), items: retailLines.optional(), rewards: retailLines.optional(), payment_method: z.enum(['cash', 'transfer']).optional(), note,
+add('retail', 'POST', /^\/invoices\/?$/, obj({ phone, full_name: name.optional(), customer_address: optionalText(LIMITS.address), items: retailLines.optional(), rewards: retailLines.optional(), payment_method: z.enum(['cash', 'transfer']).optional(), note,
   discount_percent: decimal(0, RETAIL_DISCOUNT_MAX_PERCENT).or(z.literal('')).nullable().optional() }));
 add('retail', 'GET', /^\/invoices\/?$/, empty, obj({ ...page, q: text(60).optional(), from: day.optional(), to: day.optional() }));
 add('retail', 'GET', /^\/invoices\/[^/]+\/?$/);

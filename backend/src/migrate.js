@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS retail_invoices (
   customer_id    INTEGER REFERENCES retail_customers(id) ON DELETE SET NULL,
   customer_phone TEXT,                   -- chép lại để hoá đơn cũ không đổi khi sửa khách
   customer_name  TEXT,
+  customer_address TEXT,
   subtotal       INTEGER NOT NULL,       -- tiền hàng trước giảm giá
   discount       INTEGER NOT NULL DEFAULT 0,
   total          INTEGER NOT NULL,       -- số tiền khách thực trả
@@ -466,6 +467,12 @@ if (!db.prepare('PRAGMA table_info(retail_invoices)').all().some((c) => c.name =
 if (!db.prepare('PRAGMA table_info(retail_invoices)').all().some((c) => c.name === 'total_kg')) {
   db.exec('ALTER TABLE retail_invoices ADD COLUMN total_kg REAL NOT NULL DEFAULT 0');
   console.log('✅ Đã thêm cột total_kg vào bảng retail_invoices.');
+}
+
+// Chép địa chỉ vào từng hoá đơn để bản in cũ không đổi khi khách cập nhật hồ sơ.
+if (!db.prepare('PRAGMA table_info(retail_invoices)').all().some((c) => c.name === 'customer_address')) {
+  db.exec('ALTER TABLE retail_invoices ADD COLUMN customer_address TEXT');
+  console.log('✅ Đã thêm địa chỉ khách vào hoá đơn tại quầy.');
 }
 
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
