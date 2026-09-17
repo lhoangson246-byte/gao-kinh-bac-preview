@@ -558,5 +558,41 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(testOrderClea
   console.log(`✅ Đã dọn ${removed} đơn hàng do bộ kiểm thử tạo.`);
 }
 
+// Một số tài khoản trong manage test bị chính bài test đổi tên sau khi tạo đơn,
+// nên không còn khớp điều kiện u.full_name ở lần dọn đầu. Danh sách ID dưới đây
+// là 9 đơn Production còn lại đã được đối chiếu qua API quản trị; vẫn kiểm tra
+// kèm tên người nhận, địa chỉ và thời gian để không thể xoá nhầm ở DB khác.
+const residualTestOrderCleanup = 'cleanup:test-orders:2026-09-17-v2';
+if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(residualTestOrderCleanup)) {
+  let removed = 0;
+  db.transaction(() => {
+    const candidates = db.prepare(`
+      SELECT id, status FROM orders
+      WHERE id IN (181, 182, 183, 200, 201, 202, 213, 214, 215)
+        AND receiver_name = ?
+        AND address LIKE ?
+        AND created_at >= ? AND created_at < ?
+      ORDER BY id
+    `).all(
+      'Cô Tám', 'Số 9, đường Ngô Gia Tự, phường Tiền An%',
+      '2026-09-08 00:00:00', '2026-09-09 00:00:00'
+    );
+    const listItems = db.prepare(`
+      SELECT product_id, quantity FROM order_items
+      WHERE order_id = ? AND product_id IS NOT NULL
+    `);
+    const restoreStock = db.prepare('UPDATE products SET stock = stock + ? WHERE id = ?');
+    const deleteOrder = db.prepare('DELETE FROM orders WHERE id = ?');
+    for (const order of candidates) {
+      if (order.status !== 'cancelled') {
+        for (const item of listItems.all(order.id)) restoreStock.run(item.quantity, item.product_id);
+      }
+      removed += deleteOrder.run(order.id).changes;
+    }
+    db.prepare('INSERT INTO app_migrations (name) VALUES (?)').run(residualTestOrderCleanup);
+  })();
+  console.log(`✅ Đã dọn ${removed} đơn kiểm thử còn sót sau khi tài khoản bị đổi tên.`);
+}
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

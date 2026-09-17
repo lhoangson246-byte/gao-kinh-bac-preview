@@ -18,6 +18,7 @@ try {
   const nguyenUser = Number(addUser.run('Nguyễn Văn Test', 'nguyen-test@example.com', '0900000001').lastInsertRowid);
   const coTamUser = Number(addUser.run('Cô Tám', 'cotam-test@example.com', '0900000002').lastInsertRowid);
   const realUser = Number(addUser.run('Khách thật', 'real@example.com', '0900000003').lastInsertRowid);
+  const renamedTestUser = Number(addUser.run('Khách Mới Toanh', 'renamed-test@example.com', '0900000004').lastInsertRowid);
 
   const productId = Number(db.prepare(`
     INSERT INTO products (name, price, unit, stock) VALUES ('Gạo ST25', 100000, 'túi 5kg', 1)
@@ -79,8 +80,15 @@ try {
     'Một địa chỉ khác, Bắc Ninh',
     'pending', 100000, 0, 'Gạo ST25', 1
   );
+  db.prepare(`
+    INSERT INTO orders
+      (id, user_id, receiver_name, phone, address, total, subtotal, status, points_earned, created_at)
+    VALUES (181, ?, 'Cô Tám', '0900000004', ?, 100000, 100000, 'pending', 0, '2026-09-08 15:35:06')
+  `).run(renamedTestUser, 'Số 9, đường Ngô Gia Tự, phường Tiền An, Bắc Ninh');
+  addItem.run(181, productId, 'Gạo ST25', 1);
 
   db.prepare("DELETE FROM app_migrations WHERE name = 'cleanup:test-orders:2026-09-17-v1'").run();
+  db.prepare("DELETE FROM app_migrations WHERE name = 'cleanup:test-orders:2026-09-17-v2'").run();
   migrate(db);
 
   const remaining = db.prepare('SELECT id FROM orders ORDER BY id').all().map((row) => row.id);
@@ -88,7 +96,9 @@ try {
   for (const id of [smokeCompleted, smokeCancelled, manageCompleted, managePending]) {
     assert.equal(db.prepare('SELECT COUNT(*) count FROM order_items WHERE order_id = ?').get(id).count, 0);
   }
-  assert.equal(db.prepare('SELECT stock FROM products WHERE id = ?').get(productId).stock, 6);
+  assert.equal(db.prepare('SELECT COUNT(*) count FROM orders WHERE id = 181').get().count, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) count FROM order_items WHERE order_id = 181').get().count, 0);
+  assert.equal(db.prepare('SELECT stock FROM products WHERE id = ?').get(productId).stock, 7);
   assert.deepEqual(
     db.prepare('SELECT points, total_spent, visit_count FROM retail_customers WHERE phone = ?').get('0900000001'),
     { points: 0, total_spent: 0, visit_count: 1 }
@@ -99,8 +109,9 @@ try {
   );
 
   migrate(db);
-  assert.equal(db.prepare('SELECT stock FROM products WHERE id = ?').get(productId).stock, 6);
+  assert.equal(db.prepare('SELECT stock FROM products WHERE id = ?').get(productId).stock, 7);
   assert.equal(db.prepare("SELECT COUNT(*) count FROM app_migrations WHERE name = 'cleanup:test-orders:2026-09-17-v1'").get().count, 1);
+  assert.equal(db.prepare("SELECT COUNT(*) count FROM app_migrations WHERE name = 'cleanup:test-orders:2026-09-17-v2'").get().count, 1);
   console.log('✓ Cleanup removes only fingerprinted test orders and is idempotent');
 } finally {
   db.close();
