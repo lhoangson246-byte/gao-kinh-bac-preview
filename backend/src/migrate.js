@@ -475,5 +475,88 @@ if (!db.prepare('PRAGMA table_info(retail_invoices)').all().some((c) => c.name =
   console.log('✅ Đã thêm địa chỉ khách vào hoá đơn tại quầy.');
 }
 
+/* ------------------------------------------------------------------ *
+ * Dọn các đơn do bộ smoke/manage test cũ vô tình ghi vào Production.
+ *
+ * Dấu vân tay cố ý rất hẹp: đúng tên/tài khoản/địa chỉ của fixture, đúng
+ * khoảng thời gian chạy test và (với smoke test) chỉ chứa mặt hàng test.
+ * Nhờ vậy đơn thật còn lại không bị ảnh hưởng. Khi bỏ đơn chưa huỷ phải
+ * hoàn kho; khi bỏ đơn đã hoàn thành phải hoàn tác phần tích điểm đã cộng.
+ * ------------------------------------------------------------------ */
+const testOrderCleanup = 'cleanup:test-orders:2026-09-17-v1';
+if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(testOrderCleanup)) {
+  let removed = 0;
+  db.transaction(() => {
+    const candidates = db.prepare(`
+      SELECT o.id, o.status, o.total, o.points_earned, u.phone AS account_phone
+      FROM orders o
+      JOIN users u ON u.id = o.user_id
+      WHERE o.created_at >= ? AND o.created_at < ?
+        AND (
+          (
+            o.receiver_name = ? AND o.phone = ? AND u.full_name = ?
+            AND o.address LIKE ?
+            AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id)
+            AND NOT EXISTS (
+              SELECT 1 FROM order_items i
+              WHERE i.order_id = o.id
+                AND i.product_name NOT LIKE ?
+                AND i.product_name NOT LIKE ?
+            )
+          )
+          OR (
+            o.receiver_name = ? AND u.full_name = ? AND o.address LIKE ?
+          )
+        )
+      ORDER BY o.id
+    `).all(
+      '2026-09-06 00:00:00', '2026-09-09 00:00:00',
+      'Nguyễn Văn Test', '0912345678', 'Nguyễn Văn Test',
+      'Số 1, đường Ngô Gia Tự, phường Tiền An%',
+      'Gạo kiểm thử %', 'Gạo tồn ít %',
+      'Cô Tám', 'Cô Tám', 'Số 9, đường Ngô Gia Tự, phường Tiền An%'
+    );
+
+    const listItems = db.prepare(`
+      SELECT product_id, quantity FROM order_items
+      WHERE order_id = ? AND product_id IS NOT NULL
+    `);
+    const restoreStock = db.prepare('UPDATE products SET stock = stock + ? WHERE id = ?');
+    const reverseLoyalty = db.prepare(`
+      UPDATE retail_customers
+      SET points = MAX(0, points - ?),
+          total_spent = MAX(0, total_spent - ?),
+          visit_count = MAX(0, visit_count - ?),
+          updated_at = datetime('now')
+      WHERE phone = ?
+    `);
+    const deleteOrder = db.prepare('DELETE FROM orders WHERE id = ?');
+
+    const loyaltyByPhone = new Map();
+    for (const order of candidates) {
+      if (order.status !== 'cancelled') {
+        for (const item of listItems.all(order.id)) {
+          restoreStock.run(item.quantity, item.product_id);
+        }
+      }
+      // creditPoints chỉ cộng doanh số/lượt mua khi số điểm kiếm được > 0.
+      if (order.status === 'completed' && order.points_earned > 0 && order.account_phone) {
+        const totals = loyaltyByPhone.get(order.account_phone) || { points: 0, spent: 0, visits: 0 };
+        totals.points += order.points_earned;
+        totals.spent += order.total;
+        totals.visits += 1;
+        loyaltyByPhone.set(order.account_phone, totals);
+      }
+    }
+    for (const [phone, totals] of loyaltyByPhone) {
+      reverseLoyalty.run(totals.points, totals.spent, totals.visits, phone);
+    }
+    for (const order of candidates) removed += deleteOrder.run(order.id).changes;
+
+    db.prepare('INSERT INTO app_migrations (name) VALUES (?)').run(testOrderCleanup);
+  })();
+  console.log(`✅ Đã dọn ${removed} đơn hàng do bộ kiểm thử tạo.`);
+}
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }
