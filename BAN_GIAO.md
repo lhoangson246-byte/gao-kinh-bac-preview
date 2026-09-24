@@ -646,6 +646,69 @@ Log `request_error` phía máy chủ nay ghi thêm phương thức, đường d�
 của driver (tối đa 200 ký tự, không có giá trị tham số). Nếu Vercel còn báo lỗi máy
 chủ ở đâu đó, mở **Vercel → Logs**, tìm `request_error` là thấy ngay nguyên nhân.
 
+## Tự kiểm tra an toàn
+
+Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.
+
+### Máy kiểm tra hộ
+
+Chạy trong thư mục `backend`:
+
+```bash
+npm run check:live                          # kiểm tra trang đang chạy thật
+npm run check:live https://ten-mien-khac    # hoặc chỉ định địa chỉ khác
+```
+
+Lệnh này **chỉ đọc**: không tạo tài khoản, không đặt đơn, không sửa gì. Nó kiểm 37 điểm
+trên chính trang đang phục vụ khách:
+
+| Nhóm | Kiểm cái gì |
+| --- | --- |
+| Header trình duyệt | Chặn nhúng trang vào iframe, chặn đoán kiểu tệp, ép HTTPS, không rò địa chỉ, khoá camera/micro/vị trí, chỉ nạp mã từ chính trang |
+| HTTPS | Vào bằng `http` có bị chuyển sang `https` không |
+| Rò rỉ dữ liệu | Danh mục công khai không lộ giá nhập, không lộ mật khẩu; trang health không lộ phiên bản |
+| Phân quyền | 12 đường dẫn quản trị, bán quầy và dữ liệu cá nhân đều trả 401 khi chưa đăng nhập |
+| Tệp bí mật | `.env`, `.git/config`, tệp cơ sở dữ liệu… không tải được từ ngoài |
+| Chống giả mạo | Yêu cầu ghi từ tên miền lạ bị chặn 403, từ chính trang thì chạy |
+| Thông báo lỗi | Sai mật khẩu không tiết lộ tài khoản có tồn tại hay không; đường dẫn lạ không lộ cấu trúc |
+| Bộ nhớ đệm | Dữ liệu tài khoản gửi kèm `no-store` |
+
+Kèm theo là các bộ kiểm thử chạy ở máy:
+
+```bash
+npm run test:security     # 64 phép thử bảo mật, tự dựng máy chủ riêng
+npm run test:db-config    # 7 phép thử cấu hình cơ sở dữ liệu
+npm run test:isolated     # chạy lại toàn bộ trong môi trường sạch
+```
+
+### Chỉ bạn kiểm tra được
+
+Máy không thể thay bạn làm năm việc dưới đây, và đây mới là chỗ rủi ro thật.
+
+1. **Mật khẩu quản trị.** Đây là chìa khoá vào toàn bộ dữ liệu khách. Nếu nó ngắn, dễ
+   đoán, hoặc trùng mật khẩu bạn dùng ở nơi khác, thì mọi lớp bảo vệ khác đều vô nghĩa.
+   Đổi bằng `npm run rotate:admin`; lệnh này đồng thời đăng xuất mọi phiên cũ.
+2. **Ai có quyền vào Vercel, GitHub và Turso.** Ba nơi này cộng lại là toàn quyền với
+   cửa hàng. Bật xác thực hai bước cho cả ba, và gỡ những người không còn cần.
+3. **Kho mã đang để công khai.** Tôi đã quét toàn bộ lịch sử git và **không có** khoá
+   JWT, token Turso hay mật khẩu nào bị commit — chỉ có `.env.example` để trống. Nhưng
+   người ngoài đọc được toàn bộ mã nguồn. Nếu không có nhu cầu chia sẻ, chuyển kho sang
+   riêng tư trong phần Settings của GitHub.
+4. **Sao lưu cơ sở dữ liệu.** Mất cơ sở dữ liệu là mất sạch đơn hàng, tài khoản khách và
+   điểm tích luỹ. Đây là rủi ro lớn nhất còn lại và không có lớp bảo mật nào thay thế
+   được. Đặt lịch sao lưu Turso định kỳ và **thử phục hồi một lần** để biết bản sao lưu
+   dùng được thật.
+5. **Token Turso.** Nếu từng dán token vào chat, email hay máy người khác, hãy tạo token
+   mới trong Turso rồi cập nhật biến môi trường trên Vercel.
+
+### Giới hạn đã biết
+
+**Giới hạn số lần đăng nhập đếm riêng theo từng máy chủ.** Vercel chạy nhiều bản hàm
+song song, mỗi bản giữ bộ đếm riêng trong bộ nhớ, nên mức chặn thực tế lỏng hơn con số
+20 lần / 15 phút ghi trong mã. Với quy mô một cửa hàng thì chấp nhận được; nếu về sau cần
+chặt hơn thì phải chuyển bộ đếm sang lưu trong cơ sở dữ liệu.
+
+
 ## Việc bạn cần tự làm trước khi chạy thật
 
 1. **Đổi `JWT_SECRET`** thành chuỗi dài ngẫu nhiên và **đổi mật khẩu quản trị mẫu**.

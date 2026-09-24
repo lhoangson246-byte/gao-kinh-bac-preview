@@ -17,7 +17,8 @@
     "test:manage": "node test/manage.mjs",
     "test:security": "node test/security.mjs",
     "test:db-config": "node --test test/database-config.mjs",
-    "test:isolated": "node test/isolated.mjs"
+    "test:isolated": "node test/isolated.mjs",
+    "check:live": "node test/live-security.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

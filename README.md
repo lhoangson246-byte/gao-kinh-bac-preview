@@ -125,6 +125,21 @@ và báo lỗi giả. Khởi động lại API trước mỗi bộ, hoặc chờ
 
 Bộ kiểm thử đi qua các luồng chính: đăng ký, đăng nhập, sổ địa chỉ, phân quyền, tạo đơn, giới hạn Bắc Ninh, tồn kho, huỷ đơn và hoàn kho, quy trình trạng thái đơn, quản lý sản phẩm.
 
+### Kiểm tra an toàn trang đang chạy thật
+
+```bash
+cd backend
+npm run check:live                        # kiểm tra trang đã triển khai
+npm run check:live https://ten-mien-khac  # hoặc một địa chỉ khác
+```
+
+37 phép kiểm tra **chỉ đọc**: header bảo vệ, ép HTTPS, phân quyền các đường dẫn quản trị,
+rò rỉ giá nhập, tệp bí mật, chống giả mạo yêu cầu, thông báo lỗi và bộ nhớ đệm. Lệnh này
+không tạo tài khoản, không đặt đơn và không sửa gì, nên chạy lúc nào cũng được.
+
+Những việc máy không kiểm hộ được — mật khẩu quản trị, ai có quyền vào Vercel/GitHub/Turso,
+và bản sao lưu cơ sở dữ liệu — xem mục **Tự kiểm tra an toàn** trong `BAN_GIAO.md`.
+
 ### Lưu ý khi dùng Node.js 24 trên Windows
 
 `better-sqlite3` chưa có bản biên dịch sẵn cho Node 24 nên npm sẽ cố build từ mã nguồn và báo lỗi nếu máy chưa cài Visual Studio C++. Thư viện đã kèm sẵn tệp nhị phân dùng được, chỉ cần bỏ qua bước build:
