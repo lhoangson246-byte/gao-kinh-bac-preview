@@ -37,6 +37,24 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '127.0.0.1',
       port: 5173,
+      // Gửi cùng Content-Security-Policy với bản đã triển khai (xem vercel.json),
+      // để những gì bị chặn trên Vercel cũng bị chặn ngay ở máy. Trước đây máy dev
+      // không có CSP nên ô chọn ảnh dùng "blob:" chạy tốt ở đây mà hỏng khi lên
+      // Vercel. Chỉ nới đúng những thứ máy chủ dev cần: script nội tuyến và
+      // WebSocket cho tải lại nóng.
+      headers: {
+        'Content-Security-Policy': [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' https: data:",
+          "connect-src 'self' https: ws: wss:",
+          "font-src 'self'",
+          "object-src 'none'",
+          "base-uri 'self'",
+          "form-action 'self'",
+        ].join('; '),
+      },
       proxy: {
         // Gọi /api/... từ frontend sẽ được chuyển sang backend cổng 4000
         '/api': 'http://localhost:4000',

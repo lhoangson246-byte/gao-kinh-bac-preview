@@ -6,42 +6,69 @@ const MAX_EDGE = 1200;
 const JPEG_QUALITY = 0.82;
 
 /**
+ * Mở tệp ảnh ra thành thứ vẽ được lên canvas.
+ *
+ * KHÔNG dùng URL.createObjectURL: địa chỉ "blob:" bị Content-Security-Policy của
+ * bản đã triển khai chặn (img-src chỉ cho 'self', https: và data:), nên ở máy thì
+ * chạy còn trên Vercel lại báo "Không mở được tệp này". createImageBitmap không
+ * cần địa chỉ nào; trình duyệt cũ thì lùi về data: URL vốn đã được CSP cho phép.
+ */
+async function openImage(file) {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      return await createImageBitmap(file);
+    } catch {
+      // Định dạng lạ với createImageBitmap thì thử tiếp cách dưới.
+    }
+  }
+
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Không đọc được tệp này. Vui lòng thử ảnh khác.'));
+    reader.readAsDataURL(file);
+  });
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Không mở được tệp này. Vui lòng chọn ảnh JPG, PNG hoặc WEBP.'));
+    img.src = dataUrl;
+  });
+}
+
+/**
  * Thu nhỏ ảnh ngay trên máy trước khi gửi đi.
  * Ảnh chụp bằng điện thoại thường 4–8MB; sau bước này chỉ còn khoảng 150–300KB
  * nên tải nhanh và không làm phình cơ sở dữ liệu của cửa hàng.
  */
-function shrink(file) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const scale = Math.min(1, MAX_EDGE / Math.max(img.width, img.height));
-      const width = Math.max(1, Math.round(img.width * scale));
-      const height = Math.max(1, Math.round(img.height * scale));
+async function shrink(file) {
+  const source = await openImage(file);
+  try {
+    const scale = Math.min(1, MAX_EDGE / Math.max(source.width, source.height));
+    const width = Math.max(1, Math.round(source.width * scale));
+    const height = Math.max(1, Math.round(source.height * scale));
 
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      // Ảnh gạo hay có nền trắng; PNG trong suốt chuyển sang JPG mà không tô nền
-      // sẽ ra nền đen, nên tô trắng trước.
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, width, height);
-      ctx.drawImage(img, 0, 0, width, height);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    // Ảnh gạo hay có nền trắng; PNG trong suốt chuyển sang JPG mà không tô nền
+    // sẽ ra nền đen, nên tô trắng trước.
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(source, 0, 0, width, height);
 
+    return await new Promise((resolve, reject) => {
       canvas.toBlob(
         (blob) => (blob ? resolve(blob) : reject(new Error('Không xử lý được ảnh này.'))),
         'image/jpeg',
         JPEG_QUALITY
       );
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Không mở được tệp này. Vui lòng chọn ảnh JPG, PNG hoặc WEBP.'));
-    };
-    img.src = url;
-  });
+    });
+  } finally {
+    source.close?.();
+  }
 }
 
 /**
