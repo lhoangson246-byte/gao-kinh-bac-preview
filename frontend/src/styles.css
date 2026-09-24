@@ -164,6 +164,23 @@ main.container { min-height: 66vh; padding-block: 28px 72px; }
 .input:hover { border-color: #bdb5a5; }
 .input:focus { outline: none; border-color: var(--green-800); box-shadow: 0 0 0 3px rgba(46, 98, 71, .12); }
 textarea.input { resize: vertical; }
+
+/* --- Ô mật khẩu có nút Hiện/Ẩn nằm trong ô --- */
+.password-field { position: relative; display: block; }
+/* label > .input mới được cộng margin-top, nay input nằm trong div nên đặt lại ở đây. */
+label > .password-field { margin-top: 6px; font-weight: 450; }
+/* Chừa chỗ cho nút để mật khẩu dài không chạy xuống dưới nút. */
+.password-field .input { padding-right: 62px; }
+.password-toggle {
+  position: absolute; top: 50%; right: 5px; transform: translateY(-50%);
+  min-height: 36px; padding: 0 11px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--cream); color: var(--green-950);
+  font: inherit; font-size: .78rem; font-weight: 700; line-height: 1;
+  cursor: pointer;
+}
+.password-toggle:hover { border-color: #bdb5a5; }
+.password-toggle:focus-visible { outline: 2px solid var(--green-800); outline-offset: 1px; }
 label { display: block; margin-bottom: 16px; color: #3d433d; font-size: .86rem; font-weight: 750; }
 label > .input, label > textarea { margin-top: 6px; font-weight: 450; }
 label b { color: var(--danger); }

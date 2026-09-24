@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isPhone } from '../api';
+import PasswordInput from '../components/PasswordInput.jsx';
 import { passwordError } from '../password';
 
 export default function Register() {
@@ -72,16 +73,16 @@ export default function Register() {
 
         <div className="row">
           <label>Mật khẩu <b>*</b>
-            <input className="input" type="password" name="password" value={form.password}
-                   onChange={onChange} required minLength={12} autoComplete="new-password"
-                   aria-invalid={!!fieldErrors.password} />
+            <PasswordInput name="password" value={form.password}
+                           onChange={onChange} required minLength={12} autoComplete="new-password"
+                           aria-invalid={!!fieldErrors.password} />
             {fieldErrors.password && <small className="err">{fieldErrors.password}</small>}
           </label>
 
           <label>Nhập lại mật khẩu <b>*</b>
-            <input className="input" type="password" name="confirm" value={form.confirm}
-                   onChange={onChange} required autoComplete="new-password"
-                   aria-invalid={!!fieldErrors.confirm} />
+            <PasswordInput name="confirm" value={form.confirm}
+                           onChange={onChange} required autoComplete="new-password"
+                           aria-invalid={!!fieldErrors.confirm} />
             {fieldErrors.confirm && <small className="err">{fieldErrors.confirm}</small>}
           </label>
         </div>

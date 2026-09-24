@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import PasswordInput from '../components/PasswordInput.jsx';
 
 export default function Login() {
   const [form, setForm] = useState({ identifier: '', password: '' });
@@ -46,8 +47,8 @@ export default function Login() {
         </label>
 
         <label>Mật khẩu
-          <input className="input" type="password" name="password" value={form.password}
-                 onChange={onChange} required autoComplete="current-password" />
+          <PasswordInput name="password" value={form.password}
+                         onChange={onChange} required autoComplete="current-password" />
         </label>
 
         <button className="btn btn-primary btn-block" disabled={busy}>
