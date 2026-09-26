@@ -42,10 +42,10 @@ async function openImage(file) {
  * Ảnh chụp bằng điện thoại thường 4–8MB; sau bước này chỉ còn khoảng 150–300KB
  * nên tải nhanh và không làm phình cơ sở dữ liệu của cửa hàng.
  */
-async function shrink(file) {
+async function shrink(file, maxEdge = MAX_EDGE) {
   const source = await openImage(file);
   try {
-    const scale = Math.min(1, MAX_EDGE / Math.max(source.width, source.height));
+    const scale = Math.min(1, maxEdge / Math.max(source.width, source.height));
     const width = Math.max(1, Math.round(source.width * scale));
     const height = Math.max(1, Math.round(source.height * scale));
 
@@ -75,7 +75,10 @@ async function shrink(file) {
  * Ô chọn ảnh sản phẩm. Có bốn cách đưa ảnh vào, dùng cách nào cũng được:
  * chọn tệp, kéo thả, dán bằng Ctrl+V, hoặc lấy lại ảnh đã có trong thư viện.
  */
-export default function ImagePicker({ value, onChange, error }) {
+export default function ImagePicker({
+  value, onChange, error,
+  label = 'Ảnh sản phẩm', subject = 'loại gạo này', maxEdge = MAX_EDGE, optional = true, wide = false,
+}) {
   const inputRef = useRef(null);
   const zoneRef = useRef(null);
   const [busy, setBusy] = useState(false);
@@ -91,7 +94,7 @@ export default function ImagePicker({ value, onChange, error }) {
     setUploadError('');
     setBusy(true);
     try {
-      const blob = await shrink(file);
+      const blob = await shrink(file, maxEdge);
       const { url } = await api.adminUploadImage(blob);
       onChange(url);
     } catch (err) {
@@ -154,9 +157,9 @@ export default function ImagePicker({ value, onChange, error }) {
     : [];
 
   return (
-    <div className="image-picker">
+    <div className={`image-picker${wide ? ' wide' : ''}`}>
       <span className="image-picker-label">
-        Ảnh sản phẩm <span className="optional">Không bắt buộc</span>
+        {label} {optional && <span className="optional">Không bắt buộc</span>}
       </span>
 
       <div className="image-picker-row">
@@ -220,7 +223,7 @@ export default function ImagePicker({ value, onChange, error }) {
           )}
           {libraryItems.length > 0 && (
             <>
-              <p className="pos-hint">Bấm vào một ảnh để dùng cho loại gạo này.</p>
+              <p className="pos-hint">Bấm vào một ảnh để dùng cho {subject}.</p>
               <div className="image-library-grid">
                 {libraryItems.map((item) => (
                   <button

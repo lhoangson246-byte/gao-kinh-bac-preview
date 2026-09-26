@@ -13,7 +13,7 @@ export default function Orders() {
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
   const [busyId, setBusyId] = useState(null);
-  const justOrdered = useLocation().state?.justOrdered;
+  const { justOrdered, code: newCode } = useLocation().state || {};
 
   const load = useCallback(() => {
     setLoading(true);
@@ -27,7 +27,7 @@ export default function Orders() {
   useEffect(() => { load(); }, [load]);
 
   const cancelOrder = async (order) => {
-    if (!window.confirm(`Huỷ đơn #${order.id}? Số lượng gạo sẽ được trả lại cho cửa hàng.`)) return;
+    if (!window.confirm(`Huỷ đơn ${order.code || `#${order.id}`}? Số lượng gạo sẽ được trả lại cho cửa hàng.`)) return;
     setBusyId(order.id);
     setActionError('');
     try {
@@ -62,7 +62,7 @@ export default function Orders() {
         <div className="success-banner" role="status">
           <span aria-hidden="true">✓</span>
           <div>
-            <strong>Đặt hàng thành công!</strong>
+            <strong>Đặt hàng thành công!{newCode && <> Mã đơn của bạn: <span className="order-code">{newCode}</span></>}</strong>
             <p>Cửa hàng sẽ gọi xác nhận địa chỉ và khung giờ giao. Giao hàng miễn phí.</p>
           </div>
         </div>
@@ -88,7 +88,7 @@ export default function Orders() {
               <header>
                 <div>
                   <span className="order-label">Đơn hàng</span>
-                  <strong>#{order.id}</strong>
+                  <strong className="order-code">{order.code || `#${order.id}`}</strong>
                   <small>{formatDateTime(order.created_at)}</small>
                 </div>
                 <span className={`status ${order.status}`}>{STATUS_LABEL[order.status] || order.status}</span>

@@ -614,5 +614,68 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(residualTestO
   }
 }
 
+/* ------------------------------------------------------------------ *
+ * Banner đổi được ảnh, mã đơn online, đợt giảm giá đầu tiên (26/09/2026)
+ * ------------------------------------------------------------------ */
+
+// Cài đặt cửa hàng dạng khoá–giá trị. Hiện chỉ có ảnh banner trang chủ.
+db.exec(`
+CREATE TABLE IF NOT EXISTS app_settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`);
+
+// Mã đơn online dạng DH000123, cùng kiểu với mã hoá đơn quầy HD000123.
+// Lưu hẳn vào đơn để tra cứu và xuất Excel dùng đúng một mã.
+if (!db.prepare('PRAGMA table_info(orders)').all().some((c) => c.name === 'code')) {
+  db.exec('ALTER TABLE orders ADD COLUMN code TEXT');
+  console.log('✅ Đã thêm cột code vào bảng orders.');
+}
+{
+  const missing = db.prepare('SELECT COUNT(*) AS n FROM orders WHERE code IS NULL').get().n;
+  if (missing) {
+    db.transaction(() => {
+      db.prepare(`UPDATE orders SET code = 'DH' || printf('%06d', id) WHERE code IS NULL`).run();
+    })();
+    console.log(`✅ Đã tạo mã cho ${missing} đơn online cũ.`);
+  }
+}
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_code ON orders(code)');
+
+// Đợt giảm giá cửa hàng yêu cầu ngày 26/09/2026. Giá bán hạ theo phần trăm,
+// giá cũ chuyển sang giá gốc để khách thấy nhãn giảm giá. Chỉ chạy một lần, và
+// bỏ qua sản phẩm đã đang giảm giá hoặc chưa có giá, để không giảm chồng lên.
+// Nhận sản phẩm bằng ảnh bao bì + quy cách thay vì id, vì id có thể khác nhau
+// giữa các cơ sở dữ liệu.
+const firstSaleMigration = '2026-09-26-first-sale-cm4mua-cmthom-25pct-cm25-que25-5pct';
+if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(firstSaleMigration)) {
+  const plan = [
+    { image: '/products/co-may-4-mua-5kg.jpg', unit: 'túi 5kg', percent: 25 },       // Gạo 4 Mùa Cỏ May
+    { image: '/products/co-may-thom-deo-vua-5kg.jpg', unit: 'túi 5kg', percent: 25 }, // Cỏ May thơm, bao hình bông sen
+    { image: '/products/co-may-thom-deo-vua-25kg.jpg', unit: 'bao 25kg', percent: 5 }, // Gạo Cỏ May bao 25kg
+    { image: '/products/gao-thom-que-25kg.jpg', unit: 'bao 25kg', percent: 5 },        // Gạo Quê bao 25kg
+  ];
+  let applied = 0;
+  db.transaction(() => {
+    const find = db.prepare(`
+      SELECT id, name, price FROM products
+      WHERE image_url = ? AND unit = ? AND price > 0 AND original_price = 0
+    `);
+    const discount = db.prepare('UPDATE products SET original_price = price, price = ? WHERE id = ? AND original_price = 0');
+    for (const item of plan) {
+      for (const product of find.all(item.image, item.unit)) {
+        // Giữ số nguyên đồng: 5% của 470.000đ là 446.500đ.
+        const salePrice = Math.round((product.price * (100 - item.percent)) / 100);
+        applied += discount.run(salePrice, product.id).changes;
+        console.log(`   · ${product.name}: ${product.price}đ → ${salePrice}đ (giảm ${item.percent}%)`);
+      }
+    }
+    db.prepare('INSERT INTO app_migrations (name) VALUES (?)').run(firstSaleMigration);
+  })();
+  console.log(`✅ Đợt giảm giá 26/09: đã áp dụng cho ${applied} sản phẩm.`);
+}
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

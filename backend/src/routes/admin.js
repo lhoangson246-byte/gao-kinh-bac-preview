@@ -11,6 +11,7 @@ import { HttpError, cleanImageUrl, cleanText, toInteger } from '../validate.js';
 import { writeAdminAudit } from '../audit.js';
 import { listAdminOrders } from '../order-lists.js';
 import { buildOrdersWorkbook } from '../orders-export.js';
+import { readStorefront } from './settings.js';
 
 const router = Router();
 
@@ -412,6 +413,36 @@ router.delete('/products/:id/permanent', (req, res, next) => {
       ok: true,
       message: `Đã xoá hẳn “${before.name}”. ${sold} dòng trong đơn và hoá đơn cũ vẫn giữ nguyên tên và giá lúc bán.`,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PUT /api/admin/settings/storefront — đổi ảnh banner trang chủ.
+ * Gửi chuỗi rỗng để bỏ ảnh và quay về banner màu mặc định.
+ */
+router.put('/settings/storefront', (req, res, next) => {
+  try {
+    const raw = cleanText(req.body?.banner_image_url, LIMITS.imageUrl) || '';
+    const url = raw ? cleanImageUrl(raw) : '';
+    if (raw && !url) {
+      throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', {
+        banner_image_url: 'Đường dẫn ảnh phải bắt đầu bằng http://, https:// hoặc / (ảnh có sẵn trong ứng dụng).',
+      });
+    }
+    const before = readStorefront();
+    db.transaction(() => {
+      db.prepare(`
+        INSERT INTO app_settings (key, value, updated_at) VALUES ('banner_image_url', ?, datetime('now'))
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+      `).run(url);
+    })();
+    const settings = readStorefront();
+    writeAdminAudit(req, {
+      action: 'update', entityType: 'storefront', entityId: null, before, after: settings,
+    });
+    res.json({ settings });
   } catch (err) {
     next(err);
   }

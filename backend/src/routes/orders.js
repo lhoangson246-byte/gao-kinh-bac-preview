@@ -10,6 +10,9 @@ import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../val
 import { attachItems } from '../order-lists.js';
 
 const router = Router();
+
+/** Mã đơn online, ví dụ DH000123. Migration dùng đúng định dạng này cho đơn cũ. */
+export const orderCode = (id) => `DH${String(id).padStart(6, '0')}`;
 router.use(requireAuth);
 router.use(validateRoutes('orders'));
 
@@ -146,6 +149,8 @@ router.post('/', requireAuth, (req, res, next) => {
         req.user.id, receiverName, customerPhone, deliveryAddress,
         customerNote, paymentMethod, subtotal, discount, total, deliverySlot
       ).lastInsertRowid;
+      // Mã đơn tự tạo từ số thứ tự: DH000123, cùng kiểu mã hoá đơn quầy HD000123.
+      db.prepare('UPDATE orders SET code = ? WHERE id = ?').run(orderCode(orderId), orderId);
 
       for (const { product, quantity } of lines) {
         const changed = decStock.run(quantity, product.id, quantity).changes;

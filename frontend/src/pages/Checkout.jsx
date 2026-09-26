@@ -60,13 +60,13 @@ export default function Checkout() {
     setFieldErrors({});
     setBusy(true);
     try {
-      await api.createOrder({
+      const { order } = await api.createOrder({
         ...form,
         address_id: selectedAddress.id,
         items: orderable.map((item) => ({ product_id: item.id, quantity: item.quantity })),
       });
       clear();
-      navigate('/don-hang', { replace: true, state: { justOrdered: true } });
+      navigate('/don-hang', { replace: true, state: { justOrdered: true, code: order?.code } });
     } catch (err) {
       setError(err.message);
       setFieldErrors(err.errors || {});

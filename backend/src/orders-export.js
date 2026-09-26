@@ -72,7 +72,7 @@ export async function buildOrdersWorkbook(period) {
     for (const order of list) {
       const online = channel === 'Online';
       orders.addRow([
-        online ? `DH${order.id}` : order.code, order.day, order.clock, channel,
+        order.code, order.day, order.clock, channel,
         online ? statusNames[order.status] : 'Hoàn thành',
         (online ? order.receiver_name : order.customer_name) || 'Khách vãng lai',
         String((online ? order.phone : order.customer_phone) || ''),
@@ -97,7 +97,7 @@ export async function buildOrdersWorkbook(period) {
       const order = parents.get(item[key]);
       const amount = item.price * item.quantity;
       const cost = item.cost_price * item.quantity;
-      items.addRow([channel === 'Online' ? `DH${order.id}` : order.code, order.day, channel,
+      items.addRow([order.code, order.day, channel,
         item.product_name, item.unit, item.quantity, item.price, amount, item.cost_price,
         amount - cost, item.is_reward ? 'Có' : 'Không']);
       // Giá vốn chỉ tính cùng các giao dịch được ghi nhận doanh thu, kể cả quà.

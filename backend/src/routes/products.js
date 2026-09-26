@@ -35,7 +35,8 @@ router.get('/', (req, res) => {
          AND (name LIKE ? ESCAPE '\\'
               OR IFNULL(origin, '') LIKE ? ESCAPE '\\'
               OR IFNULL(description, '') LIKE ? ESCAPE '\\')
-       ORDER BY stock > 0 DESC, id`
+       -- Còn hàng lên trước, rồi trong đó hàng đang giảm giá lên đầu tiên.
+       ORDER BY stock > 0 DESC, (original_price > price AND price > 0) DESC, id`
     )
     .all(pattern, pattern, pattern);
 

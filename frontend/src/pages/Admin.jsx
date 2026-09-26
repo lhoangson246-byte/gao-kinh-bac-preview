@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import ImagePicker from '../components/ImagePicker.jsx';
+import BannerSettings from '../components/BannerSettings.jsx';
 import { api, salePercent, PRODUCT_CATEGORIES, formatDateTime, formatVND, pointsFor, STATUS_LABEL, DELIVERY_SLOT_LABEL } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
 import RevenueReport from '../components/RevenueReport.jsx';
@@ -97,7 +98,7 @@ export default function Admin() {
   };
 
   const cancelOrder = (order) => {
-    if (window.confirm(`Bạn chắc chắn muốn huỷ đơn #${order.id}?`)) changeStatus(order.id, 'cancelled');
+    if (window.confirm(`Bạn chắc chắn muốn huỷ đơn ${order.code || `#${order.id}`}?`)) changeStatus(order.id, 'cancelled');
   };
 
   const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
@@ -340,7 +341,7 @@ export default function Admin() {
                         return (
                           <article key={order.id} className="admin-order-card">
                             <header>
-                              <div><span className="order-number">Đơn #{order.id}</span><span className={`status ${order.status}`}>{STATUS_LABEL[order.status]}</span></div>
+                              <div><span className="order-number">Đơn {order.code || `#${order.id}`}</span><span className={`status ${order.status}`}>{STATUS_LABEL[order.status]}</span></div>
                               <time>{formatDateTime(order.created_at)}</time>
                             </header>
                             <div className="admin-order-grid">
@@ -397,6 +398,7 @@ export default function Admin() {
                 </section>
               ) : (
                 <section>
+                  <BannerSettings notify={notify} />
                   {showForm && (
                     <div className="product-form-wrap">
                       <form className="form-card flat product-form" onSubmit={submitProduct}>

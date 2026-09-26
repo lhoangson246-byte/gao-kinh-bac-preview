@@ -689,6 +689,58 @@ Bảng `products` thêm `category` (mặc định `'gao'`) và `original_price` 
 bản schema lên `schema:2026-09-26-v1`; Production tự chạy migration khi build.
 
 
+## Banner đổi ảnh, hàng giảm giá lên đầu, mã đơn online (26/09/2026)
+
+### Ảnh banner trang chủ
+
+**Quản trị → Sản phẩm**, ô đầu tiên *Ảnh banner trang chủ*. Chọn ảnh bằng một trong bốn cách
+như ảnh sản phẩm (chọn tệp, kéo thả, dán Ctrl+V, chọn từ thư viện), rồi bấm **Lưu banner**.
+Ảnh chỉ đổi trên trang khi bấm Lưu, nên thử được vài ảnh trước. **Bỏ ảnh** rồi Lưu để quay về
+banner màu xanh mặc định.
+
+- Nên dùng ảnh ngang khoảng 1600 × 500 px, **không có chữ** trong ảnh, vì tiêu đề trang chủ
+  nằm đè lên. Ảnh banner được thu nhỏ tối đa 1920 px thay vì 1200 px như ảnh sản phẩm.
+- Lớp phủ tối (ngang trên máy tính, dọc trên điện thoại) giữ tiêu đề trắng luôn đọc rõ.
+- Ảnh lưu ở bảng mới `app_settings` (khoá `banner_image_url`). Khách đọc qua
+  `GET /api/settings/storefront`; chỉ quản trị đổi được qua `PUT /api/admin/settings/storefront`,
+  đường dẫn ảnh được kiểm tra như ảnh sản phẩm và mỗi lần đổi có ghi nhật ký.
+
+### Hàng đang giảm giá hiện lên đầu
+
+Danh mục xếp hàng còn trước, rồi trong số hàng còn, **hàng đang giảm giá lên đầu tiên**. Hàng
+đã hết không chiếm chỗ đầu dù đang giảm giá.
+
+### Đợt giảm giá cửa hàng yêu cầu
+
+Áp một lần lúc triển khai, qua migration `2026-09-26-first-sale-…`:
+
+| Sản phẩm | Giá trước | Giảm | Giá bán mới |
+| --- | --- | --- | --- |
+| Gạo 4 Mùa Cỏ May · túi 5kg | 140.000₫ | 25% | 105.000₫ |
+| Gạo Cỏ May thơm · túi 5kg (bao hình bông sen) | 120.000₫ | 25% | 90.000₫ |
+| Gạo Cỏ May · bao 25kg | 470.000₫ | 5% | 446.500₫ |
+| Gạo Quê · bao 25kg | 450.000₫ | 5% | 427.500₫ |
+
+- Nhận đúng sản phẩm bằng **ảnh bao bì + quy cách**, không dựa vào số thứ tự, vì số thứ tự có
+  thể khác giữa các cơ sở dữ liệu. "Cỏ May bông sen" được xác định từ ảnh: túi xanh có bông
+  sen hồng là *Gạo Cỏ May thơm*; *Gạo 4 Mùa* là bao hình lá lúa.
+- Bỏ qua sản phẩm đã đang giảm giá hoặc chưa có giá, nên không bao giờ giảm chồng.
+- 5% của 470.000₫ và 450.000₫ ra số lẻ 500₫. Giữ đúng 5%; muốn làm tròn thì sửa giá bán
+  trong trang quản trị.
+- Kết thúc đợt giảm giá: xoá trống ô *Giá gốc* của sản phẩm, rồi đặt lại giá bán cũ.
+- **Không giảm** "Gạo Cỏ May ST25 - 25KG": sản phẩm này đang có giá 750₫ với đơn vị "kg",
+  gần như chắc chắn là nhập sai giá (có lẽ 750.000₫). Cần sửa giá trước.
+
+### Mã đơn online tự tạo
+
+Mỗi đơn online có mã dạng **DH000123**, cùng kiểu với mã hoá đơn quầy HD000123. Mã gán ngay
+lúc tạo đơn, trong cùng transaction, và đơn cũ được cấp mã tự động khi triển khai. Cột
+`orders.code` có ràng buộc không trùng.
+
+Mã hiện ở trang *Đơn của tôi*, trong thông báo đặt hàng thành công, trên thẻ đơn của quản trị,
+trong hộp xác nhận huỷ đơn, và trong tệp Excel (trước đây Excel tự ghép `DH` + số không đệm).
+
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

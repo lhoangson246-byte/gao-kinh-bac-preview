@@ -780,6 +780,91 @@ const guestToken = (await call('/auth/register', {
   }
 }
 
+/* --- Ảnh banner trang chủ đổi được --- */
+{
+  const before = (await call('/settings/storefront')).data.settings?.banner_image_url ?? null;
+  check('Khách xem được cài đặt banner mà không cần đăng nhập', before !== null, String(before));
+
+  const set = await call('/admin/settings/storefront', {
+    method: 'PUT', token: admin, body: { banner_image_url: '/products/co-may-4-mua-5kg.jpg' },
+  });
+  check('Quản trị đổi được ảnh banner', set.status === 200 && set.data.settings?.banner_image_url === '/products/co-may-4-mua-5kg.jpg',
+    `status=${set.status} ${JSON.stringify(set.data).slice(0, 120)}`);
+  check('Khách thấy ngay ảnh banner mới',
+    (await call('/settings/storefront')).data.settings?.banner_image_url === '/products/co-may-4-mua-5kg.jpg');
+
+  check('Chưa đăng nhập không đổi được banner (401)',
+    (await call('/admin/settings/storefront', { method: 'PUT', body: { banner_image_url: '/x.jpg' } })).status === 401);
+  check('Khách thường không đổi được banner (403)',
+    (await call('/admin/settings/storefront', { method: 'PUT', token: guestToken, body: { banner_image_url: '/x.jpg' } })).status === 403);
+  for (const bad of ['javascript:alert(1)', '//evil.example/x.jpg']) {
+    const r = await call('/admin/settings/storefront', { method: 'PUT', token: admin, body: { banner_image_url: bad } });
+    check(`Đường dẫn banner nguy hiểm bị chặn: ${bad}`, r.status === 400, `status=${r.status}`);
+  }
+  const extra = await call('/admin/settings/storefront', { method: 'PUT', token: admin, body: { banner_image_url: '', role: 'x' } });
+  check('Không nhận trường lạ khi đổi banner (400)', extra.status === 400, `status=${extra.status}`);
+
+  const clear = await call('/admin/settings/storefront', { method: 'PUT', token: admin, body: { banner_image_url: '' } });
+  check('Bỏ ảnh banner để quay về banner màu', clear.status === 200 && clear.data.settings?.banner_image_url === '');
+  // Trả lại đúng như trước khi thử.
+  await call('/admin/settings/storefront', { method: 'PUT', token: admin, body: { banner_image_url: before || '' } });
+}
+
+/* --- Mã đơn online tự tạo --- */
+{
+  const prod = (await call('/products')).data.products.find((p) => p.price > 0 && p.stock > 0);
+  const made = await call('/orders', {
+    method: 'POST', token: guestToken,
+    body: {
+      receiver_name: 'Khách Thử Mã Đơn', phone: phoneOf(6),
+      address: 'Số 12, đường Lý Thái Tổ, phường Suối Hoa', delivery_area: 'bac-ninh',
+      items: [{ product_id: prod.id, quantity: 1 }],
+    },
+  });
+  const order = made.data.order;
+  check('Đơn mới có mã dạng DH000123', /^DH\d{6}$/.test(order?.code || ''), String(order?.code));
+  check('Mã đơn khớp số thứ tự đơn', order?.code === `DH${String(order?.id).padStart(6, '0')}`, `${order?.code} / id ${order?.id}`);
+
+  const mine = (await call('/orders', { token: guestToken })).data.orders || [];
+  check('Khách thấy mã trong danh sách đơn của mình', mine.some((o) => o.code === order.code));
+  const adminList = (await call('/admin/orders?limit=100', { token: admin })).data.orders || [];
+  check('Quản trị thấy mã trong danh sách đơn', adminList.some((o) => o.code === order.code));
+  check('Mọi đơn trong danh sách quản trị đều có mã', adminList.every((o) => /^DH\d{6}$/.test(o.code || '')),
+    adminList.filter((o) => !o.code).map((o) => o.id).join(','));
+}
+
+/* --- Đợt giảm giá 26/09 và thứ tự danh mục --- */
+{
+  const all = (await call('/products')).data.products;
+  const find = (image) => all.find((p) => p.image_url === image);
+  const bon = find('/products/co-may-4-mua-5kg.jpg');
+  const lotus = find('/products/co-may-thom-deo-vua-5kg.jpg');
+  if (bon?.original_price > 0) {
+    // Cơ sở dữ liệu đã có sản phẩm trước đợt giảm giá: phải đúng từng đồng.
+    check('Gạo 4 Mùa giảm 25% (140.000đ → 105.000đ)', bon.price === 105000 && bon.original_price === 140000,
+      `${bon.price}/${bon.original_price}`);
+    check('Cỏ May thơm bông sen giảm 25% (120.000đ → 90.000đ)', lotus?.price === 90000 && lotus?.original_price === 120000,
+      `${lotus?.price}/${lotus?.original_price}`);
+  } else {
+    // Cơ sở dữ liệu tạo mới: đợt giảm giá chỉ chạy một lần, không đụng sản phẩm thêm sau đó.
+    check('Đợt giảm giá không áp lên sản phẩm tạo sau lúc triển khai', bon?.price === 140000 && lotus?.price === 120000,
+      `${bon?.price}/${lotus?.price}`);
+  }
+
+  // Tự tạo một sản phẩm giảm giá để thứ tự luôn kiểm tra được trên mọi cơ sở dữ liệu.
+  const promo = await call('/admin/products', {
+    method: 'POST', token: admin,
+    body: { name: `Gạo thử thứ tự ${suffix}`, price: 50000, original_price: 60000, unit: 'túi 5kg', stock: 5 },
+  });
+  const list = (await call('/products')).data.products.filter((p) => p.stock > 0);
+  const onSale = (p) => p.original_price > p.price && p.price > 0;
+  const firstRegular = list.findIndex((p) => !onSale(p));
+  const lastSale = list.map(onSale).lastIndexOf(true);
+  check('Hàng đang giảm giá hiện lên đầu danh mục', lastSale !== -1 && (firstRegular === -1 || lastSale < firstRegular),
+    `giam gia cuoi o vi tri ${lastSale}, gia thuong dau o vi tri ${firstRegular}`);
+  if (promo.data.product) await call(`/admin/products/${promo.data.product.id}/permanent`, { method: 'DELETE', token: admin });
+}
+
 console.log(results.join('\n'));
 console.log(`\n${pass} PASS · ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

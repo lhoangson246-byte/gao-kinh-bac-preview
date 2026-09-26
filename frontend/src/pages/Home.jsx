@@ -27,10 +27,20 @@ export default function Home() {
   const [q, setQ] = useState('');
   const [inStockOnly, setInStockOnly] = useState(false);
   const [group, setGroup] = useState('');
+  const [banner, setBanner] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [added, setAdded] = useState(null);
   const { add, count, total, syncWithProducts } = useCart();
+
+  // Ảnh banner do cửa hàng tự đổi trong trang quản trị. Lỗi thì giữ banner màu mặc định.
+  useEffect(() => {
+    let cancelled = false;
+    api.storefront()
+      .then(({ settings }) => { if (!cancelled) setBanner(settings?.banner_image_url || ''); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,13 +70,17 @@ export default function Home() {
 
   return (
     <div className="store-app">
-      <header className="store-toolbar">
-        <div>
+      <header className={`store-toolbar${banner ? ' has-banner' : ''}`}>
+        {banner && (
+          <img className="store-banner" src={banner} alt="" fetchpriority="high"
+               onError={() => setBanner('')} />
+        )}
+        <div className="store-toolbar-copy">
           <p className="delivery-chip"><span aria-hidden="true">⌖</span> Giao hàng tại <strong>Bắc Ninh</strong></p>
           <h1>Chọn gạo cho nhà mình</h1>
           <p className="toolbar-note">Gạo bán lẻ cho gia đình · Cửa hàng gọi xác nhận trước khi giao</p>
         </div>
-        <div className="toolbar-art" aria-hidden="true"><span>🌾</span></div>
+        {!banner && <div className="toolbar-art" aria-hidden="true"><span>🌾</span></div>}
       </header>
 
       <section className="catalog-controls" aria-label="Tìm và lọc sản phẩm">

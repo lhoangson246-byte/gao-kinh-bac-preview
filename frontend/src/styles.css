@@ -97,6 +97,30 @@ main.container { min-height: 66vh; padding-block: 28px 72px; }
 .toolbar-note { margin: 9px 0 0; color: #d5e2d8; font-size: .82rem; }
 .toolbar-art { position: relative; z-index: 1; display: grid; place-items: center; width: 105px; height: 105px; flex: 0 0 105px; border: 1px solid rgba(255,255,255,.22); border-radius: 26px; background: rgba(255,255,255,.08); transform: rotate(5deg); }
 .toolbar-art span { font-size: 3.4rem; transform: rotate(-5deg); }
+
+/* --- Banner có ảnh do cửa hàng tự đổi --- */
+/* Khối chữ luôn nằm trên ảnh và lớp phủ, kể cả khi ảnh đứng trước nó trong DOM. */
+.store-toolbar-copy { position: relative; z-index: 2; }
+.store-toolbar.has-banner { min-height: 220px; }
+.store-banner { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: cover; }
+/* Lớp phủ tối bên trái để chữ trắng đọc rõ trên mọi ảnh; thay cho vòng tròn trang trí. */
+.store-toolbar.has-banner::after {
+  inset: 0; z-index: 1; width: auto; height: auto; border: 0; border-radius: 0; box-shadow: none;
+  background: linear-gradient(90deg, rgba(15, 33, 24, .9) 0%, rgba(15, 33, 24, .66) 45%, rgba(15, 33, 24, .2) 100%);
+}
+
+/* --- Ô đổi banner trong trang quản trị --- */
+.banner-settings { margin-bottom: 22px; }
+.banner-settings-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+.banner-settings-head h2 { margin: 0 0 4px; font-size: 1.1rem; }
+.banner-settings-head p { margin: 0; color: var(--muted); font-size: .82rem; }
+.banner-state { flex: 0 0 auto; padding: 4px 10px; border-radius: 99px; background: var(--cream-deep); color: var(--muted); font-size: .7rem; font-weight: 750; }
+.banner-state.on { background: var(--success-light); color: var(--success); }
+.banner-tip { margin: -4px 0 12px; }
+.image-picker.wide .image-drop { width: 300px; height: 110px; }
+
+/* --- Mã đơn online DH000123 --- */
+.order-code { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 .catalog-controls { position: relative; z-index: 2; display: flex; gap: 15px; align-items: center; margin: -1px 18px 30px; padding: 15px; border: 1px solid var(--border); border-top: 0; border-radius: 0 0 15px 15px; background: var(--paper); box-shadow: var(--shadow); }
 .catalog-controls .search-box { flex: 0 1 350px; }
 .search-box > button { position: absolute; top: 50%; right: 10px; width: 28px; height: 28px; transform: translateY(-50%); border: 0; border-radius: 50%; background: var(--cream); color: var(--muted); cursor: pointer; }
@@ -893,6 +917,9 @@ label b { color: var(--danger); }
   .quick-filters button { min-height: 34px; padding: 6px 11px; font-size: .72rem; }
   .hero-visual { height: 250px; }
   .store-toolbar { min-height: 160px; padding: 24px 21px; }
+  .store-toolbar.has-banner { min-height: 190px; }
+  .store-toolbar.has-banner::after { background: linear-gradient(180deg, rgba(15, 33, 24, .55) 0%, rgba(15, 33, 24, .86) 100%); }
+  .image-picker.wide .image-drop { width: 100%; height: 120px; }
   .toolbar-art { width: 74px; height: 74px; flex-basis: 74px; border-radius: 19px; }
   .toolbar-art span { font-size: 2.4rem; }
   .toolbar-note { max-width: 250px; }

@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 
 import authRoutes from './routes/auth.js';
 import productRoutes from './routes/products.js';
+import settingsRoutes from './routes/settings.js';
 import orderRoutes from './routes/orders.js';
 import addressRoutes from './routes/addresses.js';
 import adminRoutes from './routes/admin.js';
@@ -74,6 +75,7 @@ app.post('/api/orders', orderLimiter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/settings', settingsRoutes);
 app.use('/api/addresses', addressRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin/customers', customerRoutes);

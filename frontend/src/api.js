@@ -92,6 +92,10 @@ export const api = {
     return request(`/products${query ? `?${query}` : ''}`);
   },
   product: (id) => request(`/products/${id}`),
+  /** Ảnh banner trang chủ và các cài đặt công khai khác. */
+  storefront: () => request('/settings/storefront'),
+  adminUpdateStorefront: (payload) =>
+    request('/admin/settings/storefront', { method: 'PUT', body: payload, auth: true }),
 
   createOrder: (payload) => request('/orders', { method: 'POST', body: payload, auth: true }),
   myOrders: () => request('/orders', { auth: true }),
