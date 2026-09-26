@@ -3,12 +3,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
 import AddressBook from '../components/AddressBook.jsx';
 import {
-  api, formatVND, pointsFor, DELIVERY_AREA_CODE, DELIVERY_AREA_LABEL, DELIVERY_SLOTS,
+  api, formatVND, pointsFor, DELIVERY_AREA_CODE, DELIVERY_SLOTS,
 } from '../api';
+import { useI18n } from '../i18n/index.jsx';
 
 export default function Checkout() {
   const { items, total, hasUnavailable, clear } = useCart();
   const navigate = useNavigate();
+  const { t, unit } = useI18n();
 
   const orderable = items.filter((item) => item.stock > 0 && item.quantity > 0);
   // Xem trước ưu đãi đơn đầu tiên; máy chủ vẫn tự quyết khi tạo đơn.
@@ -43,7 +45,7 @@ export default function Checkout() {
   /** Kiểm tra ngay tại trình duyệt; máy chủ vẫn kiểm tra lại lần nữa. */
   const validate = () => {
     const errors = {};
-    if (!selectedAddress) errors.address_id = 'Hãy thêm hoặc chọn một địa chỉ nhận hàng.';
+    if (!selectedAddress) errors.address_id = t('checkout.addressRequired');
     return errors;
   };
 
@@ -54,7 +56,7 @@ export default function Checkout() {
     const errors = validate();
     if (Object.keys(errors).length) {
       setFieldErrors(errors);
-      setError('Vui lòng kiểm tra lại các thông tin được đánh dấu bên dưới.');
+      setError(t('common.checkForm'));
       return;
     }
     setFieldErrors({});
@@ -78,9 +80,9 @@ export default function Checkout() {
   if (orderable.length === 0) {
     return (
       <div className="empty empty-page">
-        <h1>Chưa có sản phẩm để đặt</h1>
-        <p>Giỏ hàng đang trống hoặc các loại gạo đã chọn tạm hết hàng.</p>
-        <Link className="btn btn-primary btn-large" to="/">Chọn gạo</Link>
+        <h1>{t('checkout.emptyTitle')}</h1>
+        <p>{t('checkout.emptyBody')}</p>
+        <Link className="btn btn-primary btn-large" to="/">{t('checkout.choose')}</Link>
       </div>
     );
   }
@@ -88,103 +90,102 @@ export default function Checkout() {
   return (
     <div className="page-shell">
       <div className="page-heading">
-        <div><p className="eyebrow dark"><span></span>Bước cuối cùng</p><h1>Thông tin nhận hàng</h1></div>
-        <Link to="/gio-hang" className="text-link">← Quay lại giỏ hàng</Link>
+        <div><p className="eyebrow dark"><span></span>{t('checkout.eyebrow')}</p><h1>{t('checkout.title')}</h1></div>
+        <Link to="/gio-hang" className="text-link">{t('checkout.back')}</Link>
       </div>
 
       {error && <div className="alert error" role="alert">{error}</div>}
       {hasUnavailable && (
         <div className="alert warning" role="status">
-          Những loại gạo đã hết hàng trong giỏ sẽ không được đưa vào đơn này.
+          {t('checkout.unavailable')}
         </div>
       )}
 
       <div className="checkout">
         <div className="form-card flat checkout-form">
           <div className="form-section-title">
-            <span>1</span><div><h2>Địa chỉ nhận hàng</h2><p>Chọn địa chỉ đã lưu hoặc thêm địa chỉ mới.</p></div>
+            <span>1</span><div><h2>{t('checkout.addressTitle')}</h2><p>{t('checkout.addressHint')}</p></div>
           </div>
 
           <AddressBook selectable selectedId={selectedAddress?.id} onSelect={onSelectAddress} />
           {fieldErrors.address_id && <small className="err address-required-error">{fieldErrors.address_id}</small>}
 
           <div className="form-section-title">
-            <span>2</span><div><h2>Thời gian giao hàng</h2><p>Giao miễn phí trong tỉnh {DELIVERY_AREA_LABEL}.</p></div>
+            <span>2</span><div><h2>{t('checkout.timeTitle')}</h2><p>{t('checkout.timeHint')}</p></div>
           </div>
 
           <fieldset className="slot-group">
-            <legend>Khung giờ giao trong ngày <span className="free-tag">Miễn phí</span></legend>
+            <legend>{t('checkout.slotLegend')} <span className="free-tag">{t('common.free')}</span></legend>
             <div className="payment-options">
-              {DELIVERY_SLOTS.map(([code, name, time]) => (
+              {DELIVERY_SLOTS.map(([code, , time]) => (
                 <label key={code} className={form.delivery_slot === code ? 'selected' : ''}>
                   <input type="radio" name="delivery_slot" value={code}
                          checked={form.delivery_slot === code} onChange={onChange} />
                   <span aria-hidden="true">◷</span>
-                  <div><strong>{name}</strong><small>{time}</small></div>
+                  <div><strong>{t(`slot.${code}`)}</strong><small>{time}</small></div>
                 </label>
               ))}
             </div>
             <small className="field-help">
-              Cửa hàng giao hoả tốc trong ngày và không thu phí giao hàng.
+              {t('checkout.slotHelp')}
             </small>
           </fieldset>
 
-          <label>Ghi chú cho cửa hàng <span className="optional">Không bắt buộc</span>
+          <label>{t('checkout.note')} <span className="optional">{t('common.optional')}</span>
             <textarea className="input" name="note" rows={2} value={form.note} onChange={onChange}
-                      placeholder="Ví dụ: gọi trước khi tới, nhà trong ngõ…" />
+                      placeholder={t('checkout.notePlaceholder')} />
           </label>
 
           <div className="form-section-title">
-            <span>3</span><div><h2>Thanh toán</h2><p>Chọn cách thuận tiện nhất cho gia đình.</p></div>
+            <span>3</span><div><h2>{t('checkout.payTitle')}</h2><p>{t('checkout.payHint')}</p></div>
           </div>
 
           <div className="payment-options">
             <label className={form.payment_method === 'cod' ? 'selected' : ''}>
               <input type="radio" name="payment_method" value="cod" checked={form.payment_method === 'cod'} onChange={onChange} />
-              <span aria-hidden="true">◫</span><div><strong>Thanh toán khi nhận hàng</strong><small>Trả tiền khi gạo được giao tới nhà</small></div>
+              <span aria-hidden="true">◫</span><div><strong>{t('checkout.cod')}</strong><small>{t('checkout.codHint')}</small></div>
             </label>
             <label className={form.payment_method === 'bank' ? 'selected' : ''}>
               <input type="radio" name="payment_method" value="bank" checked={form.payment_method === 'bank'} onChange={onChange} />
-              <span aria-hidden="true">▤</span><div><strong>Chuyển khoản ngân hàng</strong><small>Cửa hàng gửi thông tin khi xác nhận đơn</small></div>
+              <span aria-hidden="true">▤</span><div><strong>{t('checkout.bank')}</strong><small>{t('checkout.bankHint')}</small></div>
             </label>
           </div>
 
           {form.payment_method === 'bank' && (
             <p className="payment-hint" role="status">
-              Bạn chưa cần chuyển tiền lúc này. Cửa hàng sẽ gọi xác nhận đơn rồi gửi thông tin
-              tài khoản và số tiền cần chuyển. Cửa hàng không thu phí giao hàng.
+              {t('checkout.bankNotice')}
             </p>
           )}
 
           <button type="button" className="btn btn-primary btn-block btn-large mobile-submit"
                   disabled={busy} onClick={onSubmit}>
-            {busy ? 'Đang gửi đơn…' : `Xác nhận đặt hàng · ${formatVND(total - discount)}`}
+            {busy ? t('checkout.sending') : t('checkout.submitTotal', { total: formatVND(total - discount) })}
           </button>
         </div>
 
         <aside className="summary order-summary">
-          <p className="eyebrow dark"><span></span>Đơn của bạn</p>
-          <h2>{orderable.length} loại gạo</h2>
+          <p className="eyebrow dark"><span></span>{t('checkout.summaryEyebrow')}</p>
+          <h2>{t('checkout.kinds', { n: orderable.length })}</h2>
           <div className="summary-products">
             {orderable.map((item) => (
               <div key={item.id} className="summary-row">
-                <span><strong>{item.name}</strong><small>{item.quantity} {item.unit} × {formatVND(item.price)}</small></span>
+                <span><strong>{item.name}</strong><small>{t('line.qty', { qty: item.quantity, unit: unit(item.unit), price: formatVND(item.price) })}</small></span>
                 <span>{formatVND(item.price * item.quantity)}</span>
               </div>
             ))}
           </div>
           {discount > 0 && (
-            <div className="summary-row"><span>Giảm giá <small>ưu đãi đơn đầu tiên</small></span><strong className="free-tag">− {formatVND(discount)}</strong></div>
+            <div className="summary-row"><span>{t('cart.discount')} <small>{t('cart.discountFirst')}</small></span><strong className="free-tag">− {formatVND(discount)}</strong></div>
           )}
-          <div className="summary-row"><span>Phí giao hàng</span><strong className="free-tag">Miễn phí</strong></div>
-          <div className="summary-row grand-total"><span>Tạm tính</span><strong>{formatVND(total - discount)}</strong></div>
-          <p className="pos-hint">Đơn này cộng {pointsFor(total - discount)} điểm tích luỹ khi giao xong.</p>
+          <div className="summary-row"><span>{t('cart.shipping')}</span><strong className="free-tag">{t('common.free')}</strong></div>
+          <div className="summary-row grand-total"><span>{t('cart.total')}</span><strong>{formatVND(total - discount)}</strong></div>
+          <p className="pos-hint">{t('cart.points', { n: pointsFor(total - discount) })}</p>
           <p className="summary-disclaimer">
-            Bằng việc đặt hàng, bạn xác nhận đây là đơn mua lẻ và địa chỉ nhận thuộc tỉnh {DELIVERY_AREA_LABEL}.
+            {t('checkout.disclaimer')}
           </p>
           <button type="button" className="btn btn-primary btn-block btn-large desktop-submit"
                   disabled={busy} onClick={onSubmit}>
-            {busy ? 'Đang gửi đơn…' : 'Xác nhận đặt hàng'}
+            {busy ? t('checkout.sending') : t('checkout.submit')}
           </button>
         </aside>
       </div>

@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
 import { api, formatVND, pointsFor } from '../api';
+import { useI18n } from '../i18n/index.jsx';
 
 export default function Cart() {
   const { items, total, count, hasUnavailable, setQuantity, remove, clear, syncWithProducts } = useCart();
-  const [syncError, setSyncError] = useState('');
+  const [syncError, setSyncError] = useState(false);
+  const { t, unit } = useI18n();
 
   // Ưu đãi đơn đầu tiên: hỏi máy chủ xem tài khoản này còn được giảm không.
   // Chỉ để xem trước; máy chủ vẫn tự quyết khi tạo đơn.
@@ -27,7 +29,7 @@ export default function Cart() {
     let cancelled = false;
     api.products()
       .then(({ products }) => { if (!cancelled) syncWithProducts(products); })
-      .catch(() => { if (!cancelled) setSyncError('Chưa kiểm tra được tồn kho mới nhất. Cửa hàng sẽ xác nhận lại khi gọi cho bạn.'); });
+      .catch(() => { if (!cancelled) setSyncError(true); });
     return () => { cancelled = true; };
   }, [syncWithProducts]);
 
@@ -35,9 +37,9 @@ export default function Cart() {
     return (
       <div className="empty empty-page">
         <span className="empty-icon" aria-hidden="true">🧺</span>
-        <h1>Giỏ hàng đang trống</h1>
-        <p>Hãy chọn loại gạo phù hợp cho bữa cơm nhà mình.</p>
-        <Link className="btn btn-primary btn-large" to="/">Xem các loại gạo</Link>
+        <h1>{t('cart.emptyTitle')}</h1>
+        <p>{t('cart.emptyBody')}</p>
+        <Link className="btn btn-primary btn-large" to="/">{t('cart.browse')}</Link>
       </div>
     );
   }
@@ -45,19 +47,19 @@ export default function Cart() {
   return (
     <div className="page-shell">
       <div className="page-heading">
-        <div><p className="eyebrow dark"><span></span>Đơn hàng của bạn</p><h1>Giỏ hàng</h1></div>
-        <Link to="/" className="text-link">← Chọn thêm gạo</Link>
+        <div><p className="eyebrow dark"><span></span>{t('cart.eyebrow')}</p><h1>{t('cart.title')}</h1></div>
+        <Link to="/" className="text-link">{t('cart.addMore')}</Link>
       </div>
 
-      {syncError && <div className="alert warning" role="status">{syncError}</div>}
+      {syncError && <div className="alert warning" role="status">{t('cart.syncError')}</div>}
       {hasUnavailable && (
         <div className="alert error" role="alert">
-          Có loại gạo trong giỏ đã hết hàng. Vui lòng xoá khỏi giỏ trước khi đặt.
+          {t('cart.hasUnavailable')}
         </div>
       )}
 
       <div className="cart-layout">
-        <section className="cart-list" aria-label="Các sản phẩm trong giỏ">
+        <section className="cart-list" aria-label={t('cart.listAria')}>
           {items.map((item) => {
             const soldOut = item.stock <= 0;
             const atMax = !soldOut && item.quantity >= item.stock;
@@ -66,12 +68,12 @@ export default function Cart() {
                 <div className="cart-grain" aria-hidden="true">🌾</div>
                 <div className="cart-item-main">
                   <h2>{item.name}</h2>
-                  <p>{formatVND(item.price)} / {item.unit}</p>
+                  <p>{formatVND(item.price)} / {unit(item.unit)}</p>
                   {soldOut
-                    ? <p className="cart-warning">Tạm hết hàng — vui lòng xoá khỏi giỏ.</p>
-                    : atMax && <p className="cart-warning">Cửa hàng chỉ còn {item.stock} {item.unit}.</p>}
+                    ? <p className="cart-warning">{t('cart.itemSoldOut')}</p>
+                    : atMax && <p className="cart-warning">{t('cart.onlyLeft', { n: item.stock, unit: unit(item.unit) })}</p>}
                   <button className="link-button danger" onClick={() => remove(item.id)}>
-                    Xoá khỏi giỏ
+                    {t('cart.remove')}
                   </button>
                 </div>
                 <div className="cart-item-end">
@@ -80,10 +82,10 @@ export default function Cart() {
                       type="button"
                       onClick={() => setQuantity(item.id, item.quantity - 1)}
                       disabled={soldOut || item.quantity <= 1}
-                      aria-label={`Giảm số lượng ${item.name}`}
+                      aria-label={t('cart.decrease', { name: item.name })}
                     >−</button>
                     <input
-                      aria-label={`Số lượng ${item.name}`}
+                      aria-label={t('cart.quantity', { name: item.name })}
                       type="number"
                       inputMode="numeric"
                       min="1"
@@ -96,7 +98,7 @@ export default function Cart() {
                       type="button"
                       onClick={() => setQuantity(item.id, item.quantity + 1)}
                       disabled={soldOut || atMax}
-                      aria-label={`Tăng số lượng ${item.name}`}
+                      aria-label={t('cart.increase', { name: item.name })}
                     >+</button>
                   </div>
                   <strong>{formatVND(soldOut ? 0 : item.price * item.quantity)}</strong>
@@ -104,32 +106,32 @@ export default function Cart() {
               </article>
             );
           })}
-          <button className="link-button danger clear-cart" onClick={clear}>Xoá toàn bộ giỏ hàng</button>
+          <button className="link-button danger clear-cart" onClick={clear}>{t('cart.clear')}</button>
         </section>
 
         <aside className="summary cart-summary">
-          <p className="eyebrow dark"><span></span>Tóm tắt</p>
-          <h2>Đơn hàng</h2>
-          <div className="summary-row"><span>Tiền hàng</span><strong>{formatVND(total)}</strong></div>
+          <p className="eyebrow dark"><span></span>{t('cart.summaryEyebrow')}</p>
+          <h2>{t('cart.summaryTitle')}</h2>
+          <div className="summary-row"><span>{t('cart.subtotal')}</span><strong>{formatVND(total)}</strong></div>
           {discount > 0 && (
             <div className="summary-row">
-              <span>Giảm giá <small>ưu đãi đơn đầu tiên</small></span>
+              <span>{t('cart.discount')} <small>{t('cart.discountFirst')}</small></span>
               <strong className="free-tag">− {formatVND(discount)}</strong>
             </div>
           )}
-          <div className="summary-row"><span>Phí giao hàng</span><strong className="free-tag">Miễn phí</strong></div>
+          <div className="summary-row"><span>{t('cart.shipping')}</span><strong className="free-tag">{t('common.free')}</strong></div>
           <div className="summary-note">
-            <strong>Giao hàng tại Bắc Ninh</strong>
-            <p>Giao hoả tốc trong ngày, miễn phí giao hàng. Cửa hàng gọi xác nhận địa chỉ trước khi giao.</p>
+            <strong>{t('cart.deliveryTitle')}</strong>
+            <p>{t('cart.deliveryBody')}</p>
           </div>
-          <div className="summary-row grand-total"><span>Tạm tính</span><strong>{formatVND(total - discount)}</strong></div>
-          <p className="pos-hint">Đơn này cộng {pointsFor(total - discount)} điểm tích luỹ khi giao xong.</p>
+          <div className="summary-row grand-total"><span>{t('cart.total')}</span><strong>{formatVND(total - discount)}</strong></div>
+          <p className="pos-hint">{t('cart.points', { n: pointsFor(total - discount) })}</p>
           <button
             className="btn btn-primary btn-block btn-large"
             disabled={hasUnavailable || count === 0}
             onClick={() => navigate('/dat-hang')}
           >
-            Tiếp tục đặt hàng
+            {t('cart.continue')}
           </button>
         </aside>
       </div>

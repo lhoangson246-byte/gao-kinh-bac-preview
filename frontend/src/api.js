@@ -1,3 +1,6 @@
+import { getActiveLang, getLocale } from './i18n/state.js';
+import { translateServerErrors, translateServerMessage } from './i18n/server.js';
+
 const BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
 // Khi chạy dev không cần VITE_API_URL vì Vite đã proxy /api sang cổng 4000.
@@ -18,15 +21,17 @@ async function request(path, { method = 'GET', body, auth = false } = {}) {
     });
   } catch {
     // Mất mạng hoặc máy chủ không phản hồi.
-    const err = new Error('Không kết nối được tới cửa hàng. Vui lòng kiểm tra kết nối mạng và thử lại.');
+    const err = new Error(translateServerMessage('Không kết nối được tới cửa hàng. Vui lòng kiểm tra kết nối mạng và thử lại.', getActiveLang()));
     err.status = 0;
     throw err;
   }
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(data.message || 'Có lỗi xảy ra. Vui lòng thử lại.');
-    err.errors = data.errors;
+    // Máy chủ luôn trả tiếng Việt; dịch những câu khách hay gặp theo ngôn ngữ đang chọn.
+    const lang = getActiveLang();
+    const err = new Error(translateServerMessage(data.message || 'Có lỗi xảy ra. Vui lòng thử lại.', lang));
+    err.errors = translateServerErrors(data.errors, lang);
     err.status = res.status;
     throw err;
   }
@@ -257,7 +262,11 @@ export const normalizePhone = (value) => {
 
 export const isPhone = (value) => normalizePhone(value) !== '';
 
-export const formatVND = (n) => new Intl.NumberFormat('vi-VN').format(Number(n) || 0) + '₫';
+/**
+ * Tiền đồng theo ngôn ngữ đang chọn. Quan trọng với khách đọc tiếng Anh/Trung:
+ * "105.000₫" kiểu Việt dễ bị đọc nhầm thành 105 đồng, nên đổi sang "105,000₫".
+ */
+export const formatVND = (n) => new Intl.NumberFormat(getLocale()).format(Number(n) || 0) + '₫';
 
 /** Nhóm hàng cửa hàng chọn cho từng sản phẩm; khớp PRODUCT_CATEGORIES ở máy chủ. */
 export const PRODUCT_CATEGORIES = [
@@ -283,7 +292,7 @@ export const formatDateTime = (value) => {
   const date = new Date(normalized);
   return Number.isNaN(date.getTime())
     ? value
-    : new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(date);
+    : new Intl.DateTimeFormat(getLocale(), { dateStyle: 'short', timeStyle: 'short' }).format(date);
 };
 
 export const STATUS_LABEL = {

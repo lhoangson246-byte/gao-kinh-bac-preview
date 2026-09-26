@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isPhone } from '../api';
 import PasswordInput from '../components/PasswordInput.jsx';
-import { passwordError } from '../password';
+import { passwordErrorKey } from '../password';
+import { useI18n } from '../i18n/index.jsx';
 
 export default function Register() {
   const [form, setForm] = useState({
@@ -14,6 +15,7 @@ export default function Register() {
   const [busy, setBusy] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
+  const { t } = useI18n();
 
   const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -22,15 +24,15 @@ export default function Register() {
     setError('');
 
     const errors = {};
-    if (form.full_name.trim().length < 2) errors.full_name = 'Vui lòng nhập họ tên.';
-    if (!form.phone.trim()) errors.phone = 'Nhập số điện thoại để đăng nhập.';
-    else if (!isPhone(form.phone)) errors.phone = 'Số điện thoại không hợp lệ (10 số, ví dụ 0912345678).';
-    if (passwordError(form.password)) errors.password = passwordError(form.password);
-    if (form.password !== form.confirm) errors.confirm = 'Mật khẩu nhập lại không khớp.';
+    if (form.full_name.trim().length < 2) errors.full_name = t('error.fullName');
+    if (!form.phone.trim()) errors.phone = t('error.phoneRequired');
+    else if (!isPhone(form.phone)) errors.phone = t('error.phoneInvalid');
+    if (passwordErrorKey(form.password)) errors.password = t(passwordErrorKey(form.password));
+    if (form.password !== form.confirm) errors.confirm = t('error.confirmMismatch');
 
     if (Object.keys(errors).length) {
       setFieldErrors(errors);
-      setError('Vui lòng kiểm tra lại các thông tin được đánh dấu bên dưới.');
+      setError(t('common.checkForm'));
       return;
     }
 
@@ -50,36 +52,36 @@ export default function Register() {
 
   return (
     <div className="form-card">
-      <h2>Đăng ký tài khoản</h2>
-      <p className="muted">Đăng ký nhanh bằng số điện thoại và mật khẩu.</p>
+      <h2>{t('register.title')}</h2>
+      <p className="muted">{t('register.intro')}</p>
 
       {error && <p className="alert error" role="alert">{error}</p>}
 
       <form onSubmit={onSubmit} noValidate>
-        <label>Họ và tên <b>*</b>
+        <label>{t('register.fullName')} <b>*</b>
           <input className="input" name="full_name" value={form.full_name} onChange={onChange}
                  autoComplete="name" required aria-invalid={!!fieldErrors.full_name} />
           {fieldErrors.full_name && <small className="err">{fieldErrors.full_name}</small>}
         </label>
 
-        <label>Số điện thoại <b>*</b>
+        <label>{t('register.phone')} <b>*</b>
           <input className="input" name="phone" value={form.phone} onChange={onChange}
                  inputMode="tel" autoComplete="tel" placeholder="0912345678" required
                  aria-invalid={!!fieldErrors.phone} />
           {fieldErrors.phone
             ? <small className="err">{fieldErrors.phone}</small>
-            : <small className="field-help">Dùng số này để đăng nhập và để cửa hàng gọi xác nhận đơn.</small>}
+            : <small className="field-help">{t('register.phoneHelp')}</small>}
         </label>
 
         <div className="row">
-          <label>Mật khẩu <b>*</b>
+          <label>{t('register.password')} <b>*</b>
             <PasswordInput name="password" value={form.password}
                            onChange={onChange} required minLength={12} autoComplete="new-password"
                            aria-invalid={!!fieldErrors.password} />
             {fieldErrors.password && <small className="err">{fieldErrors.password}</small>}
           </label>
 
-          <label>Nhập lại mật khẩu <b>*</b>
+          <label>{t('register.confirm')} <b>*</b>
             <PasswordInput name="confirm" value={form.confirm}
                            onChange={onChange} required autoComplete="new-password"
                            aria-invalid={!!fieldErrors.confirm} />
@@ -88,11 +90,11 @@ export default function Register() {
         </div>
 
         <button className="btn btn-primary btn-block btn-large" disabled={busy}>
-          {busy ? 'Đang tạo tài khoản…' : 'Đăng ký'}
+          {busy ? t('register.busy') : t('register.submit')}
         </button>
       </form>
 
-      <p className="muted center">Đã có tài khoản? <Link to="/dang-nhap">Đăng nhập</Link></p>
+      <p className="muted center">{t('register.haveAccount')} <Link to="/dang-nhap">{t('register.login')}</Link></p>
     </div>
   );
 }

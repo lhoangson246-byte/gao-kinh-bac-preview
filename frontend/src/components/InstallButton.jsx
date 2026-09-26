@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useI18n } from '../i18n/index.jsx';
 
 export default function InstallButton() {
   const [installEvent, setInstallEvent] = useState(null);
+  const { t } = useI18n();
 
   useEffect(() => {
     const handlePrompt = (event) => {
@@ -25,5 +27,5 @@ export default function InstallButton() {
     setInstallEvent(null);
   };
 
-  return <button className="btn btn-install" onClick={install}>Cài ứng dụng</button>;
+  return <button className="btn btn-install" onClick={install}>{t('nav.install')}</button>;
 }

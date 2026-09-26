@@ -3,12 +3,14 @@ import { Link } from 'react-router-dom';
 import { api, formatVND, salePercent } from '../api';
 import { useCart } from '../context/CartContext.jsx';
 import ProductImage from '../components/ProductImage.jsx';
+import { useI18n } from '../i18n/index.jsx';
 
 // Ảnh dự phòng nằm trong thư mục public, không phụ thuộc dịch vụ bên ngoài.
 const FALLBACK_IMAGE = '/logo-mark.png';
+// Từ khoá tìm luôn là tiếng Việt vì khớp với tên sản phẩm; chỉ nhãn nút được dịch.
 const QUICK_FILTERS = [
-  ['', 'Tất cả'], ['ST25', 'Gạo ST25'], ['nếp', 'Gạo nếp'], ['lứt', 'Gạo lứt'],
-  ['G9', 'Gạo G9'], ['Cỏ May', 'Cỏ May'],
+  ['', 'filter.all'], ['ST25', 'filter.st25'], ['nếp', 'filter.nep'], ['lứt', 'filter.lut'],
+  ['G9', 'filter.g9'], ['Cỏ May', 'filter.comay'],
 ];
 
 /**
@@ -16,11 +18,17 @@ const QUICK_FILTERS = [
  * duyệt chỉ gửi mã nhóm đi.
  */
 const GROUPS = [
-  { code: '', label: 'Tất cả mặt hàng', heading: 'Tất cả sản phẩm', empty: 'Không tìm thấy sản phẩm phù hợp.' },
-  { code: 'giam-gia', label: 'Đang giảm giá', heading: 'Đang ưu đãi, giảm giá', empty: 'Hiện chưa có sản phẩm nào đang giảm giá. Quay lại sau nhé!' },
-  { code: 'nha-hang', label: 'Gạo nhà hàng · bao 25kg', heading: 'Gạo cho nhà hàng · bao 25kg', empty: 'Chưa có loại gạo bao 25kg phù hợp.' },
-  { code: 'do-kho', label: 'Thực phẩm khô', heading: 'Thực phẩm khô, đồ khô', empty: 'Cửa hàng đang cập nhật mặt hàng đồ khô.' },
+  { code: '', key: 'group.all' },
+  { code: 'giam-gia', key: 'group.sale' },
+  { code: 'nha-hang', key: 'group.restaurant' },
+  { code: 'do-kho', key: 'group.dry' },
 ];
+
+/** Chèn số in đậm vào câu đã dịch, đúng vị trí {n} của từng ngôn ngữ. */
+function splitCount(template, count) {
+  const [before, after = ''] = template.split('{n}');
+  return <>{before}<b>{count}</b>{after}</>;
+}
 
 export default function Home() {
   const [products, setProducts] = useState([]);
@@ -32,6 +40,7 @@ export default function Home() {
   const [error, setError] = useState('');
   const [added, setAdded] = useState(null);
   const { add, count, total, syncWithProducts } = useCart();
+  const { t, unit } = useI18n();
 
   // Ảnh banner do cửa hàng tự đổi trong trang quản trị. Lỗi thì giữ banner màu mặc định.
   useEffect(() => {
@@ -76,28 +85,28 @@ export default function Home() {
                onError={() => setBanner('')} />
         )}
         <div className="store-toolbar-copy">
-          <p className="delivery-chip"><span aria-hidden="true">⌖</span> Giao hàng tại <strong>Bắc Ninh</strong></p>
-          <h1>Chọn gạo cho nhà mình</h1>
-          <p className="toolbar-note">Gạo bán lẻ cho gia đình · Cửa hàng gọi xác nhận trước khi giao</p>
+          <p className="delivery-chip"><span aria-hidden="true">⌖</span> {t('home.deliveryIn')} <strong>Bắc Ninh</strong></p>
+          <h1>{t('home.title')}</h1>
+          <p className="toolbar-note">{t('home.note')}</p>
         </div>
         {!banner && <div className="toolbar-art" aria-hidden="true"><span>🌾</span></div>}
       </header>
 
-      <section className="catalog-controls" aria-label="Tìm và lọc sản phẩm">
+      <section className="catalog-controls" aria-label={t('home.controls')}>
         <label className="search-box">
           <span aria-hidden="true">⌕</span>
-          <span className="sr-only">Tìm sản phẩm</span>
+          <span className="sr-only">{t('home.searchLabel')}</span>
           <input
             className="input search"
             type="search"
-            placeholder="Tìm gạo, đồ khô…"
+            placeholder={t('home.searchPlaceholder')}
             value={q}
             onChange={(event) => setQ(event.target.value)}
           />
-          {q && <button type="button" onClick={() => setQ('')} aria-label="Xoá từ khoá">×</button>}
+          {q && <button type="button" onClick={() => setQ('')} aria-label={t('home.clearSearch')}>×</button>}
         </label>
         <div className="filter-rows">
-        <div className="quick-filters group-filters" role="group" aria-label="Nhóm mặt hàng">
+        <div className="quick-filters group-filters" role="group" aria-label={t('home.groupsAria')}>
           {GROUPS.map((g) => (
             <button
               key={g.code || 'all'}
@@ -105,10 +114,10 @@ export default function Home() {
               className={`${group === g.code ? 'active' : ''}${g.code === 'giam-gia' ? ' sale-chip' : ''}`}
               aria-pressed={group === g.code}
               onClick={() => setGroup(g.code)}
-            >{g.label}</button>
+            >{t(g.key)}</button>
           ))}
         </div>
-        <div className="quick-filters" role="group" aria-label="Loại gạo">
+        <div className="quick-filters" role="group" aria-label={t('home.typesAria')}>
           {QUICK_FILTERS.map(([value, label]) => (
             <button
               key={label}
@@ -116,36 +125,36 @@ export default function Home() {
               className={q === value ? 'active' : ''}
               aria-pressed={q === value}
               onClick={() => setQ(value)}
-            >{label}</button>
+            >{t(label)}</button>
           ))}
           <button
             type="button"
             className={inStockOnly ? 'active' : ''}
             aria-pressed={inStockOnly}
             onClick={() => setInStockOnly((value) => !value)}
-          >Chỉ hàng còn</button>
+          >{t('filter.inStock')}</button>
         </div>
         </div>
       </section>
 
       <section className="catalog-section" aria-busy={loading}>
         <div className="catalog-heading">
-          <h2>{current.heading}</h2>
-          {!loading && !error && <span>{products.length} sản phẩm</span>}
+          <h2>{t(`${current.key}.heading`)}</h2>
+          {!loading && !error && <span>{t('home.count', { n: products.length })}</span>}
         </div>
 
         {error && (
           <div className="alert error" role="alert">
             {error}{' '}
-            <button className="link-button" onClick={() => setQ((value) => value)}>Thử lại</button>
+            <button className="link-button" onClick={() => setQ((value) => value)}>{t('common.retry')}</button>
           </div>
         )}
-        {loading && <div className="loading-state" role="status"><span></span>Đang tải sản phẩm…</div>}
+        {loading && <div className="loading-state" role="status"><span></span>{t('home.loading')}</div>}
         {!loading && !error && products.length === 0 && (
           <div className="empty compact">
-            <p>{q || inStockOnly ? 'Không tìm thấy sản phẩm phù hợp.' : current.empty}</p>
+            <p>{q || inStockOnly ? t('home.noMatch') : t(`${current.key}.empty`)}</p>
             <button className="link-button" onClick={() => { setQ(''); setInStockOnly(false); setGroup(''); }}>
-              Xem tất cả sản phẩm
+              {t('home.seeAll')}
             </button>
           </div>
         )}
@@ -160,31 +169,31 @@ export default function Home() {
               <article key={product.id} className="product-card">
                 <div className="product-image">
                   <ProductImage src={product.image_url || FALLBACK_IMAGE} alt={product.name} first={index === 0} eager={index < 3} />
-                  {sale > 0 && <span className="sale-tag" aria-label={`Giảm ${sale}%`}>−{sale}%</span>}
+                  {sale > 0 && <span className="sale-tag" aria-label={t('card.saleAria', { n: sale })}>−{sale}%</span>}
                   {unpriced
-                    ? <span className="stock-tag pending">Đang cập nhật giá</span>
+                    ? <span className="stock-tag pending">{t('card.pricePending')}</span>
                     : soldOut
-                      ? <span className="stock-tag sold-out">Hết hàng</span>
-                      : product.stock <= 10 && <span className="stock-tag">Sắp hết</span>}
+                      ? <span className="stock-tag sold-out">{t('card.soldOut')}</span>
+                      : product.stock <= 10 && <span className="stock-tag">{t('card.lowStock')}</span>}
                 </div>
                 <div className="product-body">
                   <div className="product-meta">
-                    <span>{product.origin || 'Việt Nam'}</span>
+                    <span>{product.origin || t('card.originFallback')}</span>
                     <span>
-                      {unpriced ? 'Liên hệ cửa hàng'
-                        : soldOut ? 'Tạm hết hàng'
-                        : `Còn ${product.stock} ${product.unit}`}
+                      {unpriced ? t('card.contact')
+                        : soldOut ? t('card.outOfStock')
+                        : t('card.left', { n: product.stock, unit: unit(product.unit) })}
                     </span>
                   </div>
                   <h3>{product.name}</h3>
-                  <p className="desc">{product.description || 'Hạt gạo được chọn kỹ cho bữa cơm gia đình.'}</p>
+                  <p className="desc">{product.description || t('card.descFallback')}</p>
                   <div className="product-bottom">
                     <div className="product-price">
                       {unpriced
-                        ? <strong className="price-pending">Chưa có giá</strong>
+                        ? <strong className="price-pending">{t('card.noPrice')}</strong>
                         : <strong className={sale > 0 ? 'on-sale' : ''}>{formatVND(product.price)}</strong>}
-                      {sale > 0 && <s className="was-price" aria-label={`Giá gốc ${formatVND(product.original_price)}`}>{formatVND(product.original_price)}</s>}
-                      <span>/ {product.unit}</span>
+                      {sale > 0 && <s className="was-price" aria-label={t('card.wasAria', { price: formatVND(product.original_price) })}>{formatVND(product.original_price)}</s>}
+                      <span>/ {unit(product.unit)}</span>
                     </div>
                     <button
                       type="button"
@@ -192,12 +201,12 @@ export default function Home() {
                       disabled={!canBuy}
                       onClick={() => handleAdd(product)}
                       aria-label={
-                        unpriced ? `${product.name} chưa có giá bán`
-                          : soldOut ? `${product.name} đã hết hàng`
-                          : `Thêm ${product.name} vào giỏ hàng`
+                        unpriced ? t('card.noPriceAria', { name: product.name })
+                          : soldOut ? t('card.soldOutAria', { name: product.name })
+                          : t('card.addAria', { name: product.name })
                       }
                     >
-                      {unpriced ? 'Chưa bán' : soldOut ? 'Hết hàng' : added === product.id ? 'Đã thêm ✓' : '+ Thêm'}
+                      {unpriced ? t('card.notSelling') : soldOut ? t('card.soldOut') : added === product.id ? t('card.added') : t('card.add')}
                     </button>
                   </div>
                 </div>
@@ -209,7 +218,8 @@ export default function Home() {
 
       {count > 0 && (
         <Link className="floating-cart" to="/gio-hang">
-          <span><b>{count}</b> sản phẩm</span><strong>{formatVND(total)} · Xem giỏ →</strong>
+          <span>{splitCount(t('home.floatingItems'), count)}</span>
+          <strong>{t('home.floatingCart', { total: formatVND(total) })}</strong>
         </Link>
       )}
     </div>

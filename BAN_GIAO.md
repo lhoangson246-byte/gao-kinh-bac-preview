@@ -741,6 +741,39 @@ Mã hiện ở trang *Đơn của tôi*, trong thông báo đặt hàng thành c
 trong hộp xác nhận huỷ đơn, và trong tệp Excel (trước đây Excel tự ghép `DH` + số không đệm).
 
 
+## Đổi ngôn ngữ: Tiếng Việt · English · 中文 (26/09/2026)
+
+Nút **VI · EN · 中** nằm ở mép phải thanh trên cùng, hiện cả trên điện thoại. Mặc định là
+tiếng Việt, kể cả khi điện thoại khách để tiếng Anh; ngôn ngữ chỉ đổi khi khách tự bấm. Lựa
+chọn được lưu trên thiết bị (`localStorage`, khoá `gao_lang`), tải lại trang vẫn giữ.
+
+### Phạm vi dịch
+
+- **Được dịch:** trang chủ, bộ lọc, thẻ sản phẩm, giỏ hàng, đặt hàng, đơn của tôi, đăng nhập,
+  đăng ký, tài khoản, đổi mật khẩu, sổ địa chỉ, tiêu đề tab trình duyệt và thanh điều hướng.
+- **Giữ tiếng Việt:** trang quản trị và bán tại quầy, vì đó là trang cho nhân viên. Khi vào
+  `/quan-tri` giao diện luôn là tiếng Việt và nút đổi ngôn ngữ được ẩn. Ra khỏi trang quản trị
+  thì trở lại ngôn ngữ khách đã chọn.
+- **Dữ liệu cửa hàng giữ nguyên:** tên sản phẩm, mô tả, xuất xứ, tên và địa chỉ người nhận.
+  Riêng quy cách được dịch phần danh từ: `túi 5kg` hiện là *5kg bag* hoặc *袋（5kg）*.
+- **Tiền và ngày giờ theo ngôn ngữ:** 105.000₫ (VI), 105,000₫ (EN/中).
+- **Thông báo lỗi từ máy chủ:** máy chủ vẫn trả tiếng Việt, còn trình duyệt dịch những câu khách
+  hay gặp (sai mật khẩu, hết hàng, chỉ còn N túi, số điện thoại đã đăng ký…). Câu nào chưa có
+  trong bảng dịch thì hiện nguyên tiếng Việt, để khách vẫn đọc được đúng nội dung.
+
+### Dữ liệu vẫn lưu tiếng Việt
+
+Loại địa chỉ (Nhà riêng/Văn phòng…), khung giờ giao, trạng thái đơn và cách thanh toán vẫn
+lưu bằng mã hoặc chữ tiếng Việt như cũ. Chỉ phần hiển thị được dịch, nên đơn đặt bằng tiếng Anh
+hay tiếng Trung vẫn hiện đúng tiếng Việt ở trang quản trị và trong tệp Excel.
+
+### Thêm hoặc sửa câu dịch
+
+Toàn bộ chữ nằm trong `frontend/src/i18n/messages.js`, gồm ba bảng `vi`, `en`, `zh` dùng chung
+khoá. Muốn thêm câu mới thì viết bảng `vi` trước; bảng nào thiếu khoá sẽ tự lùi về tiếng Việt.
+Câu lỗi từ máy chủ được dịch trong `frontend/src/i18n/server.js`. Bản tiếng Trung dùng chữ giản
+thể. Nếu có người đọc tiếng Trung hoặc tiếng Anh, nên nhờ họ đọc soát lại một lượt.
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

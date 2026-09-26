@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useI18n } from '../i18n/index.jsx';
 
 /**
  * Ô nhập mật khẩu kèm nút Hiện/Ẩn nằm ngay trong ô.
@@ -9,7 +10,8 @@ import { useState } from 'react';
  */
 export default function PasswordInput({ className = '', ...props }) {
   const [shown, setShown] = useState(false);
-  const action = shown ? 'Ẩn mật khẩu' : 'Hiện mật khẩu';
+  const { t } = useI18n();
+  const action = shown ? t('password.hideAria') : t('password.showAria');
 
   return (
     <div className="password-field">
@@ -26,7 +28,7 @@ export default function PasswordInput({ className = '', ...props }) {
         aria-label={action}
         title={action}
       >
-        {shown ? 'Ẩn' : 'Hiện'}
+        {shown ? t('password.hide') : t('password.show')}
       </button>
     </div>
   );

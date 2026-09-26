@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
-import { api, DELIVERY_AREA_LABEL, isPhone, mentionsOtherProvince } from '../api';
+import { api, isPhone, mentionsOtherProvince } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useI18n } from '../i18n/index.jsx';
+
+// Nhãn lưu trong cơ sở dữ liệu luôn là tiếng Việt; chỉ chữ hiển thị được dịch.
+const ADDRESS_LABELS = ['Nhà riêng', 'Văn phòng', 'Nhà người thân', 'Khác'];
 
 const blankAddress = (user) => ({
   label: 'Nhà riêng',
@@ -14,6 +18,8 @@ const detailOnly = (address) => String(address || '').replace(/,?\s*Bắc Ninh\s
 
 export default function AddressBook({ selectable = false, selectedId = null, onSelect }) {
   const { user } = useAuth();
+  const { t } = useI18n();
+  const labelText = (label) => (ADDRESS_LABELS.includes(label) ? t(`addressLabel.${label}`) : label);
   const [addresses, setAddresses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -77,12 +83,12 @@ export default function AddressBook({ selectable = false, selectedId = null, onS
 
   const validate = () => {
     const errors = {};
-    if (form.receiver_name.trim().length < 2) errors.receiver_name = 'Nhập tên người nhận.';
-    if (!isPhone(form.phone)) errors.phone = 'Số điện thoại không hợp lệ (ví dụ 0912345678).';
+    if (form.receiver_name.trim().length < 2) errors.receiver_name = t('address.errName');
+    if (!isPhone(form.phone)) errors.phone = t('address.errPhone');
     if (form.address.trim().length < 8) {
-      errors.address = 'Nhập số nhà, đường/thôn và phường/xã.';
+      errors.address = t('address.errDetail');
     } else if (mentionsOtherProvince(form.address)) {
-      errors.address = `Cửa hàng chỉ giao trong tỉnh ${DELIVERY_AREA_LABEL}.`;
+      errors.address = t('address.errArea');
     }
     return errors;
   };
@@ -125,7 +131,7 @@ export default function AddressBook({ selectable = false, selectedId = null, onS
   };
 
   const remove = async (item) => {
-    if (!window.confirm(`Xoá địa chỉ “${item.label}”?`)) return;
+    if (!window.confirm(t('address.confirmDelete', { label: labelText(item.label) }))) return;
     setBusy(true);
     setError('');
     try {
@@ -140,18 +146,18 @@ export default function AddressBook({ selectable = false, selectedId = null, onS
   };
 
   if (loading) {
-    return <div className="loading-state address-loading"><span></span>Đang tải sổ địa chỉ…</div>;
+    return <div className="loading-state address-loading"><span></span>{t('address.loading')}</div>;
   }
 
   return (
     <div className="address-book">
       <div className="address-toolbar">
         <div>
-          <strong>{selectable ? 'Chọn địa chỉ nhận hàng' : 'Địa chỉ của tôi'}</strong>
-          <small>{addresses.length}/10 địa chỉ đã lưu</small>
+          <strong>{selectable ? t('address.choose') : t('address.mine')}</strong>
+          <small>{t('address.count', { n: addresses.length })}</small>
         </div>
         <button type="button" className="btn btn-secondary" onClick={openCreate} disabled={busy || addresses.length >= 10}>
-          + Thêm địa chỉ
+          {t('address.add')}
         </button>
       </div>
 
@@ -160,8 +166,8 @@ export default function AddressBook({ selectable = false, selectedId = null, onS
       {addresses.length === 0 ? (
         <button type="button" className="address-empty" onClick={openCreate}>
           <span aria-hidden="true">⌖</span>
-          <strong>Thêm địa chỉ giao hàng đầu tiên</strong>
-          <small>Địa chỉ sẽ được lưu cho những lần mua sau.</small>
+          <strong>{t('address.firstTitle')}</strong>
+          <small>{t('address.firstBody')}</small>
         </button>
       ) : (
         <div className="address-list">
@@ -170,7 +176,7 @@ export default function AddressBook({ selectable = false, selectedId = null, onS
             return (
               <article className={`address-card${selectable ? ' selectable' : ''}${selected ? ' selected' : ''}`} key={item.id}>
                 {selectable && (
-                  <button type="button" className="address-select" onClick={() => onSelect?.(item)} aria-label={`Chọn địa chỉ ${item.label}`}>
+                  <button type="button" className="address-select" onClick={() => onSelect?.(item)} aria-label={t('address.selectAria', { label: labelText(item.label) })}>
                     <span className="address-radio" aria-hidden="true">{selected ? '●' : ''}</span>
                   </button>
                 )}
@@ -180,14 +186,14 @@ export default function AddressBook({ selectable = false, selectedId = null, onS
                   </div>
                   <p>{item.address}</p>
                   <div className="address-badges">
-                    <span>{item.label}</span>
-                    {!!item.is_default && <span className="default-badge">Mặc định</span>}
+                    <span>{labelText(item.label)}</span>
+                    {!!item.is_default && <span className="default-badge">{t('address.default')}</span>}
                   </div>
                 </div>
                 <div className="address-actions">
-                  <button type="button" onClick={() => openEdit(item)} disabled={busy}>Sửa</button>
-                  {!item.is_default && <button type="button" onClick={() => setDefault(item)} disabled={busy}>Đặt mặc định</button>}
-                  <button type="button" className="danger-link" onClick={() => remove(item)} disabled={busy}>Xoá</button>
+                  <button type="button" onClick={() => openEdit(item)} disabled={busy}>{t('address.edit')}</button>
+                  {!item.is_default && <button type="button" onClick={() => setDefault(item)} disabled={busy}>{t('address.makeDefault')}</button>}
+                  <button type="button" className="danger-link" onClick={() => remove(item)} disabled={busy}>{t('address.delete')}</button>
                 </div>
               </article>
             );
@@ -200,22 +206,22 @@ export default function AddressBook({ selectable = false, selectedId = null, onS
           <section className="address-modal" role="dialog" aria-modal="true" aria-labelledby="address-modal-title">
             <div className="form-header">
               <div>
-                <h2 id="address-modal-title">{editingId ? 'Cập nhật địa chỉ' : 'Địa chỉ mới'}</h2>
-                <p>Thông tin này chỉ dùng để giao hàng, không nằm trong form đăng ký.</p>
+                <h2 id="address-modal-title">{editingId ? t('address.updateTitle') : t('address.newTitle')}</h2>
+                <p>{t('address.formHint')}</p>
               </div>
-              <button type="button" className="icon-close" onClick={closeForm} aria-label="Đóng">×</button>
+              <button type="button" className="icon-close" onClick={closeForm} aria-label={t('common.close')}>×</button>
             </div>
 
             {error && <p className="alert error" role="alert">{error}</p>}
             <form onSubmit={save} noValidate>
               <div className="row">
-                <label>Họ và tên <b>*</b>
+                <label>{t('address.fullName')} <b>*</b>
                   <input className="input" value={form.receiver_name}
                          onChange={(e) => setForm({ ...form, receiver_name: e.target.value })}
                          autoComplete="name" autoFocus aria-invalid={!!fieldErrors.receiver_name} />
                   {fieldErrors.receiver_name && <small className="err">{fieldErrors.receiver_name}</small>}
                 </label>
-                <label>Số điện thoại <b>*</b>
+                <label>{t('address.phone')} <b>*</b>
                   <input className="input" value={form.phone} inputMode="tel" autoComplete="tel"
                          onChange={(e) => setForm({ ...form, phone: e.target.value })}
                          aria-invalid={!!fieldErrors.phone} />
@@ -223,33 +229,32 @@ export default function AddressBook({ selectable = false, selectedId = null, onS
                 </label>
               </div>
 
-              <label>Địa chỉ chi tiết <b>*</b>
+              <label>{t('address.detail')} <b>*</b>
                 <textarea className="input" rows={3} value={form.address} autoComplete="street-address"
                           onChange={(e) => setForm({ ...form, address: e.target.value })}
-                          placeholder="Số nhà, đường/thôn, phường/xã" aria-invalid={!!fieldErrors.address} />
+                          placeholder={t('address.detailPlaceholder')} aria-invalid={!!fieldErrors.address} />
                 {fieldErrors.address
                   ? <small className="err">{fieldErrors.address}</small>
-                  : <small className="field-help">Khu vực giao hàng: tỉnh {DELIVERY_AREA_LABEL}.</small>}
+                  : <small className="field-help">{t('address.area')}</small>}
               </label>
 
-              <label>Loại địa chỉ
+              <label>{t('address.type')}
                 <select className="input" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })}>
-                  <option>Nhà riêng</option>
-                  <option>Văn phòng</option>
-                  <option>Nhà người thân</option>
-                  <option>Khác</option>
+                  {ADDRESS_LABELS.map((label) => (
+                    <option key={label} value={label}>{labelText(label)}</option>
+                  ))}
                 </select>
               </label>
 
               <label className="checkbox-label">
                 <input type="checkbox" checked={form.is_default}
                        onChange={(e) => setForm({ ...form, is_default: e.target.checked })} />
-                Đặt làm địa chỉ mặc định
+                {t('address.setDefault')}
               </label>
 
               <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={closeForm} disabled={busy}>Trở lại</button>
-                <button className="btn btn-primary" disabled={busy}>{busy ? 'Đang lưu…' : 'Hoàn thành'}</button>
+                <button type="button" className="btn btn-secondary" onClick={closeForm} disabled={busy}>{t('address.back')}</button>
+                <button className="btn btn-primary" disabled={busy}>{busy ? t('common.saving') : t('address.done')}</button>
               </div>
             </form>
           </section>

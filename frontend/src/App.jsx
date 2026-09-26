@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+import { useI18n } from './i18n/index.jsx';
 
 import Home from './pages/Home.jsx';
 import Login from './pages/Login.jsx';
@@ -14,33 +15,40 @@ const Admin = lazy(() => import('./pages/Admin.jsx'));
 const Retail = lazy(() => import('./pages/Retail.jsx'));
 import NotFound from './pages/NotFound.jsx';
 
+// Khoá dịch cho tiêu đề tab của từng trang khách; trang quản trị giữ tiếng Việt.
 const PAGE_TITLES = {
-  '/': 'Chọn gạo',
-  '/gio-hang': 'Giỏ hàng',
-  '/dat-hang': 'Đặt hàng',
-  '/don-hang': 'Đơn hàng của tôi',
-  '/tai-khoan': 'Tài khoản',
-  '/dang-nhap': 'Đăng nhập',
-  '/dang-ky': 'Đăng ký',
+  '/': 'title.home',
+  '/gio-hang': 'title.cart',
+  '/dat-hang': 'title.checkout',
+  '/don-hang': 'title.orders',
+  '/tai-khoan': 'title.account',
+  '/dang-nhap': 'title.login',
+  '/dang-ky': 'title.register',
+};
+const ADMIN_TITLES = {
   '/quan-tri': 'Quản trị cửa hàng',
   '/quan-tri/ban-hang': 'Bán hàng tại quầy',
 };
 
 export default function App() {
   const location = useLocation();
+  const { t } = useI18n();
   const isAdminArea = location.pathname.startsWith('/quan-tri');
 
-  // Cuộn lên đầu và đổi tiêu đề tab khi chuyển trang — giống trải nghiệm ứng dụng.
+  // Cuộn lên đầu khi chuyển trang — giống trải nghiệm ứng dụng.
+  useEffect(() => { window.scrollTo(0, 0); }, [location.pathname]);
+
+  // Tiêu đề tab đổi theo trang và theo ngôn ngữ đang chọn.
   useEffect(() => {
-    window.scrollTo(0, 0);
-    const page = PAGE_TITLES[location.pathname];
-    document.title = page ? `${page} · Gạo Kinh Bắc` : 'Gạo Kinh Bắc — Gạo ngon giao tận nhà tại Bắc Ninh';
-  }, [location.pathname]);
+    const key = PAGE_TITLES[location.pathname];
+    const page = ADMIN_TITLES[location.pathname] || (key && t(key));
+    document.title = page ? `${page} · Gạo Kinh Bắc` : t('title.default');
+  }, [location.pathname, t]);
 
   if (isAdminArea) {
     return (
       <main className="admin-main">
-        <Suspense fallback={<div className="loading-state" role="status"><span></span>Đang tải khu vực quản trị…</div>}>
+        <Suspense fallback={<div className="loading-state" role="status"><span></span>{t('common.adminLoading')}</div>}>
         <Routes>
           <Route
             path="/quan-tri"
@@ -59,7 +67,7 @@ export default function App() {
 
   return (
     <>
-      <a className="skip-link" href="#noi-dung">Bỏ qua phần điều hướng</a>
+      <a className="skip-link" href="#noi-dung">{t('nav.skip')}</a>
       <Navbar />
       <main className="container" id="noi-dung">
         <Routes>
@@ -85,7 +93,7 @@ export default function App() {
       <footer className="footer">
         <div className="container footer-inner">
           <strong>Gạo Kinh Bắc</strong>
-          <span>Gạo ngon chọn kỹ · Giao tận nhà tại Bắc Ninh</span>
+          <span>{t('footer.tagline')}</span>
           <span>© {new Date().getFullYear()}</span>
         </div>
       </footer>

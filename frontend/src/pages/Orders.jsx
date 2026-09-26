@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { api, formatDateTime, formatVND, STATUS_LABEL, DELIVERY_SLOT_LABEL } from '../api';
+import { api, formatDateTime, formatVND, DELIVERY_SLOTS } from '../api';
+import { useI18n } from '../i18n/index.jsx';
 
-const PAYMENT_LABEL = {
-  cod: 'Thanh toán khi nhận hàng',
-  bank: 'Chuyển khoản — cửa hàng gửi thông tin sau khi xác nhận',
-};
+const SLOT_TIME = Object.fromEntries(DELIVERY_SLOTS.map(([code, , time]) => [code, time]));
+const STATUSES = ['pending', 'confirmed', 'shipping', 'completed', 'cancelled'];
+const PAYMENTS = ['cod', 'bank'];
 
 export default function Orders() {
   const [orders, setOrders] = useState([]);
@@ -14,6 +14,7 @@ export default function Orders() {
   const [actionError, setActionError] = useState('');
   const [busyId, setBusyId] = useState(null);
   const { justOrdered, code: newCode } = useLocation().state || {};
+  const { t, unit } = useI18n();
 
   const load = useCallback(() => {
     setLoading(true);
@@ -27,7 +28,7 @@ export default function Orders() {
   useEffect(() => { load(); }, [load]);
 
   const cancelOrder = async (order) => {
-    if (!window.confirm(`Huỷ đơn ${order.code || `#${order.id}`}? Số lượng gạo sẽ được trả lại cho cửa hàng.`)) return;
+    if (!window.confirm(t('orders.confirmCancel', { code: order.code || `#${order.id}` }))) return;
     setBusyId(order.id);
     setActionError('');
     try {
@@ -43,15 +44,15 @@ export default function Orders() {
   };
 
   if (loading) {
-    return <div className="loading-state page-loading" role="status"><span></span>Đang tải đơn hàng…</div>;
+    return <div className="loading-state page-loading" role="status"><span></span>{t('orders.loading')}</div>;
   }
 
   if (loadError) {
     return (
       <div className="empty empty-page">
-        <h1>Chưa tải được đơn hàng</h1>
+        <h1>{t('orders.loadError')}</h1>
         <p>{loadError}</p>
-        <button className="btn btn-primary btn-large" onClick={load}>Thử lại</button>
+        <button className="btn btn-primary btn-large" onClick={load}>{t('common.retry')}</button>
       </div>
     );
   }
@@ -62,14 +63,14 @@ export default function Orders() {
         <div className="success-banner" role="status">
           <span aria-hidden="true">✓</span>
           <div>
-            <strong>Đặt hàng thành công!{newCode && <> Mã đơn của bạn: <span className="order-code">{newCode}</span></>}</strong>
-            <p>Cửa hàng sẽ gọi xác nhận địa chỉ và khung giờ giao. Giao hàng miễn phí.</p>
+            <strong>{t('orders.success')}{newCode && <> {t('orders.yourCode')} <span className="order-code">{newCode}</span></>}</strong>
+            <p>{t('orders.successBody')}</p>
           </div>
         </div>
       )}
       <div className="page-heading">
-        <div><p className="eyebrow dark"><span></span>Theo dõi mua hàng</p><h1>Đơn hàng của tôi</h1></div>
-        <Link to="/" className="btn btn-secondary">Mua thêm gạo</Link>
+        <div><p className="eyebrow dark"><span></span>{t('orders.eyebrow')}</p><h1>{t('orders.title')}</h1></div>
+        <Link to="/" className="btn btn-secondary">{t('orders.shopMore')}</Link>
       </div>
 
       {actionError && <div className="alert error" role="alert">{actionError}</div>}
@@ -77,9 +78,9 @@ export default function Orders() {
       {orders.length === 0 ? (
         <div className="empty empty-page">
           <span className="empty-icon" aria-hidden="true">📦</span>
-          <h2>Bạn chưa có đơn hàng nào</h2>
-          <p>Các đơn đã đặt sẽ hiện ở đây để bạn theo dõi từng bước giao hàng.</p>
-          <Link className="btn btn-primary btn-large" to="/">Mua gạo ngay</Link>
+          <h2>{t('orders.emptyTitle')}</h2>
+          <p>{t('orders.emptyBody')}</p>
+          <Link className="btn btn-primary btn-large" to="/">{t('orders.shopNow')}</Link>
         </div>
       ) : (
         <div className="orders-list">
@@ -87,18 +88,18 @@ export default function Orders() {
             <article key={order.id} className="order order-customer">
               <header>
                 <div>
-                  <span className="order-label">Đơn hàng</span>
+                  <span className="order-label">{t('orders.order')}</span>
                   <strong className="order-code">{order.code || `#${order.id}`}</strong>
                   <small>{formatDateTime(order.created_at)}</small>
                 </div>
-                <span className={`status ${order.status}`}>{STATUS_LABEL[order.status] || order.status}</span>
+                <span className={`status ${order.status}`}>{STATUSES.includes(order.status) ? t(`status.${order.status}`) : order.status}</span>
               </header>
               <ul className="order-items">
                 {order.items.map((item) => (
                   <li key={item.id}>
                     <span>
                       <strong>{item.product_name}</strong>
-                      <small>{item.quantity} {item.unit} × {formatVND(item.price)}</small>
+                      <small>{t('line.qty', { qty: item.quantity, unit: unit(item.unit), price: formatVND(item.price) })}</small>
                     </span>
                     <span>{formatVND(item.price * item.quantity)}</span>
                   </li>
@@ -109,14 +110,16 @@ export default function Orders() {
                 <div>
                   <strong>{order.receiver_name} · {order.phone}</strong>
                   <p>{order.address}</p>
-                  {order.delivery_slot && (
-                    <small>Giao {DELIVERY_SLOT_LABEL[order.delivery_slot]} · miễn phí</small>
+                  {SLOT_TIME[order.delivery_slot] && (
+                    <small>{t('orders.delivery', {
+                      slot: `${t(`slot.${order.delivery_slot}`)} (${SLOT_TIME[order.delivery_slot]})`,
+                    })}</small>
                   )}
-                  <small>{PAYMENT_LABEL[order.payment_method] || order.payment_method}</small>
+                  <small>{PAYMENTS.includes(order.payment_method) ? t(`orders.${order.payment_method}`) : order.payment_method}</small>
                   {order.points_earned > 0 && (
-                    <small>Đã cộng {order.points_earned} điểm tích luỹ</small>
+                    <small>{t('orders.pointsEarned', { n: order.points_earned })}</small>
                   )}
-                  {order.note && <small>Ghi chú: {order.note}</small>}
+                  {order.note && <small>{t('orders.note', { note: order.note })}</small>}
                 </div>
               </div>
               <footer>
@@ -128,23 +131,23 @@ export default function Orders() {
                       disabled={busyId === order.id}
                       onClick={() => cancelOrder(order)}
                     >
-                      {busyId === order.id ? 'Đang huỷ…' : 'Huỷ đơn hàng'}
+                      {busyId === order.id ? t('orders.cancelling') : t('orders.cancel')}
                     </button>
                   ) : (
                     <span className="order-hint">
                       {order.status === 'cancelled'
-                        ? 'Đơn đã huỷ, số lượng đã trả lại cửa hàng.'
+                        ? t('orders.hintCancelled')
                         : order.status === 'completed'
-                          ? 'Cảm ơn bạn đã mua gạo của cửa hàng.'
-                          : 'Cần thay đổi? Vui lòng liên hệ cửa hàng.'}
+                          ? t('orders.hintCompleted')
+                          : t('orders.hintOther')}
                     </span>
                   )}
                 </div>
                 <div className="total">
                   {order.discount > 0 && (
-                    <small className="order-discount">Đã giảm {formatVND(order.discount)}</small>
+                    <small className="order-discount">{t('orders.discounted', { amount: formatVND(order.discount) })}</small>
                   )}
-                  Tổng tiền hàng <strong>{formatVND(order.total)}</strong>
+                  {t('orders.total')} <strong>{formatVND(order.total)}</strong>
                 </div>
               </footer>
             </article>
