@@ -709,6 +709,77 @@ const guestToken = (await call('/auth/register', {
   check('Giới hạn phân trang không hợp lệ bị chặn', (await call('/admin/orders?limit=101', { token: admin })).status === 400);
 }
 
+/* --- Bộ lọc danh mục: giảm giá, gạo nhà hàng, thực phẩm khô --- */
+{
+  const made = [];
+  const create = async (body) => {
+    const r = await call('/admin/products', { method: 'POST', token: admin, body });
+    if (r.data.product) made.push(r.data.product.id);
+    return r;
+  };
+
+  // Gạo đang giảm giá: giá gốc cao hơn giá bán.
+  const sale = await create({ name: `Gạo giảm giá ${suffix}`, price: 90000, original_price: 120000, unit: 'túi 5kg', stock: 10 });
+  check('Tạo sản phẩm có giá gốc (201)', sale.status === 201, `status=${sale.status} ${JSON.stringify(sale.data).slice(0, 120)}`);
+  check('Lưu đúng giá gốc', sale.data.product?.original_price === 120000, String(sale.data.product?.original_price));
+  check('Mặc định nhóm hàng là gạo', sale.data.product?.category === 'gao', String(sale.data.product?.category));
+
+  // Giá gốc không cao hơn giá bán thì bị từ chối.
+  const bad = await create({ name: `Gạo giá gốc sai ${suffix}`, price: 90000, original_price: 90000, unit: 'túi 5kg', stock: 1 });
+  check('Giá gốc bằng giá bán bị từ chối (400)', bad.status === 400 && !!bad.data.errors?.original_price, `status=${bad.status}`);
+
+  // Đồ khô và gạo bao 25kg.
+  const dry = await create({ name: `Nấm hương khô ${suffix}`, price: 80000, unit: 'gói 200g', stock: 5, category: 'do-kho' });
+  check('Tạo sản phẩm nhóm thực phẩm khô', dry.status === 201 && dry.data.product?.category === 'do-kho', JSON.stringify(dry.data).slice(0, 120));
+  const bag = await create({ name: `Gạo bao nhà hàng ${suffix}`, price: 400000, unit: 'bao 25kg', stock: 5 });
+  check('Bao 25kg tự nhận 25kg', bag.data.product?.weight_kg === 25, String(bag.data.product?.weight_kg));
+
+  const bogus = await create({ name: `Nhóm lạ ${suffix}`, price: 10000, unit: 'kg', stock: 1, category: 'dien-thoai' });
+  check('Nhóm hàng lạ bị từ chối (400)', bogus.status === 400, `status=${bogus.status}`);
+
+  const ids = async (group) => (await call(`/products?group=${group}`)).data.products.map((p) => p.id);
+  const saleIds = await ids('giam-gia');
+  const restaurantIds = await ids('nha-hang');
+  const dryIds = await ids('do-kho');
+
+  check('Lọc "Đang giảm giá" có sản phẩm giảm giá', saleIds.includes(sale.data.product.id));
+  check('Lọc "Đang giảm giá" không lẫn hàng giá thường', !saleIds.includes(bag.data.product.id) && !saleIds.includes(dry.data.product.id));
+  check('Lọc "Gạo nhà hàng" có gạo bao 25kg', restaurantIds.includes(bag.data.product.id));
+  check('Lọc "Gạo nhà hàng" không lẫn túi 5kg hay đồ khô', !restaurantIds.includes(sale.data.product.id) && !restaurantIds.includes(dry.data.product.id));
+  check('Lọc "Thực phẩm khô" chỉ có đồ khô', dryIds.includes(dry.data.product.id) && !dryIds.includes(bag.data.product.id));
+
+  const odd = await call('/products?group=constructor');
+  check('Nhóm lọc lạ bị từ chối (400)', odd.status === 400, `status=${odd.status}`);
+
+  const publicList = JSON.stringify((await call('/products?group=giam-gia')).data);
+  check('Danh mục công khai trả giá gốc để hiện nhãn giảm giá', publicList.includes('original_price'));
+  check('Danh mục công khai vẫn không lộ giá nhập', !publicList.includes('cost_price'));
+
+  // Khách đặt sản phẩm đang giảm giá: tiền hàng tính theo giá bán, không phải giá gốc.
+  const order = await call('/orders', {
+    method: 'POST', token: guestToken,
+    body: {
+      receiver_name: 'Khách Mua Hàng Giảm Giá', phone: phoneOf(6),
+      address: 'Số 12, đường Lý Thái Tổ, phường Suối Hoa', delivery_area: 'bac-ninh',
+      items: [{ product_id: sale.data.product.id, quantity: 2 }],
+    },
+  });
+  check('Đặt sản phẩm giảm giá tính theo giá bán (2 × 90.000đ)', order.data.order?.subtotal === 180000,
+    `status=${order.status} subtotal=${order.data.order?.subtotal}`);
+
+  // Sửa giá bán lên cao hơn giá gốc cũ: phải bị chặn vì nhãn giảm giá sẽ sai.
+  const raise = await call(`/admin/products/${sale.data.product.id}`, { method: 'PUT', token: admin, body: { price: 130000 } });
+  check('Nâng giá bán vượt giá gốc cũ bị từ chối (400)', raise.status === 400, `status=${raise.status}`);
+  const clear = await call(`/admin/products/${sale.data.product.id}`, { method: 'PUT', token: admin, body: { original_price: '' } });
+  check('Xoá giá gốc là thôi giảm giá', clear.status === 200 && clear.data.product?.original_price === 0, JSON.stringify(clear.data).slice(0, 120));
+  check('Thôi giảm giá thì rời khỏi bộ lọc giảm giá', !(await ids('giam-gia')).includes(sale.data.product.id));
+
+  // Khách vẫn trả đúng giá bán, không phải giá gốc.
+  for (const id of made) {
+    await call(`/admin/products/${id}/permanent`, { method: 'DELETE', token: admin });
+  }
+}
+
 console.log(results.join('\n'));
 console.log(`\n${pass} PASS · ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import ImagePicker from '../components/ImagePicker.jsx';
-import { api, formatDateTime, formatVND, pointsFor, STATUS_LABEL, DELIVERY_SLOT_LABEL } from '../api';
+import { api, salePercent, PRODUCT_CATEGORIES, formatDateTime, formatVND, pointsFor, STATUS_LABEL, DELIVERY_SLOT_LABEL } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
 import RevenueReport from '../components/RevenueReport.jsx';
 import CustomerManager from '../components/CustomerManager.jsx';
@@ -10,7 +10,7 @@ import ActivityLog from '../components/ActivityLog.jsx';
 import ProductImage from '../components/ProductImage.jsx';
 import OrdersExportButton from '../components/OrdersExportButton.jsx';
 
-const EMPTY = { name: '', origin: '', price: '', cost_price: '', unit: 'kg', weight_kg: '', stock: '', description: '', image_url: '' };
+const EMPTY = { name: '', origin: '', price: '', original_price: '', cost_price: '', category: 'gao', unit: 'kg', weight_kg: '', stock: '', description: '', image_url: '' };
 const FILTERS = [
   ['all', 'Tất cả'], ['pending', 'Chờ xác nhận'], ['confirmed', 'Đã xác nhận'],
   ['shipping', 'Đang giao'], ['completed', 'Hoàn thành'], ['cancelled', 'Đã huỷ'],
@@ -119,6 +119,12 @@ export default function Admin() {
     if (!Number.isFinite(price) || !Number.isInteger(price) || price <= 0) {
       errors.price = 'Giá bán phải là số nguyên dương, đơn vị đồng (ví dụ 32000).';
     }
+    const original = form.original_price === '' ? 0 : Number(form.original_price);
+    if (!Number.isInteger(original) || original < 0) {
+      errors.original_price = 'Giá gốc phải là số nguyên, đơn vị đồng.';
+    } else if (original > 0 && original <= Number(form.price)) {
+      errors.original_price = 'Giá gốc phải cao hơn giá bán. Để trống nếu không giảm giá.';
+    }
     if (!Number.isFinite(stock) || !Number.isInteger(stock) || stock < 0) {
       errors.stock = 'Tồn kho phải là số nguyên từ 0 trở lên.';
     }
@@ -147,6 +153,7 @@ export default function Admin() {
         ...form,
         price: Number(form.price),
         cost_price: form.cost_price === '' ? 0 : Number(form.cost_price),
+        original_price: form.original_price === '' ? 0 : Number(form.original_price),
         stock: form.stock === '' ? 0 : Number(form.stock),
       };
       if (editingId) {
@@ -172,6 +179,7 @@ export default function Admin() {
     setForm({
       name: product.name, origin: product.origin || '', price: product.price,
       cost_price: product.cost_price || '', unit: product.unit,
+      original_price: product.original_price || '', category: product.category || 'gao',
       weight_kg: product.weight_kg || '',
       stock: product.stock, description: product.description || '', image_url: product.image_url || '',
     });
@@ -399,11 +407,27 @@ export default function Admin() {
                             {formErrors.name && <small className="err">{formErrors.name}</small>}
                           </label>
                           <label>Xuất xứ<input className="input" name="origin" value={form.origin} onChange={onChange} placeholder="Ví dụ: Sóc Trăng" /></label>
+                          <label>Nhóm hàng
+                            <select className="input" name="category" value={form.category} onChange={onChange} aria-invalid={!!formErrors.category}>
+                              {PRODUCT_CATEGORIES.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+                            </select>
+                            {formErrors.category
+                              ? <small className="err">{formErrors.category}</small>
+                              : <small className="field-help">Chọn "Thực phẩm khô" để hiện trong bộ lọc đồ khô.</small>}
+                          </label>
                         </div>
                         <div className="row">
                           <label>Giá bán (đồng) <b>*</b>
                             <input className="input" type="number" name="price" value={form.price} onChange={onChange} required min="1" step="1" inputMode="numeric" aria-invalid={!!formErrors.price} />
                             {formErrors.price && <small className="err">{formErrors.price}</small>}
+                          </label>
+                          <label>Giá gốc (đồng) <span className="optional">Khi giảm giá</span>
+                            <input className="input" type="number" name="original_price" value={form.original_price} onChange={onChange} min="0" step="1" inputMode="numeric" placeholder="Để trống nếu không giảm" aria-invalid={!!formErrors.original_price} />
+                            {formErrors.original_price
+                              ? <small className="err">{formErrors.original_price}</small>
+                              : salePercent({ price: form.price, original_price: form.original_price }) > 0
+                                ? <small className="field-help sale-help">Khách thấy nhãn −{salePercent({ price: form.price, original_price: form.original_price })}% và giá gốc bị gạch.</small>
+                                : <small className="field-help">Nhập cao hơn giá bán để hiện nhãn giảm giá. Khách vẫn trả đúng giá bán.</small>}
                           </label>
                           <label>Giá nhập (đồng) <span className="optional">Chỉ cửa hàng thấy</span>
                             <input className="input" type="number" name="cost_price" value={form.cost_price} onChange={onChange} min="0" step="1" inputMode="numeric" placeholder="Ví dụ: 120000" aria-invalid={!!formErrors.cost_price} />
@@ -475,6 +499,14 @@ export default function Admin() {
                               <span className="margin-tag"> · lãi {formatVND(product.price - product.cost_price)}</span>
                             )}
                           </p>
+                          {(salePercent(product) > 0 || product.category === 'do-kho') && (
+                            <p className="product-tags">
+                              {salePercent(product) > 0 && (
+                                <span className="admin-sale-tag">Giảm {salePercent(product)}% · giá gốc {formatVND(product.original_price)}</span>
+                              )}
+                              {product.category === 'do-kho' && <span className="admin-category-tag">Thực phẩm khô</span>}
+                            </p>
+                          )}
                         </div>
                         <div className="inventory">
                           <span>Còn trong kho</span>

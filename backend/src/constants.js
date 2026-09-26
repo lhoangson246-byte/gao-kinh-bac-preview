@@ -23,6 +23,32 @@ export const ALLOWED_TRANSITIONS = {
 };
 
 /** Giới hạn dữ liệu đầu vào để tránh đơn hàng bất thường. */
+/* ------------------------------------------------------------------ *
+ * Nhóm hàng và bộ lọc danh mục cho khách
+ * ------------------------------------------------------------------ */
+
+/** Nhóm hàng cửa hàng tự chọn cho từng sản phẩm. */
+export const PRODUCT_CATEGORIES = {
+  gao: 'Gạo',
+  'do-kho': 'Thực phẩm khô',
+};
+export const PRODUCT_CATEGORY_CODES = Object.keys(PRODUCT_CATEGORIES);
+
+/** Gạo đóng bao từ mức này trở lên được xếp vào nhóm "gạo cho nhà hàng". */
+export const RESTAURANT_MIN_KG = 25;
+
+/**
+ * Bộ lọc khách chọn ở trang chủ. Hai nhóm tự suy ra từ dữ liệu sẵn có nên cửa
+ * hàng không phải gắn tay: "giảm giá" khi giá gốc cao hơn giá bán, "nhà hàng"
+ * khi là gạo đóng bao từ 25kg. Riêng "thực phẩm khô" dựa vào nhóm hàng.
+ */
+export const CATALOG_GROUPS = {
+  'giam-gia': 'original_price > price AND price > 0',
+  'nha-hang': `category = 'gao' AND weight_kg >= ${RESTAURANT_MIN_KG}`,
+  'do-kho': "category = 'do-kho'",
+};
+export const CATALOG_GROUP_CODES = Object.keys(CATALOG_GROUPS);
+
 export const LIMITS = {
   name: 120,
   email: 160,

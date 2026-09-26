@@ -4,7 +4,9 @@ import db from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { restoreStockForOrder } from './orders.js';
 import { creditPoints, loyaltyPhoneForOrder } from '../loyalty.js';
-import { ALLOWED_TRANSITIONS, ORDER_STATUSES, LIMITS, localDate, parseWeightKg } from '../constants.js';
+import {
+  ALLOWED_TRANSITIONS, ORDER_STATUSES, LIMITS, localDate, parseWeightKg, PRODUCT_CATEGORY_CODES,
+} from '../constants.js';
 import { HttpError, cleanImageUrl, cleanText, toInteger } from '../validate.js';
 import { writeAdminAudit } from '../audit.js';
 import { listAdminOrders } from '../order-lists.js';
@@ -167,8 +169,38 @@ function readProductInput(body, { partial }) {
 
   if (has('is_active')) data.is_active = body.is_active ? 1 : 0;
 
+  if (!partial || has('category')) {
+    const category = body?.category ?? 'gao';
+    if (!PRODUCT_CATEGORY_CODES.includes(category)) errors.category = 'Nhóm hàng không hợp lệ.';
+    else data.category = category;
+  }
+
+  // Giá gốc trước khi giảm; 0 nghĩa là không giảm giá. Chỉ để hiện nhãn giảm giá,
+  // khách luôn trả đúng giá bán nên không đổi cách tính tiền ở đâu cả.
+  if (has('original_price')) {
+    const blank = body.original_price === '' || body.original_price == null;
+    if (blank) data.original_price = 0;
+    else {
+      const original = toInteger(body.original_price, { min: 0, max: LIMITS.price });
+      if (original == null) errors.original_price = `Giá gốc phải là số nguyên từ 0 đến ${LIMITS.price} đồng.`;
+      else data.original_price = original;
+    }
+  }
+
   if (Object.keys(errors).length) throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', errors);
   return data;
+}
+
+/**
+ * Giá gốc chỉ có nghĩa khi cao hơn giá bán. Kiểm tra trên giá trị SAU khi gộp
+ * với dữ liệu cũ, vì cửa hàng có thể chỉ sửa một trong hai ô.
+ */
+function assertSalePrice({ price, original_price: original }) {
+  if (original > 0 && original <= price) {
+    throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', {
+      original_price: 'Giá gốc phải cao hơn giá bán. Để trống nếu sản phẩm không giảm giá.',
+    });
+  }
 }
 
 /* ------------------------------------------------------------------ *
@@ -274,15 +306,17 @@ router.get('/stock-entries', (req, res, next) => {
 router.post('/products', (req, res, next) => {
   try {
     const data = readProductInput(req.body, { partial: false });
+    assertSalePrice({ price: data.price, original_price: data.original_price ?? 0 });
     const info = db
       .prepare(
-        `INSERT INTO products (name, description, origin, price, cost_price, unit, weight_kg, stock, image_url, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO products (name, description, origin, price, cost_price, unit, weight_kg, stock,
+                               image_url, is_active, category, original_price)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         data.name, data.description ?? null, data.origin ?? null, data.price,
         data.cost_price ?? 0, data.unit, data.weight_kg ?? 0, data.stock ?? 0,
-        data.image_url ?? null, data.is_active ?? 1,
+        data.image_url ?? null, data.is_active ?? 1, data.category ?? 'gao', data.original_price ?? 0,
       );
     const product = db.prepare('SELECT * FROM products WHERE id = ?').get(info.lastInsertRowid);
     writeAdminAudit(req, {
@@ -305,6 +339,7 @@ router.put('/products/:id', (req, res, next) => {
     const data = readProductInput(req.body, { partial: true });
     const fields = Object.keys(data);
     if (!fields.length) throw new HttpError(400, 'Không có thông tin nào để cập nhật.');
+    assertSalePrice({ ...before, ...data });
 
     const info = db
       .prepare(

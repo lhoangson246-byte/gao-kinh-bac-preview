@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { HttpError, cleanImageUrl } from './validate.js';
-import { LIMITS, ORDER_STATUSES, RETAIL_DISCOUNT_MAX_PERCENT } from './constants.js';
+import {
+  LIMITS, ORDER_STATUSES, RETAIL_DISCOUNT_MAX_PERCENT, PRODUCT_CATEGORY_CODES, CATALOG_GROUP_CODES,
+} from './constants.js';
 
 const obj = (shape) => z.strictObject(shape);
 const text = (max) => z.string().max(max).refine((v) => !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(v));
@@ -35,6 +37,8 @@ const product = {
   image_url: optionalText(LIMITS.imageUrl).refine((v) => !v || cleanImageUrl(v) !== null),
   cost_price: integer(0, LIMITS.price).or(z.literal('')).nullable().optional(), is_active: flag.optional(),
   weight_kg: decimal(0, 1000).or(z.literal('')).nullable().optional(),
+  category: z.enum(PRODUCT_CATEGORY_CODES).optional(),
+  original_price: integer(0, LIMITS.price).or(z.literal('')).nullable().optional(),
 };
 const day = text(10).regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => {
   const d = new Date(`${v}T00:00:00Z`);
@@ -50,7 +54,10 @@ add('auth', 'GET', /^\/me\/?$/);
 add('auth', 'PUT', /^\/me\/?$/, obj({ full_name: name.optional(), phone, address: optionalText(LIMITS.address) }));
 add('auth', 'POST', /^\/logout\/?$/);
 add('auth', 'PUT', /^\/password\/?$/, obj({ current_password: loginPassword, password: newPassword }));
-add('products', 'GET', /^\/?$/, empty, obj({ q: text(LIMITS.name).optional(), in_stock: z.enum(['0', '1']).optional() }));
+add('products', 'GET', /^\/?$/, empty, obj({
+  q: text(LIMITS.name).optional(), in_stock: z.enum(['0', '1']).optional(),
+  group: z.enum(CATALOG_GROUP_CODES).optional(),
+}));
 add('products', 'GET', /^\/[^/]+\/?$/);
 add('addresses', 'GET', /^\/?$/);
 add('addresses', 'POST', /^\/?$/, obj(address));

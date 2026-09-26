@@ -594,5 +594,25 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(residualTestO
   console.log(`✅ Đã dọn ${removed} đơn kiểm thử còn sót sau khi tài khoản bị đổi tên.`);
 }
 
+/* ------------------------------------------------------------------ *
+ * Bộ lọc danh mục cho khách (26/09/2026)
+ * ------------------------------------------------------------------ */
+{
+  const productColumns = db.prepare('PRAGMA table_info(products)').all().map((c) => c.name);
+
+  // Nhóm hàng: mọi sản phẩm cũ đều là gạo; cửa hàng tự đổi khi bán thêm đồ khô.
+  if (!productColumns.includes('category')) {
+    db.exec("ALTER TABLE products ADD COLUMN category TEXT NOT NULL DEFAULT 'gao'");
+    console.log('✅ Đã thêm cột category vào bảng products.');
+  }
+
+  // Giá gốc trước khi giảm. Chỉ để hiển thị nhãn giảm giá: khách luôn trả đúng
+  // cột price, nên đơn hàng và hoá đơn quầy không phải đổi cách tính tiền.
+  if (!productColumns.includes('original_price')) {
+    db.exec('ALTER TABLE products ADD COLUMN original_price INTEGER NOT NULL DEFAULT 0');
+    console.log('✅ Đã thêm cột original_price vào bảng products.');
+  }
+}
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

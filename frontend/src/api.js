@@ -83,10 +83,11 @@ export const api = {
   deleteAddress: (id) => request(`/addresses/${id}`, { method: 'DELETE', auth: true }),
   setDefaultAddress: (id) => request(`/addresses/${id}/default`, { method: 'PATCH', auth: true }),
 
-  products: (q = '', { inStockOnly = false } = {}) => {
+  products: (q = '', { inStockOnly = false, group = '' } = {}) => {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
     if (inStockOnly) params.set('in_stock', '1');
+    if (group) params.set('group', group);
     const query = params.toString();
     return request(`/products${query ? `?${query}` : ''}`);
   },
@@ -253,6 +254,23 @@ export const normalizePhone = (value) => {
 export const isPhone = (value) => normalizePhone(value) !== '';
 
 export const formatVND = (n) => new Intl.NumberFormat('vi-VN').format(Number(n) || 0) + '₫';
+
+/** Nhóm hàng cửa hàng chọn cho từng sản phẩm; khớp PRODUCT_CATEGORIES ở máy chủ. */
+export const PRODUCT_CATEGORIES = [
+  ['gao', 'Gạo'],
+  ['do-kho', 'Thực phẩm khô'],
+];
+
+/**
+ * Phần trăm giảm của một sản phẩm, 0 nếu không giảm. Giảm khi cửa hàng nhập
+ * giá gốc cao hơn giá bán; khách luôn trả đúng giá bán.
+ */
+export function salePercent(product) {
+  const price = Number(product?.price) || 0;
+  const original = Number(product?.original_price) || 0;
+  if (price <= 0 || original <= price) return 0;
+  return Math.max(1, Math.round(((original - price) / original) * 100));
+}
 
 export const formatDateTime = (value) => {
   if (!value) return '';

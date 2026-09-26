@@ -646,6 +646,49 @@ Log `request_error` phía máy chủ nay ghi thêm phương thức, đường d�
 của driver (tối đa 200 ký tự, không có giá trị tham số). Nếu Vercel còn báo lỗi máy
 chủ ở đâu đó, mở **Vercel → Logs**, tìm `request_error` là thấy ngay nguyên nhân.
 
+## Bộ lọc danh mục và 3 sản phẩm một hàng (26/09/2026)
+
+### Lưới sản phẩm
+
+Danh mục hiện **3 sản phẩm một hàng** ở mọi cỡ màn hình. Trên điện thoại mỗi thẻ chỉ giữ
+ảnh, tên (tối đa 2 dòng), giá và nút thêm; mô tả và xuất xứ được ẩn để vừa khung. Ảnh
+WebP được khai báo lại kích thước cho lưới 3 cột nên điện thoại tải bản nhỏ hơn.
+
+### Ba bộ lọc nhóm mặt hàng
+
+Nằm ở hàng chip trên cùng, phía trên các chip loại gạo cũ.
+
+| Bộ lọc | Sản phẩm nào hiện | Cửa hàng cần làm gì |
+| --- | --- | --- |
+| **Đang giảm giá** | Giá gốc cao hơn giá bán | Nhập ô *Giá gốc* khi sửa sản phẩm |
+| **Gạo nhà hàng · bao 25kg** | Nhóm Gạo, khối lượng từ 25kg | Không cần — tự nhận từ đơn vị "bao 25kg" |
+| **Thực phẩm khô** | Nhóm hàng là Thực phẩm khô | Chọn *Nhóm hàng* khi thêm sản phẩm |
+
+Máy chủ lọc theo mã nhóm cố định trong `CATALOG_GROUPS` (`backend/src/constants.js`),
+không ghép chữ khách gửi vào câu SQL; mã lạ bị từ chối 400.
+
+### Giảm giá chỉ là nhãn hiển thị
+
+Ô **Giá gốc** mới chỉ dùng để hiện nhãn −X% và gạch giá cũ. **Khách luôn trả đúng giá bán**,
+nên cách tính tiền của đơn online, hoá đơn quầy, điểm tích luỹ và ưu đãi đơn đầu tiên đều
+không đổi. Có phép thử đặt hàng một sản phẩm đang giảm giá để canh điều này.
+
+- Giá gốc phải cao hơn giá bán, không thì báo lỗi ngay trên form.
+- Muốn thôi giảm giá: xoá trống ô *Giá gốc*.
+- Nâng giá bán lên vượt giá gốc cũ sẽ bị chặn, vì nhãn giảm giá khi đó sẽ sai.
+
+### Dữ liệu chưa có
+
+Lúc triển khai, **chưa sản phẩm nào đang giảm giá và chưa có mặt hàng đồ khô**, nên hai bộ
+lọc này hiện thông báo trống. Tôi không tự đặt giá giảm hay thêm mặt hàng. *Kê vàng* đang
+để ở nhóm Gạo; đổi sang Thực phẩm khô nếu cửa hàng muốn.
+
+### Thay đổi cơ sở dữ liệu
+
+Bảng `products` thêm `category` (mặc định `'gao'`) và `original_price` (mặc định 0). Phiên
+bản schema lên `schema:2026-09-26-v1`; Production tự chạy migration khi build.
+
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

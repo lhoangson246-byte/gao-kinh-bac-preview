@@ -151,6 +151,24 @@ main.container { min-height: 66vh; padding-block: 28px 72px; }
 .product-price strong { color: var(--green-900); font-size: 1.08rem; }
 .product-price span { color: var(--muted); font-size: .72rem; }
 .add-button { white-space: nowrap; }
+
+/* --- Bộ lọc nhóm mặt hàng (hàng trên) và loại gạo (hàng dưới) --- */
+.filter-rows { display: flex; flex: 1 1 auto; flex-direction: column; gap: 8px; min-width: 0; }
+.group-filters button { color: var(--green-950); }
+.quick-filters button.sale-chip { border-color: #e7b9ab; color: var(--danger); }
+.quick-filters button.sale-chip.active { border-color: var(--danger); background: var(--danger); color: white; }
+
+/* --- Giảm giá: nhãn trên ảnh, giá mới nổi bật, giá gốc bị gạch --- */
+.sale-tag { position: absolute; top: 13px; left: 13px; z-index: 1; padding: 5px 9px; border-radius: 99px; background: var(--danger); color: white; font-size: .72rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.product-price strong.on-sale { color: var(--danger); }
+.product-price .was-price { color: var(--muted); font-size: .74rem; text-decoration: line-through; font-variant-numeric: tabular-nums; }
+
+/* --- Trang quản trị: nhãn giảm giá và nhóm hàng trên từng dòng sản phẩm --- */
+.product-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 5px 0 0; }
+.admin-sale-tag, .admin-category-tag { padding: 2px 8px; border-radius: 99px; font-size: .68rem; font-weight: 750; }
+.admin-sale-tag { background: var(--danger-light); color: var(--danger); }
+.admin-category-tag { background: var(--cream-deep); color: var(--green-950); }
+.field-help.sale-help { color: var(--danger); font-weight: 700; }
 .how-it-works { display: grid; grid-template-columns: .7fr 1.3fr; gap: 60px; align-items: start; margin-top: 84px; padding: 48px; border-radius: var(--radius-lg); background: var(--cream-deep); }
 .how-it-works ol { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 0; padding: 0; list-style: none; }
 .how-it-works li { padding-left: 18px; border-left: 2px solid rgba(46, 98, 71, .25); }
@@ -786,7 +804,15 @@ label b { color: var(--danger); }
 .footer strong { color: white; font-family: Cambria, Constantia, "Noto Serif", "Times New Roman", Times, serif; font-size: 1rem; }
 
 @media (max-width: 980px) {
-  .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Ba sản phẩm một hàng cả trên máy tính bảng: bỏ mô tả, dồn giá và nút xuống dưới. */
+  .product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .product-image { height: 170px; }
+  .product-body { padding: 13px; }
+  .product-body h3 { font-size: 1.08rem; }
+  .product-body .desc { display: none; }
+  .product-bottom { display: block; padding-top: 11px; }
+  .product-price { margin-bottom: 9px; }
+  .product-bottom .add-button { width: 100%; }
   .hero { grid-template-columns: 1fr .78fr; min-height: 470px; }
   .hero-copy { padding: 42px; padding-right: 24px; }
   .how-it-works { grid-template-columns: 1fr; gap: 26px; }
@@ -849,20 +875,22 @@ label b { color: var(--danger); }
 
 @media (max-width: 560px) {
   h1 { font-size: 2.55rem; }
-  /* A compact two-column catalogue lets customers compare products while browsing. */
-  .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  .product-card { border-radius: 12px; }
-  .product-image { height: clamp(130px, 42vw, 170px); }
-  .stock-tag { top: 8px; right: 8px; max-width: calc(100% - 16px); padding: 4px 6px; font-size: .58rem; text-align: center; }
-  .product-body { padding: 12px; }
-  .product-meta { display: block; overflow: hidden; font-size: .63rem; white-space: nowrap; text-overflow: ellipsis; }
-  .product-meta span:last-child, .product-body .desc { display: none; }
-  .product-body h3 { display: -webkit-box; min-height: 2.32em; margin: 7px 0 9px; overflow: hidden; font-size: 1.03rem; line-height: 1.16; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-  .product-bottom { display: block; padding-top: 9px; }
-  .product-price { margin-bottom: 8px; }
-  .product-price strong { font-size: .98rem; }
-  .product-price span { font-size: .65rem; }
-  .product-bottom .add-button { width: 100%; min-height: 36px; padding: 7px 6px; font-size: .76rem; }
+  /* Ba sản phẩm một hàng khi lướt trên điện thoại: chỉ giữ ảnh, tên, giá và nút. */
+  .product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .product-card { border-radius: 10px; }
+  .product-image { height: clamp(96px, 29vw, 140px); }
+  .stock-tag { top: 5px; right: 5px; max-width: calc(100% - 10px); padding: 3px 5px; font-size: .52rem; text-align: center; }
+  .sale-tag { top: 5px; left: 5px; padding: 3px 5px; font-size: .58rem; }
+  .product-body { padding: 8px; }
+  .product-meta, .product-body .desc { display: none; }
+  .product-body h3 { display: -webkit-box; min-height: 2.4em; margin: 0 0 6px; overflow: hidden; font-size: .82rem; line-height: 1.2; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .product-bottom { display: block; padding-top: 7px; }
+  .product-price { margin-bottom: 6px; }
+  .product-price strong { font-size: .84rem; }
+  .product-price .was-price { font-size: .62rem; }
+  .product-price span { font-size: .58rem; }
+  .product-bottom .add-button { width: 100%; min-height: 32px; padding: 5px 4px; font-size: .7rem; }
+  .quick-filters button { min-height: 34px; padding: 6px 11px; font-size: .72rem; }
   .hero-visual { height: 250px; }
   .store-toolbar { min-height: 160px; padding: 24px 21px; }
   .toolbar-art { width: 74px; height: 74px; flex-basis: 74px; border-radius: 19px; }

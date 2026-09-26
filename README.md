@@ -7,6 +7,9 @@
 ### Khách hàng
 
 - Xem, tìm kiếm và lọc loại gạo; lọc nhanh "chỉ hàng còn"
+- Danh mục hiện **3 sản phẩm một hàng** trên cả điện thoại, máy tính bảng và máy tính
+- **Lọc theo nhóm mặt hàng**: *Đang giảm giá*, *Gạo nhà hàng · bao 25kg*, *Thực phẩm khô*
+- Sản phẩm đang giảm giá có nhãn **−X%** và giá gốc bị gạch ngang
 - Giỏ hàng lưu trên thiết bị, tự cập nhật giá và tồn kho mới nhất từ cửa hàng
 - Đăng ký chỉ bằng **số điện thoại** (email không bắt buộc), đăng nhập bằng SĐT hoặc email
 - Sổ địa chỉ giao hàng riêng (tối đa 10 địa chỉ): thêm/sửa/xoá, chọn địa chỉ khi thanh toán và đặt mặc định cho lần mua sau
