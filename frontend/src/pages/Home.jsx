@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, formatVND, salePercent } from '../api';
 import { useCart } from '../context/CartContext.jsx';
@@ -39,6 +39,9 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [added, setAdded] = useState(null);
+  const [retry, setRetry] = useState(0);
+  const previousQuery = useRef('');
+  const addedTimer = useRef(null);
   const { add, count, total, syncWithProducts } = useCart();
   const { t, unit } = useI18n();
 
@@ -53,10 +56,14 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    // Chỉ chờ khi gõ từ khoá; mở trang, đổi nhóm và thử lại gọi ngay.
+    const delay = previousQuery.current === q ? 0 : 200;
+    previousQuery.current = q;
+    setLoading(true);
+    setError('');
     const timer = window.setTimeout(() => {
-      setLoading(true);
-      setError('');
-      api.products(q, { inStockOnly, group })
+      api.products(q, { inStockOnly, group, signal: controller.signal })
         .then(({ products }) => {
           if (cancelled) return;
           setProducts(products);
@@ -65,16 +72,23 @@ export default function Home() {
         })
         .catch((err) => { if (!cancelled) setError(err.message); })
         .finally(() => { if (!cancelled) setLoading(false); });
-    }, 200);
-    return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [q, inStockOnly, group, syncWithProducts]);
+    }, delay);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [q, inStockOnly, group, retry, syncWithProducts]);
+
+  useEffect(() => () => window.clearTimeout(addedTimer.current), []);
 
   const current = GROUPS.find((g) => g.code === group) || GROUPS[0];
 
   const handleAdd = (product) => {
     if (!add(product, 1)) return;
     setAdded(product.id);
-    window.setTimeout(() => setAdded(null), 1400);
+    window.clearTimeout(addedTimer.current);
+    addedTimer.current = window.setTimeout(() => setAdded(null), 1400);
   };
 
   return (
@@ -146,7 +160,7 @@ export default function Home() {
         {error && (
           <div className="alert error" role="alert">
             {error}{' '}
-            <button className="link-button" onClick={() => setQ((value) => value)}>{t('common.retry')}</button>
+            <button className="link-button" onClick={() => setRetry((value) => value + 1)}>{t('common.retry')}</button>
           </div>
         )}
         {loading && <div className="loading-state" role="status"><span></span>{t('home.loading')}</div>}

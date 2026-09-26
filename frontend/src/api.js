@@ -3,12 +3,8 @@ import { translateServerErrors, translateServerMessage } from './i18n/server.js'
 
 const BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
-// Khi chạy dev không cần VITE_API_URL vì Vite đã proxy /api sang cổng 4000.
-if (import.meta.env.PROD && !BASE) {
-  console.warn('Chưa đặt VITE_API_URL — ứng dụng sẽ gọi API cùng tên miền với trang web.');
-}
-
-async function request(path, { method = 'GET', body, auth = false } = {}) {
+// Cùng tên miền là cấu hình bình thường trên Vercel và bản preview local.
+async function request(path, { method = 'GET', body, auth = false, signal } = {}) {
   const headers = { 'Content-Type': 'application/json', 'X-Session-Mode': 'cookie', 'X-CSRF-Protection': '1' };
 
   let res;
@@ -17,9 +13,11 @@ async function request(path, { method = 'GET', body, auth = false } = {}) {
       method,
       headers,
       credentials: 'include',
+      signal,
       body: body ? JSON.stringify(body) : undefined,
     });
-  } catch {
+  } catch (cause) {
+    if (signal?.aborted) throw cause;
     // Mất mạng hoặc máy chủ không phản hồi.
     const err = new Error(translateServerMessage('Không kết nối được tới cửa hàng. Vui lòng kiểm tra kết nối mạng và thử lại.', getActiveLang()));
     err.status = 0;
@@ -88,13 +86,13 @@ export const api = {
   deleteAddress: (id) => request(`/addresses/${id}`, { method: 'DELETE', auth: true }),
   setDefaultAddress: (id) => request(`/addresses/${id}/default`, { method: 'PATCH', auth: true }),
 
-  products: (q = '', { inStockOnly = false, group = '' } = {}) => {
+  products: (q = '', { inStockOnly = false, group = '', signal } = {}) => {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
     if (inStockOnly) params.set('in_stock', '1');
     if (group) params.set('group', group);
     const query = params.toString();
-    return request(`/products${query ? `?${query}` : ''}`);
+    return request(`/products${query ? `?${query}` : ''}`, { signal });
   },
   product: (id) => request(`/products/${id}`),
   /** Ảnh banner trang chủ và các cài đặt công khai khác. */
@@ -266,7 +264,12 @@ export const isPhone = (value) => normalizePhone(value) !== '';
  * Tiền đồng theo ngôn ngữ đang chọn. Quan trọng với khách đọc tiếng Anh/Trung:
  * "105.000₫" kiểu Việt dễ bị đọc nhầm thành 105 đồng, nên đổi sang "105,000₫".
  */
-export const formatVND = (n) => new Intl.NumberFormat(getLocale()).format(Number(n) || 0) + '₫';
+const currencyFormatters = new Map();
+export const formatVND = (n) => {
+  const locale = getLocale();
+  if (!currencyFormatters.has(locale)) currencyFormatters.set(locale, new Intl.NumberFormat(locale));
+  return currencyFormatters.get(locale).format(Number(n) || 0) + '₫';
+};
 
 /** Nhóm hàng cửa hàng chọn cho từng sản phẩm; khớp PRODUCT_CATEGORIES ở máy chủ. */
 export const PRODUCT_CATEGORIES = [
@@ -285,14 +288,18 @@ export function salePercent(product) {
   return Math.max(1, Math.round(((original - price) / original) * 100));
 }
 
+const dateFormatters = new Map();
 export const formatDateTime = (value) => {
   if (!value) return '';
   // SQLite trả về "YYYY-MM-DD HH:MM:SS" theo giờ UTC.
   const normalized = String(value).includes('T') ? value : `${String(value).replace(' ', 'T')}Z`;
   const date = new Date(normalized);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat(getLocale(), { dateStyle: 'short', timeStyle: 'short' }).format(date);
+  if (Number.isNaN(date.getTime())) return value;
+  const locale = getLocale();
+  if (!dateFormatters.has(locale)) {
+    dateFormatters.set(locale, new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }));
+  }
+  return dateFormatters.get(locale).format(date);
 };
 
 export const STATUS_LABEL = {

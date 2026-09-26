@@ -2,15 +2,16 @@ import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+import PageLoadBoundary from './components/PageLoadBoundary.jsx';
 import { useI18n } from './i18n/index.jsx';
 
 import Home from './pages/Home.jsx';
-import Login from './pages/Login.jsx';
-import Register from './pages/Register.jsx';
-import Cart from './pages/Cart.jsx';
-import Checkout from './pages/Checkout.jsx';
-import Orders from './pages/Orders.jsx';
-import Profile from './pages/Profile.jsx';
+const Login = lazy(() => import('./pages/Login.jsx'));
+const Register = lazy(() => import('./pages/Register.jsx'));
+const Cart = lazy(() => import('./pages/Cart.jsx'));
+const Checkout = lazy(() => import('./pages/Checkout.jsx'));
+const Orders = lazy(() => import('./pages/Orders.jsx'));
+const Profile = lazy(() => import('./pages/Profile.jsx'));
 const Admin = lazy(() => import('./pages/Admin.jsx'));
 const Retail = lazy(() => import('./pages/Retail.jsx'));
 import NotFound from './pages/NotFound.jsx';
@@ -48,6 +49,7 @@ export default function App() {
   if (isAdminArea) {
     return (
       <main className="admin-main">
+        <PageLoadBoundary key={location.pathname}>
         <Suspense fallback={<div className="loading-state" role="status"><span></span>{t('common.adminLoading')}</div>}>
         <Routes>
           <Route
@@ -61,6 +63,7 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
         </Suspense>
+        </PageLoadBoundary>
       </main>
     );
   }
@@ -70,6 +73,8 @@ export default function App() {
       <a className="skip-link" href="#noi-dung">{t('nav.skip')}</a>
       <Navbar />
       <main className="container" id="noi-dung">
+        <PageLoadBoundary key={location.pathname}>
+        <Suspense fallback={<div className="loading-state" role="status"><span></span>{t('common.loading')}</div>}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/dang-nhap" element={<Login />} />
@@ -89,6 +94,8 @@ export default function App() {
           />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </Suspense>
+        </PageLoadBoundary>
       </main>
       <footer className="footer">
         <div className="container footer-inner">

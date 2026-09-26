@@ -42,6 +42,7 @@ export const vi = {
   // Dùng chung
   'common.loading': 'Đang tải…',
   'common.retry': 'Thử lại',
+  'common.pageLoadError': 'Chưa tải được trang. Vui lòng kiểm tra kết nối rồi thử lại.',
   'common.optional': 'Không bắt buộc',
   'common.free': 'Miễn phí',
   'common.saving': 'Đang lưu…',
@@ -330,6 +331,7 @@ export const en = {
 
   'common.loading': 'Loading…',
   'common.retry': 'Try again',
+  'common.pageLoadError': 'Could not load this page. Please check your connection and try again.',
   'common.optional': 'Optional',
   'common.free': 'Free',
   'common.saving': 'Saving…',
@@ -610,6 +612,7 @@ export const zh = {
 
   'common.loading': '加载中…',
   'common.retry': '重试',
+  'common.pageLoadError': '无法加载页面。请检查网络连接后重试。',
   'common.optional': '选填',
   'common.free': '免费',
   'common.saving': '保存中…',

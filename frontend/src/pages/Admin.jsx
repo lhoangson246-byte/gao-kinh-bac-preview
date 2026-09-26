@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import ImagePicker from '../components/ImagePicker.jsx';
-import BannerSettings from '../components/BannerSettings.jsx';
+const ImagePicker = lazy(() => import('../components/ImagePicker.jsx'));
+const BannerSettings = lazy(() => import('../components/BannerSettings.jsx'));
 import { api, salePercent, PRODUCT_CATEGORIES, formatDateTime, formatVND, pointsFor, STATUS_LABEL, DELIVERY_SLOT_LABEL } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
-import RevenueReport from '../components/RevenueReport.jsx';
-import CustomerManager from '../components/CustomerManager.jsx';
-import StockReceive from '../components/StockReceive.jsx';
-import ActivityLog from '../components/ActivityLog.jsx';
+const RevenueReport = lazy(() => import('../components/RevenueReport.jsx'));
+const CustomerManager = lazy(() => import('../components/CustomerManager.jsx'));
+const StockReceive = lazy(() => import('../components/StockReceive.jsx'));
+const ActivityLog = lazy(() => import('../components/ActivityLog.jsx'));
 import ProductImage from '../components/ProductImage.jsx';
 import OrdersExportButton from '../components/OrdersExportButton.jsx';
+import PageLoadBoundary from '../components/PageLoadBoundary.jsx';
 
 const EMPTY = { name: '', origin: '', price: '', original_price: '', cost_price: '', category: 'gao', unit: 'kg', weight_kg: '', stock: '', description: '', image_url: '' };
 const FILTERS = [
@@ -31,6 +32,7 @@ export default function Admin() {
   const [orderTotal, setOrderTotal] = useState(0);
   const [counts, setCounts] = useState({});
   const requestId = useRef(0);
+  const productsLoaded = useRef(false);
   const [products, setProducts] = useState([]);
   const [form, setForm] = useState(EMPTY);
   const [editingId, setEditingId] = useState(null);
@@ -44,13 +46,14 @@ export default function Admin() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async ({ refreshProducts = true } = {}) => {
     const id = ++requestId.current;
     setLoading(true);
     setError('');
     try {
       const [statsResult, ordersResult, productsResult] = await Promise.all([
-        api.adminStats(), api.adminOrders(filter, { offset }), api.adminProducts(),
+        api.adminStats(), api.adminOrders(filter, { offset }),
+        refreshProducts || !productsLoaded.current ? api.adminProducts() : Promise.resolve(null),
       ]);
       if (id !== requestId.current) return;
       if (!ordersResult.orders.length && offset > 0) {
@@ -61,7 +64,10 @@ export default function Admin() {
       setOrders(ordersResult.orders);
       setCounts(ordersResult.counts);
       setOrderTotal(ordersResult.total);
-      setProducts(productsResult.products);
+      if (productsResult) {
+        setProducts(productsResult.products);
+        productsLoaded.current = true;
+      }
     } catch (err) {
       if (id === requestId.current) setError(err.message);
     } finally {
@@ -69,7 +75,10 @@ export default function Admin() {
     }
   }, [filter, offset]);
 
-  useEffect(() => { reload(); return () => { requestId.current++; }; }, [reload]);
+  useEffect(() => {
+    reload({ refreshProducts: false });
+    return () => { requestId.current++; };
+  }, [reload]);
 
   const visibleOrders = orders;
 
@@ -276,6 +285,8 @@ export default function Admin() {
 
         <main className="admin-content">
           {loading ? <div className="loading-state page-loading"><span></span>Đang mở trang quản trị…</div> : (
+            <PageLoadBoundary key={tab}>
+            <Suspense fallback={<div className="loading-state" role="status"><span></span>Đang mở chức năng…</div>}>
             <>
               {!['revenue', 'customers', 'activity'].includes(tab) && (
               <div className="admin-page-heading">
@@ -533,6 +544,8 @@ export default function Admin() {
                 </section>
               )}
             </>
+            </Suspense>
+            </PageLoadBoundary>
           )}
         </main>
       </div>
