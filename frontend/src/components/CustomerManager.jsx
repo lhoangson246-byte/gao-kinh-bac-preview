@@ -1,12 +1,16 @@
 import { generatePassword, passwordError } from '../password';
 import { useCallback, useEffect, useState } from 'react';
-import { api, formatDateTime, formatVND } from '../api';
+import { api, formatDateTime, formatVND, mapLink, CUSTOMER_SEGMENTS } from '../api';
+
+const SEGMENT_SHORT = { thuong: 'Thường', 'nha-hang': 'Nhà hàng', 'dai-ly': 'Buôn · đại lý' };
 
 const LIMIT = 20;
 
 export default function CustomerManager() {
   const [q, setQ] = useState('');
   const [locked, setLocked] = useState('');       // '' | '1' | '0'
+  const [segment, setSegment] = useState('');     // '' = mọi nhóm
+  const [segmentCounts, setSegmentCounts] = useState({});
   const [customers, setCustomers] = useState([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -26,20 +30,21 @@ export default function CustomerManager() {
   const load = useCallback(async (nextOffset = 0, filters) => {
     setLoading(true);
     setError('');
-    const f = filters ?? { q, locked };
+    const f = filters ?? { q, locked, segment };
     try {
       const r = await api.adminCustomers({ ...f, limit: LIMIT, offset: nextOffset });
       setCustomers(r.customers);
       setTotal(r.total);
       setOffset(nextOffset);
+      setSegmentCounts(r.segments || {});
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [q, locked]);
+  }, [q, locked, segment]);
 
-  useEffect(() => { load(0, { q: '', locked: '' }); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(0, { q: '', locked: '', segment: '' }); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const openDetail = async (customer) => {
     if (opened === customer.id) { setOpened(null); setDetail(null); return; }
@@ -111,6 +116,38 @@ export default function CustomerManager() {
 
   const submit = (e) => { e.preventDefault(); load(0); };
 
+  const filterSegment = (code) => {
+    setSegment(code);
+    load(0, { q, locked, segment: code });
+  };
+
+  /** Xếp khách vào nhóm thường / nhà hàng / buôn · đại lý. */
+  const changeSegment = async (customer, code) => {
+    if (customer.segment === code) return;
+    setBusyId(customer.id);
+    setError('');
+    try {
+      const r = await api.adminSetCustomerSegment(customer.id, code);
+      notify(r.message);
+      setSegmentCounts((current) => ({
+        ...current,
+        [customer.segment]: Math.max(0, (current[customer.segment] || 0) - 1),
+        [code]: (current[code] || 0) + 1,
+      }));
+      // Đang lọc theo nhóm cũ thì khách rời khỏi danh sách.
+      if (segment && segment !== code) {
+        setCustomers((cur) => cur.filter((c) => c.id !== customer.id));
+        setTotal((n) => Math.max(0, n - 1));
+      } else {
+        setCustomers((cur) => cur.map((c) => (c.id === customer.id ? { ...c, segment: code } : c)));
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <section aria-label="Quản lý tài khoản khách hàng">
       <div className="admin-page-heading">
@@ -141,11 +178,24 @@ export default function CustomerManager() {
         <div className="pos-filter-actions">
           <button className="btn btn-primary">Tìm</button>
           <button type="button" className="btn btn-ghost"
-                  onClick={() => { setQ(''); setLocked(''); load(0, { q: '', locked: '' }); }}>
+                  onClick={() => { setQ(''); setLocked(''); setSegment(''); load(0, { q: '', locked: '', segment: '' }); }}>
             Xoá lọc
           </button>
         </div>
       </form>
+
+      <div className="filter-bar segment-filter" role="group" aria-label="Lọc theo nhóm khách">
+        <button type="button" className={segment === '' ? 'active' : ''} aria-pressed={segment === ''}
+                onClick={() => filterSegment('')}>
+          Tất cả <span>{Object.values(segmentCounts).reduce((sum, n) => sum + n, 0)}</span>
+        </button>
+        {CUSTOMER_SEGMENTS.map(([code, label]) => (
+          <button key={code} type="button" className={segment === code ? 'active' : ''} aria-pressed={segment === code}
+                  onClick={() => filterSegment(code)}>
+            {label} <span>{segmentCounts[code] || 0}</span>
+          </button>
+        ))}
+      </div>
 
       {error && <div className="alert error" role="alert">{error}</div>}
       {msg && <div className="toast success" role="status"><span>✓</span>{msg}</div>}
@@ -178,6 +228,7 @@ export default function CustomerManager() {
                 <div className="customer-main">
                   <h2>
                     {c.full_name}
+                    <span className={`segment-tag ${c.segment}`}>{SEGMENT_SHORT[c.segment] || 'Thường'}</span>
                     {c.is_locked === 1 && <span className="lock-tag">Đang bị khoá</span>}
                   </h2>
                   <p>
@@ -190,6 +241,19 @@ export default function CustomerManager() {
                 <div className="customer-figures">
                   <div><span>Đơn đã đặt</span><strong>{c.order_count}</strong></div>
                   <div><span>Đã mua</span><strong>{formatVND(c.spent)}</strong></div>
+                  <div><span>Điểm</span><strong>{(c.points || 0).toLocaleString('vi-VN')}</strong></div>
+                </div>
+
+                <div className="segment-picker" role="group" aria-label={`Nhóm khách của ${c.full_name}`}>
+                  <span>Nhóm khách</span>
+                  {CUSTOMER_SEGMENTS.map(([code, label]) => (
+                    <button key={code} type="button" className={c.segment === code ? 'active' : ''}
+                            aria-pressed={c.segment === code} title={label}
+                            disabled={busyId === c.id || !c.phone}
+                            onClick={() => changeSegment(c, code)}>
+                      {SEGMENT_SHORT[code]}
+                    </button>
+                  ))}
                 </div>
 
                 <div className="customer-actions">
@@ -232,6 +296,11 @@ export default function CustomerManager() {
                                 <span>
                                   <strong>{a.label || 'Địa chỉ'}{a.is_default ? ' · mặc định' : ''}</strong>
                                   <small>{a.receiver_name} · {a.phone} — {a.address}</small>
+                                  {mapLink(a.latitude, a.longitude) && (
+                                    <a className="map-link" href={mapLink(a.latitude, a.longitude)} target="_blank" rel="noopener noreferrer">
+                                      📍 Xem vị trí khách ghim
+                                    </a>
+                                  )}
                                 </span>
                               </li>
                             ))}

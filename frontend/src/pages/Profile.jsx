@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { isPhone } from '../api';
+import { api, formatNumber, formatVND, isPhone } from '../api';
 import AddressBook from '../components/AddressBook.jsx';
 import ChangePassword from '../components/ChangePassword.jsx';
 import { useI18n } from '../i18n/index.jsx';
@@ -18,6 +18,16 @@ export default function Profile() {
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [busy, setBusy] = useState(false);
+  const [loyalty, setLoyalty] = useState(null);
+
+  // Điểm tích luỹ theo số điện thoại đăng nhập (chung với mua tại cửa hàng).
+  useEffect(() => {
+    let cancelled = false;
+    api.orderDiscount()
+      .then((r) => { if (!cancelled) setLoyalty(r); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -83,6 +93,21 @@ export default function Profile() {
           </button>
         </form>
       </section>
+
+      {loyalty && (
+        <section className="form-card flat profile-section loyalty-card" aria-labelledby="loyalty-title">
+          <div>
+            <h2 id="loyalty-title">{t('profile.pointsTitle')}</h2>
+            <p className="loyalty-points">{t('profile.pointsValue', { n: formatNumber(loyalty.points || 0) })}</p>
+          </div>
+          <p className="muted">
+            {t('profile.pointsHelp', {
+              amount: formatVND(loyalty.voucherAmount || 30000),
+              gifts: (loyalty.rewards || []).map((r) => r.name).join(', ') || '—',
+            })}
+          </p>
+        </section>
+      )}
 
       <section className="form-card flat profile-section address-profile-section">
         <AddressBook />

@@ -53,7 +53,8 @@ export async function buildOrdersWorkbook(period) {
     ['Mã', 15], ['Ngày', 13], ['Giờ', 11], ['Kênh', 12], ['Trạng thái', 19],
     ['Khách', 26], ['SĐT', 16], ['Địa chỉ', 45], ['Khung giờ giao', 28], ['Thanh toán', 28],
     ['Tiền hàng', 17], ['Giảm giá', 16], ['Khách trả', 17], ['Điểm cộng', 14],
-  ], [11, 12, 13, 14]);
+    ['Điểm đã đổi', 14], ['Vị trí giao hàng', 46],
+  ], [11, 12, 13, 14, 15]);
   const items = sheet('Chi tiết mặt hàng', [
     ['Mã đơn', 15], ['Ngày', 13], ['Kênh', 12], ['Tên gạo', 38], ['Đơn vị', 16],
     ['Số lượng', 13], ['Đơn giá', 17], ['Thành tiền', 17], ['Giá nhập', 17],
@@ -71,6 +72,11 @@ export async function buildOrdersWorkbook(period) {
   for (const [list, channel] of [[data.online, 'Online'], [data.retail, 'Tại quầy']]) {
     for (const order of list) {
       const online = channel === 'Online';
+      // Đơn online đã gộp voucher vào cột discount; hoá đơn quầy để voucher ở cột riêng.
+      const discount = online ? order.discount : order.discount + (order.voucher_discount || 0);
+      const mapLink = online && order.delivery_lat != null && order.delivery_lng != null
+        ? `https://www.google.com/maps/search/?api=1&query=${order.delivery_lat},${order.delivery_lng}`
+        : '';
       orders.addRow([
         order.code, order.day, order.clock, channel,
         online ? statusNames[order.status] : 'Hoàn thành',
@@ -78,13 +84,13 @@ export async function buildOrdersWorkbook(period) {
         String((online ? order.phone : order.customer_phone) || ''),
         online ? order.address : (order.customer_address || ''),
         online ? (slotNames[order.delivery_slot] || '') : '', paymentNames[order.payment_method] || order.payment_method,
-        order.subtotal, order.discount, order.total, order.points_earned,
+        order.subtotal, discount, order.total, order.points_earned, order.points_used || 0, mapLink,
       ]);
       if (online && order.status !== 'completed') continue;
       const day = byDay.get(order.day);
       day[online ? 'onlineCount' : 'retailCount']++;
       day[online ? 'online' : 'retail'] += order.total;
-      day.discount += order.discount;
+      day.discount += discount;
     }
   }
   const onlineById = new Map(data.online.map(o => [o.id, o]));

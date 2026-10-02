@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { HttpError, cleanImageUrl } from './validate.js';
 import {
   LIMITS, ORDER_STATUSES, RETAIL_DISCOUNT_MAX_PERCENT, PRODUCT_CATEGORY_CODES, CATALOG_GROUP_CODES,
+  CUSTOMER_SEGMENT_CODES,
 } from './constants.js';
 
 const obj = (shape) => z.strictObject(shape);
@@ -30,6 +31,10 @@ const retailLines = z.array(obj({ product_id: id, quantity: integer(1, 500) })).
 const address = {
   label: optionalText(40), receiver_name: name, phone: text(LIMITS.phone),
   address: text(LIMITS.address), is_default: flag.optional(),
+  // Vị trí khách tự ghim (không bắt buộc); null để bỏ vị trí đã ghim.
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
+  location_accuracy: z.number().min(0).max(100_000).nullable().optional(),
 };
 const product = {
   name, price: integer(1, LIMITS.price), stock: integer(0, LIMITS.stock).or(z.literal('')).nullable().optional(),
@@ -39,6 +44,8 @@ const product = {
   weight_kg: decimal(0, 1000).or(z.literal('')).nullable().optional(),
   category: z.enum(PRODUCT_CATEGORY_CODES).optional(),
   original_price: integer(0, LIMITS.price).or(z.literal('')).nullable().optional(),
+  points_per_unit: integer(0, 10_000).or(z.literal('')).nullable().optional(),
+  is_reward: flag.optional(),
 };
 const day = text(10).regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => {
   const d = new Date(`${v}T00:00:00Z`);
@@ -69,11 +76,16 @@ add('orders', 'POST', /^\/?$/, obj({
   address: optionalText(LIMITS.address), delivery_area: z.literal('bac-ninh'),
   delivery_slot: z.enum(['sang', 'chieu', '']).nullable().optional(), note,
   payment_method: z.enum(['cod', 'bank']).optional(), items: lines.min(1),
+  voucher_count: integer(0, 20).optional(), rewards: z.array(line).max(LIMITS.linesPerOrder).optional(),
 }));
 add('orders', 'GET', /^\/?$/);
 add('orders', 'GET', /^\/[^/]+\/?$/);
 add('orders', 'PATCH', /^\/[^/]+\/cancel\/?$/);
-add('customers', 'GET', /^\/?$/, empty, obj({ ...page, q: text(60).optional(), locked: z.enum(['0', '1']).optional() }));
+add('customers', 'GET', /^\/?$/, empty, obj({
+  ...page, q: text(60).optional(), locked: z.enum(['0', '1']).optional(),
+  segment: z.enum(CUSTOMER_SEGMENT_CODES).optional(),
+}));
+add('customers', 'PATCH', /^\/[^/]+\/segment\/?$/, obj({ segment: z.enum(CUSTOMER_SEGMENT_CODES) }));
 add('customers', 'GET', /^\/[^/]+\/?$/);
 add('customers', 'POST', /^\/[^/]+\/reset-password\/?$/, obj({ password: newPassword }));
 add('customers', 'PATCH', /^\/[^/]+\/lock\/?$/, obj({ is_locked: flag }));
@@ -102,8 +114,10 @@ add('admin', 'GET', /^\/(revenue|export\/orders)\/?$/, empty, obj({
 add('retail', 'GET', /^\/(policy|stats)\/?$/);
 add('retail', 'GET', /^\/customers\/?$/, empty, obj({ phone: text(LIMITS.phone) }));
 add('retail', 'POST', /^\/customers\/account\/?$/, obj({ phone: text(LIMITS.phone), full_name: name, password: newPassword }));
-add('retail', 'PUT', /^\/customers\/[^/]+\/?$/, obj({ full_name: name.optional(), note }));
-add('retail', 'POST', /^\/invoices\/?$/, obj({ phone, full_name: name.optional(), customer_address: optionalText(LIMITS.address), items: retailLines.optional(), rewards: retailLines.optional(), payment_method: z.enum(['cash', 'transfer']).optional(), note,
+add('retail', 'PUT', /^\/customers\/[^/]+\/?$/, obj({
+  full_name: name.optional(), note, segment: z.enum(CUSTOMER_SEGMENT_CODES).optional(),
+}));
+add('retail', 'POST', /^\/invoices\/?$/, obj({ phone, full_name: name.optional(), customer_address: optionalText(LIMITS.address), items: retailLines.optional(), rewards: retailLines.optional(), voucher_count: integer(0, 20).optional(), payment_method: z.enum(['cash', 'transfer']).optional(), note,
   discount_percent: decimal(0, RETAIL_DISCOUNT_MAX_PERCENT).or(z.literal('')).nullable().optional() }));
 add('retail', 'GET', /^\/invoices\/?$/, empty, obj({ ...page, q: text(60).optional(), from: day.optional(), to: day.optional() }));
 add('retail', 'GET', /^\/invoices\/[^/]+\/?$/);

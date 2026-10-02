@@ -3,7 +3,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import db from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
-import { LIMITS } from '../constants.js';
+import { CUSTOMER_SEGMENTS, CUSTOMER_SEGMENT_CODES, LIMITS } from '../constants.js';
 import { HttpError, cleanText, normalizePhone, toInteger } from '../validate.js';
 import { writeAdminAudit } from '../audit.js';
 
@@ -24,8 +24,9 @@ function findCustomer(id) {
   return user;
 }
 
-/** GET /api/admin/customers?q=&locked=&limit=&offset=
- *  Danh sách khách kèm số đơn đã đặt. q tìm theo tên, số điện thoại hoặc email.
+/** GET /api/admin/customers?q=&locked=&segment=&limit=&offset=
+ *  Danh sách khách kèm số đơn đã đặt, điểm tích luỹ và nhóm khách.
+ *  q tìm theo tên, số điện thoại hoặc email; segment lọc theo nhóm khách.
  */
 router.get('/', (req, res, next) => {
   try {
@@ -33,6 +34,7 @@ router.get('/', (req, res, next) => {
     const offset = toInteger(req.query.offset, { min: 0, max: 100_000 }) ?? 0;
     const q = cleanText(req.query.q, 60);
     const locked = req.query.locked;
+    const segment = CUSTOMER_SEGMENT_CODES.includes(req.query.segment) ? req.query.segment : null;
 
     const where = ["u.role = 'customer'"];
     const filterParams = [];
@@ -52,23 +54,40 @@ router.get('/', (req, res, next) => {
     }
     if (locked === '1') where.push('u.is_locked = 1');
     if (locked === '0') where.push('u.is_locked = 0');
+    // Nhóm khách lưu ở hồ sơ tích điểm theo số điện thoại; chưa có hồ sơ là khách thường.
+    if (segment) {
+      where.push("COALESCE(rc.segment, 'thuong') = ?");
+      filterParams.push(segment);
+    }
 
     const clause = `WHERE ${where.join(' AND ')}`;
+    const join = 'LEFT JOIN retail_customers rc ON rc.phone = u.phone';
     // Positional bindings work consistently with both better-sqlite3 locally and
     // the remote libSQL protocol used by Turso.
-    const total = db.prepare(`SELECT COUNT(*) c FROM users u ${clause}`).get(...filterParams).c;
+    const total = db.prepare(`SELECT COUNT(*) c FROM users u ${join} ${clause}`).get(...filterParams).c;
 
     const customers = db.prepare(`
       SELECT ${PUBLIC.split(', ').map((c) => `u.${c}`).join(', ')},
              (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) AS order_count,
              (SELECT COALESCE(SUM(o.total), 0) FROM orders o
                WHERE o.user_id = u.id AND o.status = 'completed') AS spent,
-             (SELECT MAX(o.created_at) FROM orders o WHERE o.user_id = u.id) AS last_order_at
-      FROM users u ${clause}
+             (SELECT MAX(o.created_at) FROM orders o WHERE o.user_id = u.id) AS last_order_at,
+             COALESCE(rc.segment, 'thuong') AS segment,
+             COALESCE(rc.points, 0) AS points
+      FROM users u ${join} ${clause}
       ORDER BY u.id DESC LIMIT ? OFFSET ?
     `).all(...filterParams, limit, offset);
 
-    res.json({ customers, total, limit, offset });
+    // Số khách mỗi nhóm (trên toàn bộ khách) để hiện trên nút lọc.
+    const segments = Object.fromEntries(CUSTOMER_SEGMENT_CODES.map((code) => [code, 0]));
+    for (const row of db.prepare(`
+      SELECT COALESCE(rc.segment, 'thuong') AS segment, COUNT(*) AS n
+      FROM users u ${join} WHERE u.role = 'customer' GROUP BY 1
+    `).all()) {
+      if (row.segment in segments) segments[row.segment] = row.n;
+    }
+
+    res.json({ customers, total, limit, offset, segments });
   } catch (err) {
     next(err);
   }
@@ -147,6 +166,42 @@ router.patch('/:id/lock', (req, res, next) => {
       message: locked
         ? 'Đã khoá tài khoản. Khách không đăng nhập và không đặt hàng được nữa.'
         : 'Đã mở khoá tài khoản.',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PATCH /api/admin/customers/:id/segment — xếp khách vào nhóm thường / nhà hàng / buôn · đại lý.
+ * Nhóm lưu ở hồ sơ tích điểm theo số điện thoại, nên bán tại quầy cũng thấy cùng nhóm.
+ */
+router.patch('/:id/segment', (req, res, next) => {
+  try {
+    const id = toInteger(req.params.id, { min: 1 });
+    if (!id) throw new HttpError(404, 'Không tìm thấy tài khoản.');
+    const segment = req.body?.segment;
+    if (!CUSTOMER_SEGMENT_CODES.includes(segment)) throw new HttpError(400, 'Nhóm khách không hợp lệ.');
+
+    const result = db.transaction(() => {
+      const customer = findCustomer(id);
+      const phone = normalizePhone(customer.phone);
+      if (!phone) throw new HttpError(400, 'Tài khoản chưa có số điện thoại nên chưa xếp nhóm được.');
+      const before = db.prepare('SELECT segment FROM retail_customers WHERE phone = ?').get(phone)?.segment ?? 'thuong';
+      db.prepare(`
+        INSERT INTO retail_customers (phone, full_name, segment) VALUES (?, ?, ?)
+        ON CONFLICT(phone) DO UPDATE SET segment = excluded.segment, updated_at = datetime('now')
+      `).run(phone, customer.full_name, segment);
+      return { customer, before };
+    })();
+
+    writeAdminAudit(req, {
+      action: 'segment', entityType: 'customer_account', entityId: id,
+      before: { segment: result.before }, after: { segment },
+    });
+    res.json({
+      id, segment,
+      message: `Đã xếp ${result.customer.full_name} vào nhóm “${CUSTOMER_SEGMENTS[segment]}”.`,
     });
   } catch (err) {
     next(err);

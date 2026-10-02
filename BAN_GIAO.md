@@ -732,6 +732,88 @@ Mã hiện ở trang *Đơn của tôi*, trong thông báo đặt hàng thành c
 trong hộp xác nhận huỷ đơn, và trong tệp Excel (trước đây Excel tự ghép `DH` + số không đệm).
 
 
+## Định vị khách, điểm theo loại gạo, nhóm khách, đổi điểm (02/10/2026)
+
+### Lấy định vị của khách
+
+Trong form địa chỉ (lúc đặt hàng hoặc ở trang Tài khoản) có nút **📍 Dùng vị trí hiện tại**.
+Trình duyệt luôn hỏi khách có cho phép không; khách có thể bỏ qua, vì địa chỉ chữ vẫn bắt buộc
+như cũ. Bấm xong sẽ hiện *Đã ghim vị trí giao hàng*, kèm sai số (ví dụ khoảng 15 m), nút
+*Xem bản đồ* và *Bỏ vị trí*. Sai số trên 200 m thì trang nhắc khách bật GPS và lấy lại.
+
+- Vị trí lưu cùng địa chỉ (làm tròn khoảng 1 m). Mỗi đơn giữ bản sao vị trí lúc đặt.
+- **Quản trị → Đơn hàng**: đơn có vị trí sẽ có link *📍 Mở vị trí khách ghim trên Google Maps*
+  để người giao bấm chỉ đường. Chi tiết khách và tệp Excel (cột *Vị trí giao hàng*) cũng có link.
+- Chỉ chính khách và cửa hàng xem được vị trí. Không gửi vị trí cho dịch vụ bản đồ nào; link
+  Google Maps chỉ mở khi người dùng bấm vào.
+- Trước đây `vercel.json` chặn hẳn quyền định vị (`geolocation=()`). Giờ cho phép chính trang web
+  (`geolocation=(self)`); camera và micro vẫn bị chặn.
+
+### Cộng điểm theo loại gạo
+
+**Quản trị → Sản phẩm → Sửa**, mục *Tích điểm cho loại này* có hai nút:
+
+- **Theo tiền** (mặc định, giống trước đây): 1.000₫ khách thực trả = 1 điểm.
+- **Điểm riêng**: tự nhập số điểm cho mỗi túi/bao, ví dụ 150 điểm mỗi bao 25kg. Khách mua bao
+  nhiêu túi thì được cộng bấy nhiêu lần, không phụ thuộc giảm giá hay voucher. Nhập 0 nghĩa là
+  loại này không cộng điểm.
+
+Một đơn có cả hai kiểu thì cộng riêng từng phần. Phần theo tiền tính trên số tiền khách thực trả,
+sau khi chia đều giảm giá theo tỉ lệ tiền hàng. Quà đổi điểm không sinh điểm. Áp dụng cho cả đơn
+online (cộng khi bấm *Hoàn thành*) và hoá đơn quầy (cộng ngay). Mỗi dòng đơn online giữ quy tắc
+điểm lúc đặt, nên đổi cài đặt sau này không làm sai điểm của đơn đang chờ. Khách thấy nhãn
+*★ +150 điểm mỗi bao 25kg* trên thẻ sản phẩm. Giỏ hàng và trang đặt hàng báo trước số điểm
+sẽ được cộng.
+
+Cũng trong form đó có ô **Làm quà đổi 1.000 điểm**, để bật hoặc tắt một loại trong danh sách quà.
+
+### Nhóm khách: thường / nhà hàng / buôn · đại lý
+
+- **Quản trị → Khách hàng**: hàng nút lọc *Tất cả · Khách thường · Khách nhà hàng · Khách buôn ·
+  đại lý*, kèm số khách mỗi nhóm. Mỗi khách có hàng nút **Thường / Nhà hàng / Buôn · đại lý**;
+  bấm là xếp nhóm ngay. Danh sách cũng hiện điểm tích luỹ của từng khách.
+- **Bán hàng tại quầy**: tra số điện thoại thì thấy và đổi được nhóm ngay trên thẻ khách.
+- Nhóm lưu theo **số điện thoại**, cùng chỗ với điểm tích luỹ, nên online và tại quầy luôn khớp.
+  Khách chưa xếp nhóm mặc định là khách thường. Tài khoản chưa có số điện thoại thì chưa xếp được.
+- Hiện nhóm khách chỉ để phân loại và lọc. Chưa có giá hay chiết khấu riêng theo nhóm.
+
+### Đổi 1.000 điểm: voucher 30.000₫ hoặc 1kg gạo nếp / gạo lứt / mì chũ
+
+Mỗi 1.000 điểm đổi được **một** trong các lựa chọn sau:
+
+- **Voucher giảm 30.000₫** vào đơn online hoặc hoá đơn quầy.
+- **1kg quà miễn phí**: các loại đang bật *Làm quà đổi 1.000 điểm*. Lần triển khai này tự đặt
+  danh sách quà đúng như yêu cầu: gạo nếp 1kg, gạo lứt 1kg và mì chũ 1kg. **Kê vàng không còn là
+  quà.** Sau này bật hoặc tắt ở form sản phẩm.
+
+**Online**: trang đặt hàng có mục *4 · Đổi điểm tích luỹ* khi khách có điểm. Khách chọn số voucher
+và quà bằng nút − / +, không vượt số điểm đang có. Điểm bị trừ ngay khi đặt. **Huỷ đơn thì hoàn
+lại điểm và trả quà về kho**, đúng một lần, trong cùng transaction với việc đổi trạng thái đơn.
+Voucher dùng chung được với ưu đãi 20.000₫ đơn đầu, nhưng tổng voucher không được lớn hơn số tiền
+còn phải trả, để khách không mất điểm oan. Quà nằm trong đơn với giá 0₫ và trừ kho như hàng bán.
+Trang *Tài khoản* hiện số điểm và cách đổi.
+
+**Tại quầy**: khung *Đổi quà* có thêm dòng *Voucher giảm 30.000₫*, cạnh các túi quà 1kg. Voucher trừ
+sau giảm giá %, ghi riêng trên hoá đơn, trên bản in và trong thống kê giảm giá.
+
+**Máy chủ tự kiểm tra hết**: đủ điểm (trừ có điều kiện, hai lần đổi cùng lúc không thể trừ quá),
+quà phải nằm trong danh sách và còn hàng, voucher không vượt tiền hàng. Trình duyệt chỉ hiển thị
+trước.
+
+### Thay đổi cơ sở dữ liệu
+
+Migration `schema:2026-10-02-v1` chỉ **thêm cột**, không xoá hay sửa dữ liệu cũ:
+
+- `delivery_addresses.latitude / longitude / location_accuracy`
+- `orders.delivery_lat / delivery_lng / voucher_discount / points_used / points_phone`
+- `products.points_per_unit`, `order_items.points_per_unit / is_reward`
+- `retail_invoices.voucher_discount`, `retail_customers.segment`
+
+Migration dữ liệu duy nhất là danh sách quà nói trên (chạy một lần): bật mì chũ loại 1kg, tắt kê
+vàng. Ở `orders`, cột `discount` vẫn là **tổng** tiền giảm (đơn đầu + voucher), còn
+`voucher_discount` là phần voucher.
+
+
 ## Banner chạy vòng và khung liên hệ tư vấn (02/10/2026)
 
 ### Banner chạy vòng

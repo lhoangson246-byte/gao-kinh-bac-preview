@@ -7,6 +7,15 @@ import { translateUnit } from './state.js';
  */
 
 const EXACT = {
+  'Tài khoản chưa có số điện thoại nên chưa dùng được điểm tích luỹ.': {
+    en: 'Your account has no phone number yet, so points cannot be used.', zh: '账户尚未绑定手机号，暂时无法使用积分。',
+  },
+  'Có phần quà không còn trong danh sách đổi điểm. Vui lòng chọn lại.': {
+    en: 'A gift is no longer available for points. Please choose again.', zh: '有礼品已不可兑换，请重新选择。',
+  },
+  'Vị trí không hợp lệ. Vui lòng lấy lại vị trí.': {
+    en: 'Invalid location. Please get your location again.', zh: '位置无效，请重新定位。',
+  },
   'Số điện thoại/email hoặc mật khẩu không đúng.': {
     en: 'Incorrect phone number/email or password.', zh: '手机号/邮箱或密码不正确。',
   },
@@ -93,6 +102,21 @@ const PATTERNS = [
     re: /^“(.+)” vừa được mua hết\. Vui lòng thử lại\.$/,
     en: (m) => `“${m[1]}” just sold out. Please try again.`,
     zh: (m) => `“${m[1]}”刚刚售罄，请重试。`,
+  },
+  {
+    re: /^Bạn chỉ có (\d+) điểm, cần (\d+) điểm để đổi\.$/,
+    en: (m) => `You have ${m[1]} points; ${m[2]} are needed for this redemption.`,
+    zh: (m) => `您只有 ${m[1]} 积分，本次兑换需要 ${m[2]} 积分。`,
+  },
+  {
+    re: /^Đơn còn ([\d.]+)đ, chưa đủ để dùng (\d+) voucher ([\d.]+)đ\.$/,
+    en: (m) => `The order is only ${m[1]}₫, not enough for ${m[2]} voucher(s) of ${m[3]}₫.`,
+    zh: (m) => `订单仅 ${m[1]}₫，不足以使用 ${m[2]} 张 ${m[3]}₫ 代金券。`,
+  },
+  {
+    re: /^Quà “(.+)” vừa hết hàng\. Vui lòng chọn quà khác\.$/,
+    en: (m) => `The gift “${m[1]}” just ran out. Please choose another gift.`,
+    zh: (m) => `礼品“${m[1]}”刚刚兑完，请选择其他礼品。`,
   },
   {
     re: /^Bạn chỉ có thể lưu tối đa (\d+) địa chỉ\.$/,

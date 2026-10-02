@@ -905,6 +905,168 @@ const guestToken = (await call('/auth/register', {
   if (promo.data.product) await call(`/admin/products/${promo.data.product.id}/permanent`, { method: 'DELETE', token: admin });
 }
 
+/* ================================================================== *
+ * 02/10/2026: định vị giao hàng, điểm theo loại gạo, nhóm khách,
+ * đổi 1.000 điểm lấy voucher 30.000đ hoặc quà 1kg
+ * ================================================================== */
+{
+  const phone = phoneOf(9);
+  const signup = await call('/auth/register', {
+    method: 'POST', body: { full_name: 'Khách Đổi Điểm', phone, password: 'matkhau123!test' },
+  });
+  const token = signup.data.token;
+  const userId = signup.data.user?.id;
+  check('Tạo khách thử đổi điểm', signup.status === 201, JSON.stringify(signup.data).slice(0, 120));
+
+  /* --- Sản phẩm thử: một loại có điểm riêng, một loại làm quà --- */
+  const pointy = (await call('/admin/products', {
+    method: 'POST', token: admin,
+    body: { name: `Gạo điểm riêng ${suffix}`, price: 100000, unit: 'túi 5kg', stock: 50, points_per_unit: 150 },
+  })).data.product;
+  const gift = (await call('/admin/products', {
+    method: 'POST', token: admin,
+    body: { name: `Quà nếp 1kg ${suffix}`, price: 30000, unit: 'túi 1kg', stock: 5, is_reward: true },
+  })).data.product;
+  check('Admin đặt được điểm riêng mỗi túi', pointy?.points_per_unit === 150, JSON.stringify(pointy));
+  check('Admin bật được làm quà đổi điểm', gift?.is_reward === 1);
+  const publicPointy = (await call(`/products/${pointy.id}`)).data.product;
+  check('Khách thấy điểm riêng của loại gạo', publicPointy?.points_per_unit === 150);
+  check('Khách không thấy giá nhập', !('cost_price' in (publicPointy || {})));
+  const badPoints = await call(`/admin/products/${pointy.id}`, { method: 'PUT', token: admin, body: { points_per_unit: -5 } });
+  check('Điểm âm bị từ chối (400)', badPoints.status === 400, `status=${badPoints.status}`);
+  const guestEdit = await call(`/admin/products/${pointy.id}`, { method: 'PUT', token, body: { points_per_unit: 9999 } });
+  check('Khách thường không sửa được điểm sản phẩm (403)', guestEdit.status === 403);
+
+  /* --- Ghim vị trí vào địa chỉ, đơn giữ bản sao vị trí --- */
+  const addr = await call('/addresses', {
+    method: 'POST', token,
+    body: {
+      label: 'Nhà riêng', receiver_name: 'Khách Đổi Điểm', phone,
+      address: 'Số 12 đường Lý Thái Tổ, phường Suối Hoa',
+      latitude: 21.1861234, longitude: 106.0763456, location_accuracy: 18.4,
+    },
+  });
+  const saved = addr.data.address;
+  check('Lưu được vị trí khách ghim (làm tròn ~1m)',
+    addr.status === 201 && saved?.latitude === 21.18612 && saved?.longitude === 106.07635 && saved?.location_accuracy === 18,
+    JSON.stringify(saved));
+  const badLoc = await call('/addresses', {
+    method: 'POST', token,
+    body: { receiver_name: 'Khách', phone, address: 'Số 1 đường Trần Hưng Đạo', latitude: 200, longitude: 106 },
+  });
+  check('Vị trí sai bị từ chối (400)', badLoc.status === 400, `status=${badLoc.status}`);
+  const keep = await call(`/addresses/${saved.id}`, {
+    method: 'PUT', token,
+    body: { label: 'Nhà riêng', receiver_name: 'Khách Đổi Điểm', phone, address: 'Số 12 đường Lý Thái Tổ, phường Suối Hoa' },
+  });
+  check('Sửa địa chỉ không gửi vị trí thì giữ nguyên vị trí cũ', keep.data.address?.latitude === 21.18612);
+
+  /* --- Tích điểm tại quầy để có điểm đổi (bán quầy không trừ kho online) --- */
+  const pos = await call('/retail/invoices', {
+    method: 'POST', token: admin,
+    body: { phone, full_name: 'Khách Đổi Điểm', items: [{ product_id: pointy.id, quantity: 20 }] },
+  });
+  check('Hoá đơn quầy cộng điểm theo loại gạo (20 túi × 150 điểm)',
+    pos.status === 201 && pos.data.invoice?.points_earned === 3000, JSON.stringify(pos.data.invoice?.points_earned));
+
+  const info = (await call('/orders/discount', { token })).data;
+  check('Trang đặt hàng thấy điểm và danh sách quà',
+    info.points === 3000 && info.voucherAmount === 30000 && info.rewards?.some((r) => r.id === gift.id),
+    JSON.stringify({ points: info.points, voucher: info.voucherAmount }));
+
+  /* --- Đặt online dùng 1 voucher + 1 quà: trừ 2.000 điểm --- */
+  const orderBody = {
+    address_id: saved.id, delivery_area: 'bac-ninh', payment_method: 'cod',
+    items: [{ product_id: pointy.id, quantity: 2 }],
+  };
+  const tooMany = await call('/orders', {
+    method: 'POST', token, body: { ...orderBody, voucher_count: 2, rewards: [{ product_id: gift.id, quantity: 2 }] },
+  });
+  check('Đổi quá số điểm đang có bị từ chối (400)', tooMany.status === 400, `status=${tooMany.status} ${tooMany.data.message}`);
+  const bigVoucher = await call('/orders', {
+    method: 'POST', token, body: { ...orderBody, items: [{ product_id: gift.id, quantity: 1 }], voucher_count: 1 },
+  });
+  check('Voucher lớn hơn tiền còn phải trả bị từ chối (400)', bigVoucher.status === 400, `status=${bigVoucher.status}`);
+  const notGift = await call('/orders', {
+    method: 'POST', token, body: { ...orderBody, rewards: [{ product_id: pointy.id, quantity: 1 }] },
+  });
+  check('Sản phẩm không phải quà thì không đổi được (400)', notGift.status === 400);
+  check('Các lần bị từ chối không trừ điểm', (await call('/orders/discount', { token })).data.points === 3000);
+
+  const giftStock = (await call(`/products/${gift.id}`)).data.product.stock;
+  const made = await call('/orders', {
+    method: 'POST', token, body: { ...orderBody, voucher_count: 1, rewards: [{ product_id: gift.id, quantity: 1 }] },
+  });
+  const order = made.data.order;
+  check('Đơn dùng voucher: giảm đơn đầu 20.000đ + voucher 30.000đ',
+    made.status === 201 && order.subtotal === 200000 && order.voucher_discount === 30000
+      && order.discount === 50000 && order.total === 150000 && order.points_used === 2000,
+    JSON.stringify({ s: made.status, ...order, items: undefined }).slice(0, 200));
+  const giftLine = order?.items?.find((i) => i.product_id === gift.id);
+  check('Quà nằm trong đơn với giá 0đ', giftLine?.price === 0 && giftLine?.is_reward === 1);
+  check('Đơn giữ vị trí khách ghim', order?.delivery_lat === 21.18612 && order?.delivery_lng === 106.07635);
+  check('Trừ 2.000 điểm ngay khi đặt', (await call('/orders/discount', { token })).data.points === 1000);
+  check('Quà trừ kho như hàng bán', (await call(`/products/${gift.id}`)).data.product.stock === giftStock - 1);
+
+  /* --- Huỷ đơn: hoàn điểm và hoàn kho đúng một lần --- */
+  const cancel = await call(`/orders/${order.id}/cancel`, { method: 'PATCH', token });
+  check('Khách huỷ được đơn đổi điểm', cancel.status === 200);
+  check('Huỷ đơn hoàn lại 2.000 điểm', (await call('/orders/discount', { token })).data.points === 3000);
+  check('Huỷ đơn trả quà về kho', (await call(`/products/${gift.id}`)).data.product.stock === giftStock);
+  const again = await call(`/orders/${order.id}/cancel`, { method: 'PATCH', token });
+  check('Huỷ lần hai bị từ chối, không hoàn điểm hai lần',
+    again.status === 400 && (await call('/orders/discount', { token })).data.points === 3000);
+
+  /* --- Hoàn thành đơn: điểm theo loại gạo --- */
+  const plain = await call('/orders', { method: 'POST', token, body: orderBody });
+  const plainId = plain.data.order?.id;
+  for (const status of ['confirmed', 'shipping', 'completed']) {
+    await call(`/admin/orders/${plainId}/status`, { method: 'PATCH', token: admin, body: { status } });
+  }
+  const done = (await call(`/orders/${plainId}`, { token })).data.order;
+  check('Đơn giao xong cộng điểm riêng: 2 túi × 150 = 300 điểm (không phụ thuộc giảm giá)',
+    done?.points_earned === 300, `points_earned=${done?.points_earned}`);
+
+  /* --- Voucher tại quầy --- */
+  const posVoucher = await call('/retail/invoices', {
+    method: 'POST', token: admin,
+    body: { phone, items: [{ product_id: pointy.id, quantity: 1 }], voucher_count: 1 },
+  });
+  const pv = posVoucher.data.invoice;
+  check('Voucher tại quầy trừ 30.000đ và 1.000 điểm',
+    posVoucher.status === 201 && pv.voucher_discount === 30000 && pv.total === 70000 && pv.points_used === 1000,
+    JSON.stringify(pv && { total: pv.total, v: pv.voucher_discount, used: pv.points_used }));
+  const posBig = await call('/retail/invoices', {
+    method: 'POST', token: admin,
+    body: { phone, items: [{ product_id: gift.id, quantity: 1 }], voucher_count: 2 },
+  });
+  check('Voucher quầy vượt tiền hàng bị từ chối (400)', posBig.status === 400);
+
+  /* --- Nhóm khách --- */
+  const seg = await call(`/admin/customers/${userId}/segment`, {
+    method: 'PATCH', token: admin, body: { segment: 'nha-hang' },
+  });
+  check('Admin xếp khách vào nhóm nhà hàng', seg.status === 200 && seg.data.segment === 'nha-hang', JSON.stringify(seg.data));
+  const listed = await call('/admin/customers?segment=nha-hang&limit=100', { token: admin });
+  check('Lọc danh sách theo nhóm nhà hàng',
+    listed.data.customers?.some((c) => c.id === userId && c.segment === 'nha-hang')
+      && listed.data.customers.every((c) => c.segment === 'nha-hang'));
+  check('Danh sách có số khách mỗi nhóm', (listed.data.segments?.['nha-hang'] ?? 0) >= 1);
+  const lookup = await call(`/retail/customers?phone=${phone}`, { token: admin });
+  check('Bán quầy thấy cùng nhóm khách theo số điện thoại', lookup.data.customer?.segment === 'nha-hang');
+  const posSeg = await call(`/retail/customers/${lookup.data.customer.id}`, {
+    method: 'PUT', token: admin, body: { segment: 'dai-ly' },
+  });
+  check('Bán quầy đổi được nhóm khách', posSeg.data.customer?.segment === 'dai-ly');
+  const badSeg = await call(`/admin/customers/${userId}/segment`, { method: 'PATCH', token: admin, body: { segment: 'vip' } });
+  check('Nhóm khách lạ bị từ chối (400)', badSeg.status === 400);
+  const guestSeg = await call(`/admin/customers/${userId}/segment`, { method: 'PATCH', token, body: { segment: 'dai-ly' } });
+  check('Khách thường không tự xếp nhóm được (403)', guestSeg.status === 403);
+
+  // Dọn sản phẩm thử. Đơn và hoá đơn cũ vẫn giữ tên/giá lúc bán.
+  for (const p of [pointy, gift]) await call(`/admin/products/${p.id}/permanent`, { method: 'DELETE', token: admin });
+}
+
 console.log(results.join('\n'));
 console.log(`\n${pass} PASS · ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

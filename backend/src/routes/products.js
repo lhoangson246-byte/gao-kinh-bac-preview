@@ -8,7 +8,7 @@ const router = Router();
 router.use(validateRoutes('products'));
 // Không có cost_price: giá nhập là thông tin nội bộ của cửa hàng.
 const PUBLIC_COLUMNS = 'id, name, description, origin, price, original_price, unit, stock, '
-  + 'image_url, is_active, category, created_at';
+  + 'image_url, is_active, category, points_per_unit, created_at';
 
 /** Bỏ ý nghĩa đặc biệt của % và _ để khách gõ ký tự nào cũng chỉ là tìm kiếm chữ. */
 const escapeLike = (text) => text.replace(/[\\%_]/g, (ch) => `\\${ch}`);

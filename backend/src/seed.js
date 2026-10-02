@@ -154,7 +154,8 @@ const tx = db.transaction(() => {
       // Loại chưa có giá cũng chưa mở bán, để tồn kho 0 cho khỏi hiểu nhầm.
       p.price > 0 ? STOCK_PLACEHOLDER : 0,
       p.image ? `/products/${p.image}.jpg` : null,
-      /1kg/.test(p.unit) && /nếp|lứt|ê vàng/.test(p.name) ? 1 : 0,
+      // Quà đổi 1.000 điểm: 1kg gạo nếp, gạo lứt hoặc mì chũ (kê vàng không còn là quà).
+      (/1kg/.test(p.unit) || p.unit === 'kg') && /nếp|lứt|mì chũ/i.test(p.name) ? 1 : 0,
       parseWeightKg(p.unit),
     );
     added++;

@@ -4,6 +4,7 @@ import db from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { restoreStockForOrder } from './orders.js';
 import { creditPoints, loyaltyPhoneForOrder } from '../loyalty.js';
+import { pointsForSale, MAX_POINTS_PER_UNIT } from '../constants.js';
 import {
   ALLOWED_TRANSITIONS, ORDER_STATUSES, LIMITS, localDate, parseWeightKg, PRODUCT_CATEGORY_CODES,
 } from '../constants.js';
@@ -70,8 +71,13 @@ router.patch('/orders/:id/status', (req, res, next) => {
         const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(current.id);
         const phone = loyaltyPhoneForOrder(order);
         if (phone) {
+          // Điểm tính theo từng loại gạo, dùng quy tắc điểm đã lưu vào dòng hàng lúc đặt.
+          const items = db.prepare(
+            'SELECT price, quantity, points_per_unit, is_reward FROM order_items WHERE order_id = ?'
+          ).all(order.id);
           const earned = creditPoints(phone, {
             amountPaid: order.total,
+            points: pointsForSale(items, order.total),
             fullName: order.receiver_name,
           });
           db.prepare('UPDATE orders SET points_earned = ? WHERE id = ?').run(earned, order.id);
@@ -187,6 +193,20 @@ function readProductInput(body, { partial }) {
       else data.original_price = original;
     }
   }
+
+  // Điểm riêng cho mỗi túi/bao. Bỏ trống (null) = theo tiền 1.000đ = 1 điểm; 0 = không cộng điểm.
+  if (has('points_per_unit')) {
+    const blank = body.points_per_unit === '' || body.points_per_unit == null;
+    if (blank) data.points_per_unit = null;
+    else {
+      const points = toInteger(body.points_per_unit, { min: 0, max: MAX_POINTS_PER_UNIT });
+      if (points == null) errors.points_per_unit = `Điểm mỗi đơn vị phải là số nguyên từ 0 đến ${MAX_POINTS_PER_UNIT}.`;
+      else data.points_per_unit = points;
+    }
+  }
+
+  // Loại này có nằm trong danh sách quà đổi 1.000 điểm không.
+  if (has('is_reward')) data.is_reward = body.is_reward ? 1 : 0;
 
   if (Object.keys(errors).length) throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', errors);
   return data;
@@ -311,13 +331,14 @@ router.post('/products', (req, res, next) => {
     const info = db
       .prepare(
         `INSERT INTO products (name, description, origin, price, cost_price, unit, weight_kg, stock,
-                               image_url, is_active, category, original_price)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                               image_url, is_active, category, original_price, points_per_unit, is_reward)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         data.name, data.description ?? null, data.origin ?? null, data.price,
         data.cost_price ?? 0, data.unit, data.weight_kg ?? 0, data.stock ?? 0,
         data.image_url ?? null, data.is_active ?? 1, data.category ?? 'gao', data.original_price ?? 0,
+        data.points_per_unit ?? null, data.is_reward ?? 0,
       );
     const product = db.prepare('SELECT * FROM products WHERE id = ?').get(info.lastInsertRowid);
     writeAdminAudit(req, {
@@ -606,7 +627,7 @@ router.get('/revenue', (req, res, next) => {
     `).get(...range);
 
     const retail = db.prepare(`
-      SELECT COUNT(*) c, COALESCE(SUM(total), 0) s, COALESCE(SUM(discount), 0) d
+      SELECT COUNT(*) c, COALESCE(SUM(total), 0) s, COALESCE(SUM(discount + voucher_discount), 0) d
       FROM retail_invoices
       WHERE ${localDate('created_at')} BETWEEN ? AND ?
     `).get(...range);

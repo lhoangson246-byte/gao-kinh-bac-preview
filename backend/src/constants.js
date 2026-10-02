@@ -137,6 +137,52 @@ export function retailRewardsAffordable(points) {
   return Math.floor(Math.max(0, points) / RETAIL_POINTS_PER_REWARD);
 }
 
+/**
+ * Ngoài quà là túi 1kg, mỗi 1.000 điểm còn đổi được một voucher giảm 30.000đ
+ * vào hoá đơn quầy hoặc đơn online. Voucher không được lớn hơn số tiền còn phải trả.
+ */
+export const REWARD_VOUCHER_AMOUNT = 30_000;
+
+/** Số voucher / phần quà tối đa trong một đơn, chặn gõ nhầm. */
+export const MAX_REWARDS_PER_SALE = 20;
+
+/** Điểm riêng tối đa cho mỗi túi/bao của một loại gạo. */
+export const MAX_POINTS_PER_UNIT = 10_000;
+
+/**
+ * Điểm tích được cho một lần mua, tính theo TỪNG LOẠI GẠO:
+ *  - Loại có điểm riêng (points_per_unit là số): mỗi túi/bao được đúng số điểm đó,
+ *    không phụ thuộc giảm giá. Đặt 0 nghĩa là loại đó không cộng điểm.
+ *  - Loại còn lại (points_per_unit = null): theo tiền, 1.000đ = 1 điểm, tính trên
+ *    phần tiền khách thực trả (giảm giá và voucher chia đều theo tỉ lệ tiền hàng).
+ *  - Quà đổi điểm (is_reward) không sinh điểm.
+ */
+export function pointsForSale(lines, amountPaid) {
+  let subtotal = 0;
+  let fixed = 0;
+  let byMoney = 0;
+  for (const line of lines) {
+    if (line.is_reward) continue;
+    const value = Math.max(0, Number(line.price) || 0) * Math.max(0, Number(line.quantity) || 0);
+    subtotal += value;
+    if (line.points_per_unit === null || line.points_per_unit === undefined || line.points_per_unit === '') {
+      byMoney += value;
+    } else {
+      fixed += Math.max(0, Math.floor(Number(line.points_per_unit) || 0)) * line.quantity;
+    }
+  }
+  const ratio = subtotal > 0 ? Math.min(1, Math.max(0, amountPaid) / subtotal) : 0;
+  return fixed + Math.floor((byMoney * ratio) / RETAIL_VND_PER_POINT);
+}
+
+/** Phân loại khách. Lưu theo số điện thoại nên dùng chung cho online và tại quầy. */
+export const CUSTOMER_SEGMENTS = {
+  thuong: 'Khách thường',
+  'nha-hang': 'Khách nhà hàng',
+  'dai-ly': 'Khách buôn · đại lý',
+};
+export const CUSTOMER_SEGMENT_CODES = Object.keys(CUSTOMER_SEGMENTS);
+
 export const RETAIL_PAYMENT_METHODS = {
   cash: 'Tiền mặt',
   transfer: 'Chuyển khoản',

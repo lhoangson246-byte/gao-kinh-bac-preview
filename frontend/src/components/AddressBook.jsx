@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, isPhone, mentionsOtherProvince } from '../api';
+import { api, isPhone, mapLink, mentionsOtherProvince } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../i18n/index.jsx';
 
@@ -12,7 +12,13 @@ const blankAddress = (user) => ({
   phone: user?.phone || '',
   address: '',
   is_default: false,
+  latitude: null,
+  longitude: null,
+  location_accuracy: null,
 });
+
+/** Vị trí kém chính xác hơn mức này thì nhắc khách thử lại ở ngoài trời. */
+const ROUGH_ACCURACY_M = 200;
 
 const detailOnly = (address) => String(address || '').replace(/,?\s*Bắc Ninh\s*$/i, '');
 
@@ -28,6 +34,8 @@ export default function AddressBook({ selectable = false, selectedId = null, onS
   const [editingId, setEditingId] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState(blankAddress(user));
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState('');
 
   const chooseFrom = (list, preferredId = selectedId) => {
     if (!selectable || !onSelect) return;
@@ -58,6 +66,7 @@ export default function AddressBook({ selectable = false, selectedId = null, onS
     setForm({ ...blankAddress(user), is_default: addresses.length === 0 });
     setFieldErrors({});
     setError('');
+    setLocationError('');
     setFormOpen(true);
   };
 
@@ -69,9 +78,13 @@ export default function AddressBook({ selectable = false, selectedId = null, onS
       phone: item.phone,
       address: detailOnly(item.address),
       is_default: !!item.is_default,
+      latitude: item.latitude ?? null,
+      longitude: item.longitude ?? null,
+      location_accuracy: item.location_accuracy ?? null,
     });
     setFieldErrors({});
     setError('');
+    setLocationError('');
     setFormOpen(true);
   };
 
@@ -79,6 +92,42 @@ export default function AddressBook({ selectable = false, selectedId = null, onS
     if (busy) return;
     setFormOpen(false);
     setFieldErrors({});
+  };
+
+  /**
+   * Lấy vị trí GPS của điện thoại để người giao hàng tìm nhà dễ hơn. Trình duyệt
+   * luôn hỏi khách trước; vị trí chỉ cửa hàng và chính khách xem được.
+   */
+  const locate = () => {
+    setLocationError('');
+    if (!window.isSecureContext || !navigator.geolocation) {
+      setLocationError(t('location.unsupported'));
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocating(false);
+        const { latitude, longitude, accuracy } = position.coords;
+        setForm((current) => ({
+          ...current,
+          latitude: Math.round(latitude * 1e5) / 1e5,
+          longitude: Math.round(longitude * 1e5) / 1e5,
+          location_accuracy: Math.round(accuracy),
+        }));
+      },
+      (err) => {
+        setLocating(false);
+        setLocationError(err.code === 1 ? t('location.denied')
+          : err.code === 3 ? t('location.timeout') : t('location.unavailable'));
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+    );
+  };
+
+  const clearLocation = () => {
+    setForm((current) => ({ ...current, latitude: null, longitude: null, location_accuracy: null }));
+    setLocationError('');
   };
 
   const validate = () => {
@@ -188,6 +237,7 @@ export default function AddressBook({ selectable = false, selectedId = null, onS
                   <div className="address-badges">
                     <span>{labelText(item.label)}</span>
                     {!!item.is_default && <span className="default-badge">{t('address.default')}</span>}
+                    {item.latitude != null && <span className="location-badge">{t('location.badge')}</span>}
                   </div>
                 </div>
                 <div className="address-actions">
@@ -237,6 +287,37 @@ export default function AddressBook({ selectable = false, selectedId = null, onS
                   ? <small className="err">{fieldErrors.address}</small>
                   : <small className="field-help">{t('address.area')}</small>}
               </label>
+
+              <div className={`locate-box${form.latitude != null ? ' pinned' : ''}`}>
+                {form.latitude != null ? (
+                  <p className="locate-status">
+                    <span aria-hidden="true">📍</span>
+                    <span>
+                      <strong>{t('location.pinned')}</strong>
+                      {form.location_accuracy != null && (
+                        <small>{t('location.accuracy', { m: form.location_accuracy })}</small>
+                      )}
+                    </span>
+                    <a href={mapLink(form.latitude, form.longitude)} target="_blank" rel="noopener noreferrer">
+                      {t('location.view')}
+                    </a>
+                    <button type="button" className="link-button danger" onClick={clearLocation}>
+                      {t('location.remove')}
+                    </button>
+                  </p>
+                ) : (
+                  <p className="locate-intro">{t('location.help')}</p>
+                )}
+                <button type="button" className="btn btn-secondary locate-button" onClick={locate} disabled={locating || busy}>
+                  {locating ? t('location.locating') : form.latitude != null ? t('location.update') : t('location.use')}
+                </button>
+                {form.location_accuracy > ROUGH_ACCURACY_M && !locationError && (
+                  <small className="field-help warn">{t('location.rough')}</small>
+                )}
+                {(locationError || fieldErrors.location) && (
+                  <small className="err" role="alert">{locationError || fieldErrors.location}</small>
+                )}
+              </div>
 
               <label>{t('address.type')}
                 <select className="input" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })}>

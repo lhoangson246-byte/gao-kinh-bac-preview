@@ -677,5 +677,62 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(firstSaleMigr
   console.log(`✅ Đợt giảm giá 26/09: đã áp dụng cho ${applied} sản phẩm.`);
 }
 
+
+/* ------------------------------------------------------------------ *
+ * 02/10/2026: định vị giao hàng, điểm theo loại gạo, phân loại khách,
+ * đổi 1.000 điểm lấy voucher 30.000đ hoặc 1kg gạo nếp / gạo lứt / mì chũ.
+ * ------------------------------------------------------------------ */
+{
+  const addColumn = (table, column, definition) => {
+    if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column)) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+      console.log(`✅ Đã thêm cột ${column} vào bảng ${table}.`);
+    }
+  };
+
+  // Vị trí khách tự ghim trên điện thoại (không bắt buộc). Đơn giữ bản sao lúc đặt.
+  addColumn('delivery_addresses', 'latitude', 'REAL');
+  addColumn('delivery_addresses', 'longitude', 'REAL');
+  addColumn('delivery_addresses', 'location_accuracy', 'REAL');
+  addColumn('orders', 'delivery_lat', 'REAL');
+  addColumn('orders', 'delivery_lng', 'REAL');
+
+  // Điểm riêng cho mỗi túi/bao. NULL = theo tiền (1.000đ = 1 điểm), 0 = không cộng điểm.
+  addColumn('products', 'points_per_unit', 'INTEGER');
+  // Dòng hàng giữ quy tắc điểm lúc đặt, để đổi cài đặt sau này không làm sai đơn cũ.
+  addColumn('order_items', 'points_per_unit', 'INTEGER');
+  addColumn('order_items', 'is_reward', 'INTEGER NOT NULL DEFAULT 0');
+
+  // Đổi điểm trong đơn online: voucher, số điểm đã trừ và hồ sơ đã trừ (để hoàn khi huỷ).
+  addColumn('orders', 'voucher_discount', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn('orders', 'points_used', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn('orders', 'points_phone', 'TEXT');
+  addColumn('retail_invoices', 'voucher_discount', 'INTEGER NOT NULL DEFAULT 0');
+
+  // Khách thường / nhà hàng / buôn · đại lý, theo số điện thoại.
+  addColumn('retail_customers', 'segment', "TEXT NOT NULL DEFAULT 'thuong'");
+}
+
+// Quà đổi 1.000 điểm theo yêu cầu cửa hàng ngày 02/10/2026: 1kg gạo nếp, 1kg gạo lứt
+// hoặc 1kg mì chũ (cùng voucher 30.000đ). Kê vàng không còn nằm trong danh sách quà.
+// Chỉ chạy một lần; sau đó chủ cửa hàng tự bật/tắt ở form sản phẩm.
+const rewardsOct2026 = '2026-10-02-rewards-nep-lut-michu-1kg';
+if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(rewardsOct2026)) {
+  db.transaction(() => {
+    const on = db.prepare(`
+      UPDATE products SET is_reward = 1
+      WHERE is_reward = 0 AND (
+        (lower(name) LIKE '%mì chũ%' OR lower(name) LIKE '%mỳ chũ%' OR lower(name) LIKE '%mi chu%')
+        AND (unit = 'kg' OR unit LIKE '%1kg%' OR unit LIKE '%1 kg%')
+      )
+    `).run().changes;
+    const off = db.prepare(`
+      UPDATE products SET is_reward = 0 WHERE is_reward = 1 AND name LIKE '%ê vàng%'
+    `).run().changes;
+    db.prepare('INSERT INTO app_migrations (name) VALUES (?)').run(rewardsOct2026);
+    console.log(`✅ Quà đổi điểm: bật ${on} loại mì chũ 1kg, tắt ${off} loại kê vàng.`);
+  })();
+}
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

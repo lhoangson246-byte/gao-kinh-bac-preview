@@ -3,6 +3,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 const CartContext = createContext(null);
 const STORAGE_KEY = 'gao_cart';
 
+/** Điểm riêng mỗi túi/bao: null = theo tiền, số nguyên ≥ 0 = điểm cố định. */
+const pointsRule = (value) => (Number.isInteger(value) && value >= 0 ? value : null);
+
 /** Chỉ giữ lại những dòng giỏ hàng có cấu trúc hợp lệ. */
 function readStoredCart() {
   try {
@@ -17,6 +20,7 @@ function readStoredCart() {
         unit: String(item.unit || 'kg'),
         stock: Math.max(0, Math.round(Number(item.stock) || 0)),
         quantity: Math.max(1, Math.round(Number(item.quantity) || 1)),
+        points_per_unit: pointsRule(item.points_per_unit),
       }));
   } catch {
     return [];
@@ -58,11 +62,12 @@ export function CartProvider({ children }) {
           unit: product.unit,
           stock: product.stock,
           quantity,
+          points_per_unit: pointsRule(product.points_per_unit),
         };
         if (
           updated.price !== item.price || updated.stock !== item.stock ||
           updated.quantity !== item.quantity || updated.name !== item.name ||
-          updated.unit !== item.unit
+          updated.unit !== item.unit || updated.points_per_unit !== item.points_per_unit
         ) changed = true;
         next.push(updated);
       }
@@ -91,6 +96,7 @@ export function CartProvider({ children }) {
             price: product.price,
             unit: product.unit,
             stock: product.stock,
+            points_per_unit: pointsRule(product.points_per_unit),
           };
           if (found) {
             return prev.map((item) => item.id === product.id

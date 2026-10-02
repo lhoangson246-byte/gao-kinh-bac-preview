@@ -387,8 +387,9 @@ let invoice10k;
 {
   const pol = (await call('/retail/policy', { token: admin })).data.policy;
   check('Chính sách nêu 1.000 điểm đổi 1 quà', pol.pointsPerReward === 1000, String(pol.pointsPerReward));
-  check('Có danh sách quà (nếp, lứt, kê)', pol.rewards.length >= 3, String(pol.rewards.length));
-  check('Quà đều là loại 1kg', pol.rewards.every((g) => /1kg/.test(g.unit)),
+  check('Có danh sách quà (nếp, lứt, mì chũ)', pol.rewards.length >= 2, String(pol.rewards.length));
+  check('Kê vàng không còn là quà', !pol.rewards.some((g) => /ê vàng/i.test(g.name)));
+  check('Quà đều là loại 1kg', pol.rewards.every((g) => /1kg|^kg$/.test(g.unit)),
     JSON.stringify(pol.rewards.map((g) => g.unit)));
 
   const gift = pol.rewards[0];

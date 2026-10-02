@@ -1,6 +1,6 @@
 import db from './db.js';
 import { retailPointsFor } from './constants.js';
-import { normalizePhone } from './validate.js';
+import { HttpError, normalizePhone } from './validate.js';
 
 /**
  * Hồ sơ tích điểm dùng chung cho cả hai kênh bán:
@@ -20,13 +20,14 @@ export function loyaltyPhoneForOrder(order) {
 /**
  * Cộng điểm cho một số điện thoại. Tạo hồ sơ nếu chưa có.
  * Luôn gọi bên trong transaction của phía gọi.
- * Trả về số điểm đã cộng.
+ * `points` là số điểm đã tính sẵn theo từng loại gạo (pointsForSale); bỏ trống
+ * thì tính theo tiền như cũ. Trả về số điểm đã cộng.
  */
-export function creditPoints(phone, { amountPaid, fullName = null }) {
+export function creditPoints(phone, { amountPaid, points: preset = null, fullName = null }) {
   const normalized = normalizePhone(phone);
   if (!normalized) return 0;
 
-  const points = retailPointsFor(amountPaid);
+  const points = preset ?? retailPointsFor(amountPaid);
   if (points <= 0) return 0;
 
   const existing = db.prepare('SELECT id FROM retail_customers WHERE phone = ?').get(normalized);
@@ -66,4 +67,31 @@ export function onlineAccount(phone) {
       ), u.address) AS address
      FROM users u WHERE u.phone = ?`
   ).get(normalized) || null;
+}
+
+/**
+ * Trừ điểm đổi quà / voucher. Luôn gọi bên trong transaction của phía gọi.
+ * Câu UPDATE có điều kiện "points >= ?" nên hai lần đổi cùng lúc không thể trừ
+ * quá số điểm đang có; thiếu điểm thì ném lỗi để cả transaction bị huỷ.
+ */
+export function spendPoints(phone, points) {
+  const normalized = normalizePhone(phone);
+  if (!normalized || points <= 0) return;
+  const changed = db.prepare(`
+    UPDATE retail_customers SET points = points - ?, updated_at = datetime('now')
+    WHERE phone = ? AND points >= ?
+  `).run(points, normalized, points).changes;
+  if (!changed) {
+    const have = db.prepare('SELECT points FROM retail_customers WHERE phone = ?').get(normalized)?.points ?? 0;
+    throw new HttpError(400, `Bạn chỉ có ${have} điểm, cần ${points} điểm để đổi.`, { rewards: 'Không đủ điểm.' });
+  }
+}
+
+/** Hoàn lại điểm đã trừ (ví dụ đơn đổi điểm bị huỷ). Gọi trong transaction đã khoá trạng thái đơn. */
+export function refundPoints(phone, points) {
+  const normalized = normalizePhone(phone);
+  if (!normalized || points <= 0) return;
+  db.prepare(`
+    UPDATE retail_customers SET points = points + ?, updated_at = datetime('now') WHERE phone = ?
+  `).run(points, normalized);
 }

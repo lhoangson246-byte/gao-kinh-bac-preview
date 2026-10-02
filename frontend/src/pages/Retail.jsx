@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, formatDateTime, formatVND, isPhone, normalizePhone } from '../api';
+import { api, formatDateTime, formatVND, isPhone, normalizePhone, pointsForLines, CUSTOMER_SEGMENTS } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
 import ReturnManager from '../components/ReturnManager.jsx';
 import AccountSignup from '../components/AccountSignup.jsx';
@@ -80,7 +80,7 @@ export default function Retail() {
               <p>Giảm giá: chỉ hoá đơn từ <b>{policy.minKgForDiscount}kg</b> trở lên,
                  mức % do cửa hàng tự nhập (tối đa {policy.maxDiscountPercent}%).</p>
               <p>Tích điểm: {formatVND(policy.vndPerPoint)} = 1 điểm</p>
-              <p>Đổi quà: <b>{policy.pointsPerReward?.toLocaleString("vi-VN")} điểm</b> = 1 túi 1kg (nếp / lứt / kê)</p>
+              <p>Đổi quà: <b>{policy.pointsPerReward?.toLocaleString("vi-VN")} điểm</b> = voucher {formatVND(policy.voucherAmount || 30000)} hoặc 1kg {policy.rewards?.length ? policy.rewards.map((r) => r.name).join(' / ') : 'quà'}</p>
             </div>
           )}
         </aside>
@@ -142,6 +142,7 @@ function SellTab({ products, policy, onDone, notify }) {
   const [onlineOrders, setOnlineOrders] = useState(0);
   const [rewardsAffordable, setRewardsAffordable] = useState(0);
   const [giftLines, setGiftLines] = useState([]);   // [{ product, quantity }] quà đổi điểm
+  const [vouchers, setVouchers] = useState(0);      // số voucher 30.000đ đổi bằng điểm
 
   const [lines, setLines] = useState([]);       // [{ product, quantity }]
   const [search, setSearch] = useState('');
@@ -171,7 +172,15 @@ function SellTab({ products, policy, onDone, notify }) {
   const discount = canDiscount && percent > 0
     ? Math.min(subtotal, Math.floor((subtotal * Math.min(percent, maxPercent)) / 100))
     : 0;
-  const total = subtotal - discount;
+  // Voucher đổi điểm trừ sau giảm giá %, không vượt số tiền còn phải trả.
+  const voucherAmount = policy?.voucherAmount ?? 30000;
+  const voucherDiscount = vouchers * voucherAmount;
+  const maxVouchers = Math.floor(Math.max(0, subtotal - discount) / voucherAmount);
+  const total = subtotal - discount - voucherDiscount;
+  const earnPoints = pointsForLines(
+    lines.map((l) => ({ price: l.product.price, quantity: l.quantity, points_per_unit: l.product.points_per_unit })),
+    total,
+  );
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -200,6 +209,7 @@ function SellTab({ products, policy, onDone, notify }) {
       setOnlineOrders(r.onlineOrders || 0);
       setRewardsAffordable(r.rewardsAffordable || 0);
       setGiftLines([]);
+      setVouchers(0);
       setCustomerHistory(r.invoices || []);
       setLookupState(r.customer ? 'found' : 'new');
     } catch (err) {
@@ -229,7 +239,7 @@ function SellTab({ products, policy, onDone, notify }) {
     setLines([]); setNote(''); setAddress(''); setPayment('cash'); setDiscountPercent('');
     setPhone(''); setCustomer(null); setCustomerHistory([]);
     setLookupState('idle'); setLookupError(''); setGuestName('');
-    setGiftLines([]); setRewardsAffordable(0);
+    setGiftLines([]); setRewardsAffordable(0); setVouchers(0);
     setAccount(null); setOnlineOrders(0);
   };
 
@@ -253,6 +263,7 @@ function SellTab({ products, policy, onDone, notify }) {
         payment_method: payment,
         note: note.trim() || undefined,
         discount_percent: discount > 0 ? percent : undefined,
+        voucher_count: vouchers > 0 ? vouchers : undefined,
       });
       setReceipt(r);
       notify(`Đã lưu hoá đơn ${r.invoice.code}.`);
@@ -335,16 +346,33 @@ function SellTab({ products, policy, onDone, notify }) {
                 <div className="pos-points">
                   <span>Điểm tích luỹ</span><b>{customer.points.toLocaleString('vi-VN')}</b>
                 </div>
+                <label className="pos-segment">Nhóm khách
+                  <select className="input" value={customer.segment || 'thuong'}
+                          onChange={async (e) => {
+                            const segment = e.target.value;
+                            try {
+                              const r = await api.retailUpdateCustomer(customer.id, { segment });
+                              setCustomer(r.customer);
+                            } catch (err) {
+                              setLookupError(err.message);
+                            }
+                          }}>
+                    {CUSTOMER_SEGMENTS.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+                  </select>
+                </label>
               </div>
             )}
 
             {/* Đổi điểm lấy quà: đủ 1.000 điểm được 1 túi 1kg */}
-            {lookupState === 'found' && policy?.rewards?.length > 0 && (
+            {lookupState === 'found' && policy && (
               <RewardPicker
                 policy={policy}
                 affordable={rewardsAffordable}
                 giftLines={giftLines}
                 setGiftLines={setGiftLines}
+                vouchers={vouchers}
+                setVouchers={setVouchers}
+                maxVouchers={maxVouchers}
               />
             )}
             {lookupState === 'new' && (
@@ -435,6 +463,15 @@ function SellTab({ products, policy, onDone, notify }) {
                 <strong className="pos-line-total free-tag">0₫</strong>
               </div>
             ))}
+            {vouchers > 0 && (
+              <div className="pos-line gift">
+                <div className="pos-line-main">
+                  <strong>Voucher {formatVND(voucherAmount)} <span className="gift-tag">Đổi điểm</span></strong>
+                  <small>{vouchers} × {policy.pointsPerReward.toLocaleString('vi-VN')} điểm</small>
+                </div>
+                <strong className="pos-line-total free-tag">− {formatVND(voucherDiscount)}</strong>
+              </div>
+            )}
           </div>
 
           <div className="pos-totals">
@@ -473,12 +510,18 @@ function SellTab({ products, policy, onDone, notify }) {
             {percent > maxPercent && (
               <p className="pos-hint">Mức giảm tối đa là {maxPercent}%.</p>
             )}
-            <div className="summary-row grand-total"><span>Khách trả</span><strong>{formatVND(total)}</strong></div>
+            {voucherDiscount > 0 && (
+              <div className="summary-row"><span>Voucher đổi điểm</span><strong className="free-tag">− {formatVND(voucherDiscount)}</strong></div>
+            )}
+            {voucherDiscount > subtotal - discount && (
+              <p className="pos-hint">Voucher lớn hơn số tiền còn phải trả. Bớt voucher hoặc thêm hàng.</p>
+            )}
+            <div className="summary-row grand-total"><span>Khách trả</span><strong>{formatVND(Math.max(0, total))}</strong></div>
             {phone.trim() && isPhone(phone) && policy && (
               <p className="pos-hint">
-                Khách sẽ được cộng <b>{Math.floor(total / policy.vndPerPoint).toLocaleString('vi-VN')}</b> điểm.
-                {giftLines.length > 0 && (
-                  <> Trừ <b>{(giftLines.reduce((n, g) => n + g.quantity, 0) * policy.pointsPerReward).toLocaleString('vi-VN')}</b> điểm đổi quà.</>
+                Khách sẽ được cộng <b>{earnPoints.toLocaleString('vi-VN')}</b> điểm.
+                {(giftLines.length > 0 || vouchers > 0) && (
+                  <> Trừ <b>{((giftLines.reduce((n, g) => n + g.quantity, 0) + vouchers) * policy.pointsPerReward).toLocaleString('vi-VN')}</b> điểm đổi quà/voucher.</>
                 )}
               </p>
             )}
@@ -548,12 +591,16 @@ function Receipt({ data, onClose }) {
         <div className="summary-row"><span>Giảm giá</span>
           <strong className="free-tag">− {formatVND(invoice.discount)}</strong></div>
       )}
+      {invoice.voucher_discount > 0 && (
+        <div className="summary-row"><span>Voucher đổi điểm</span>
+          <strong className="free-tag">− {formatVND(invoice.voucher_discount)}</strong></div>
+      )}
       <div className="summary-row grand-total"><span>Khách trả</span><strong>{formatVND(invoice.total)}</strong></div>
       {customer && (
         <p className="receipt-points">
           {customer.full_name || customer.phone} được cộng <b>{invoice.points_earned}</b> điểm
           {invoice.points_used > 0 && (
-            <>, trừ <b>{invoice.points_used.toLocaleString('vi-VN')}</b> điểm đổi quà</>
+            <>, trừ <b>{invoice.points_used.toLocaleString('vi-VN')}</b> điểm đổi quà/voucher</>
           )}
           {' '}— tổng còn <b>{customer.points.toLocaleString('vi-VN')}</b> điểm.
         </p>
@@ -568,9 +615,10 @@ function Receipt({ data, onClose }) {
 /* ------------------------------------------------------------------ *
  * Chọn quà đổi điểm — đủ 1.000 điểm được 1 túi 1kg
  * ------------------------------------------------------------------ */
-function RewardPicker({ policy, affordable, giftLines, setGiftLines }) {
-  const chosen = giftLines.reduce((sum, g) => sum + g.quantity, 0);
+function RewardPicker({ policy, affordable, giftLines, setGiftLines, vouchers, setVouchers, maxVouchers }) {
+  const chosen = giftLines.reduce((sum, g) => sum + g.quantity, 0) + vouchers;
   const left = affordable - chosen;
+  const voucherAmount = policy.voucherAmount || 30000;
 
   const add = (product) => {
     if (left <= 0) return;
@@ -600,10 +648,26 @@ function RewardPicker({ policy, affordable, giftLines, setGiftLines }) {
     <div className="reward-picker">
       <p className="reward-title">
         Đổi được <b>{affordable}</b> phần quà
-        <small>{policy.pointsPerReward.toLocaleString('vi-VN')} điểm = 1 túi 1kg</small>
+        <small>{policy.pointsPerReward.toLocaleString('vi-VN')} điểm = 1 voucher {formatVND(voucherAmount)} hoặc 1 phần quà 1kg</small>
       </p>
 
       <div className="reward-options">
+        <div className={`reward-option${vouchers > 0 ? ' picked' : ''}`}>
+          <span className="reward-name">Voucher giảm {formatVND(voucherAmount)}
+            <small>{maxVouchers === 0 && vouchers === 0 ? 'Chọn hàng trước để dùng voucher' : 'Trừ thẳng vào hoá đơn'}</small>
+          </span>
+          {vouchers > 0 ? (
+            <div className="qty-stepper">
+              <button type="button" onClick={() => setVouchers(vouchers - 1)} aria-label="Bớt voucher">−</button>
+              <input type="number" value={vouchers} readOnly aria-label="Số voucher" />
+              <button type="button" onClick={() => setVouchers(vouchers + 1)}
+                      disabled={left <= 0 || vouchers >= maxVouchers} aria-label="Thêm voucher">+</button>
+            </div>
+          ) : (
+            <button type="button" className="btn btn-secondary" disabled={left <= 0 || maxVouchers === 0}
+                    onClick={() => setVouchers(1)}>Chọn</button>
+          )}
+        </div>
         {policy.rewards.map((g) => {
           const picked = giftLines.find((x) => x.product.id === g.id);
           return (
@@ -629,7 +693,7 @@ function RewardPicker({ policy, affordable, giftLines, setGiftLines }) {
 
       {chosen > 0 && (
         <p className="reward-summary">
-          Đổi <b>{chosen}</b> phần quà · trừ{' '}
+          Đổi <b>{chosen}</b> phần quà/voucher · trừ{' '}
           <b>{(chosen * policy.pointsPerReward).toLocaleString('vi-VN')}</b> điểm
           {left > 0 && ` · còn đổi được ${left} phần nữa`}
         </p>
@@ -754,7 +818,7 @@ function InvoiceLookupTab() {
                       {inv.customer_phone && <small>{inv.customer_phone}</small>}
                     </span>
                     <time>{formatDateTime(inv.created_at)}</time>
-                    {inv.discount > 0 && <span className="pos-tag">− {formatVND(inv.discount)}</span>}
+                    {inv.discount + (inv.voucher_discount || 0) > 0 && <span className="pos-tag">− {formatVND(inv.discount + (inv.voucher_discount || 0))}</span>}
                     <strong>{formatVND(inv.total)}</strong>
                   </button>
                   <button type="button" className="btn btn-secondary pos-print-button"
@@ -777,6 +841,10 @@ function InvoiceLookupTab() {
                     {inv.discount > 0 && (
                       <div className="summary-row"><span>Giảm giá</span>
                         <strong className="free-tag">− {formatVND(inv.discount)}</strong></div>
+                    )}
+                    {inv.voucher_discount > 0 && (
+                      <div className="summary-row"><span>Voucher đổi điểm</span>
+                        <strong className="free-tag">− {formatVND(inv.voucher_discount)}</strong></div>
                     )}
                     <div className="summary-row grand-total"><span>Khách trả</span>
                       <strong>{formatVND(inv.total)}</strong></div>
@@ -836,6 +904,7 @@ function PrintableInvoice({ invoice }) {
       <div className="print-totals">
         <p><span>Tiền hàng</span><strong>{formatVND(invoice.subtotal)}</strong></p>
         {invoice.discount > 0 && <p><span>Giảm giá</span><strong>− {formatVND(invoice.discount)}</strong></p>}
+        {invoice.voucher_discount > 0 && <p><span>Voucher đổi điểm</span><strong>− {formatVND(invoice.voucher_discount)}</strong></p>}
         <p className="print-grand"><span>Khách trả</span><strong>{formatVND(invoice.total)}</strong></p>
         <p><span>Thanh toán</span><strong>{PAYMENT_LABEL[invoice.payment_method] || invoice.payment_method}</strong></p>
       </div>

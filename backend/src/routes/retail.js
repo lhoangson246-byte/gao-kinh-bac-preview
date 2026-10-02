@@ -6,7 +6,8 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import {
   LIMITS, RETAIL_DISCOUNT_MIN_KG, RETAIL_DISCOUNT_MAX_PERCENT, RETAIL_PAYMENT_METHODS,
   RETAIL_POINTS_PER_REWARD, RETAIL_VND_PER_POINT, retailRewardsAffordable,
-  localDate, retailDiscountFor, retailPointsFor,
+  localDate, retailDiscountFor, pointsForSale,
+  REWARD_VOUCHER_AMOUNT, MAX_REWARDS_PER_SALE, CUSTOMER_SEGMENTS, CUSTOMER_SEGMENT_CODES,
 } from '../constants.js';
 import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../validate.js';
 import { writeAdminAudit } from '../audit.js';
@@ -46,6 +47,8 @@ router.get('/policy', (req, res) => {
       vndPerPoint: RETAIL_VND_PER_POINT,
       paymentMethods: RETAIL_PAYMENT_METHODS,
       pointsPerReward: RETAIL_POINTS_PER_REWARD,
+      voucherAmount: REWARD_VOUCHER_AMOUNT,
+      segments: CUSTOMER_SEGMENTS,
       rewards: db.prepare(
         'SELECT id, name, unit, image_url FROM products WHERE is_reward = 1 AND is_active = 1 ORDER BY id'
       ).all(),
@@ -170,6 +173,10 @@ router.put('/customers/:id', (req, res, next) => {
     if (req.body?.note !== undefined) {
       updates.note = cleanText(req.body.note, LIMITS.note);
     }
+    if (req.body?.segment !== undefined) {
+      if (!CUSTOMER_SEGMENT_CODES.includes(req.body.segment)) throw new HttpError(400, 'Nhóm khách không hợp lệ.');
+      updates.segment = req.body.segment;
+    }
     const fields = Object.keys(updates);
     if (!fields.length) throw new HttpError(400, 'Không có thông tin nào để cập nhật.');
 
@@ -247,6 +254,7 @@ router.post('/invoices', (req, res, next) => {
   try {
     const {
       phone, full_name, customer_address, items, rewards, payment_method, note, discount_percent,
+      voucher_count,
     } = req.body || {};
 
     // Khách vãng lai không cần số điện thoại; có số thì mới tích được điểm.
@@ -266,6 +274,14 @@ router.post('/invoices', (req, res, next) => {
     }
 
     const wantedRewards = normalizeRewards(rewards);
+    const vouchers = voucher_count == null || voucher_count === '' ? 0
+      : toInteger(voucher_count, { min: 0, max: MAX_REWARDS_PER_SALE });
+    if (vouchers == null) throw new HttpError(400, 'Số voucher không hợp lệ.');
+    if (vouchers > 0 && !customerPhone) {
+      throw new HttpError(400, 'Dùng voucher đổi điểm cần số điện thoại của khách để trừ điểm.', {
+        phone: 'Nhập số điện thoại để dùng voucher.',
+      });
+    }
     // Hoá đơn chỉ gồm quà (khách vào lấy quà, không mua thêm) vẫn hợp lệ.
     const wanted = wantedRewards.size > 0 && (!Array.isArray(items) || items.length === 0)
       ? new Map()
@@ -311,7 +327,8 @@ router.post('/invoices', (req, res, next) => {
         rewardLines.push({ product, quantity });
         rewardCount += quantity;
       }
-      const pointsUsed = rewardCount * RETAIL_POINTS_PER_REWARD;
+      // Mỗi voucher 30.000đ cũng tốn 1.000 điểm như một phần quà.
+      const pointsUsed = (rewardCount + vouchers) * RETAIL_POINTS_PER_REWARD;
 
       // Mua tại quầy chỉ được giảm khi hoá đơn đạt 50kg trở lên; mức phần trăm
       // do nhân viên nhập cho từng hoá đơn. Máy chủ tự tính lại số tiền giảm.
@@ -324,8 +341,19 @@ router.post('/invoices', (req, res, next) => {
       }
       const discount = retailDiscountFor(subtotal, { percent, totalKg });
       const appliedPercent = discount > 0 ? Math.min(percent, RETAIL_DISCOUNT_MAX_PERCENT) : 0;
-      const total = subtotal - discount;
-      const pointsEarned = customerPhone ? retailPointsFor(total) : 0;
+      // Voucher trừ sau giảm giá %, không được lớn hơn số tiền còn phải trả.
+      const voucherDiscount = vouchers * REWARD_VOUCHER_AMOUNT;
+      if (voucherDiscount > subtotal - discount) {
+        throw new HttpError(400,
+          `Hoá đơn còn ${(subtotal - discount).toLocaleString('vi-VN')}đ, chưa đủ để dùng ${vouchers} voucher ${REWARD_VOUCHER_AMOUNT.toLocaleString('vi-VN')}đ.`);
+      }
+      const total = subtotal - discount - voucherDiscount;
+      // Điểm theo từng loại gạo: loại có điểm riêng tính theo túi/bao, còn lại theo tiền.
+      const pointsEarned = customerPhone
+        ? pointsForSale(lines.map(({ product, quantity }) => ({
+          price: product.price, quantity, points_per_unit: product.points_per_unit,
+        })), total)
+        : 0;
 
       // Khách có số điện thoại thì tạo hoặc cập nhật hồ sơ tích điểm.
       let customerId = null;
@@ -338,7 +366,7 @@ router.post('/invoices', (req, res, next) => {
           const available = existing?.points ?? 0;
           if (available < pointsUsed) {
             throw new HttpError(400,
-              `Khách chỉ có ${available} điểm, cần ${pointsUsed} điểm để đổi ${rewardCount} phần quà.`);
+              `Khách chỉ có ${available} điểm, cần ${pointsUsed} điểm để đổi ${rewardCount + vouchers} phần quà/voucher.`);
           }
         }
 
@@ -369,11 +397,12 @@ router.post('/invoices', (req, res, next) => {
       const invoiceId = db.prepare(`
         INSERT INTO retail_invoices
           (customer_id, customer_phone, customer_name, customer_address, subtotal, discount,
-           discount_percent, total_kg, total, points_earned, points_used, payment_method, note, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           discount_percent, total_kg, total, points_earned, points_used, payment_method, note, created_by,
+           voucher_discount)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         customerId, customerPhone, customerName, customerAddress, subtotal, discount, appliedPercent,
-        totalKg, total, pointsEarned, pointsUsed, paymentMethod, invoiceNote, req.user.id
+        totalKg, total, pointsEarned, pointsUsed, paymentMethod, invoiceNote, req.user.id, voucherDiscount
       ).lastInsertRowid;
 
       db.prepare('UPDATE retail_invoices SET code = ? WHERE id = ?').run(invoiceCode(invoiceId), invoiceId);
@@ -639,7 +668,7 @@ router.get('/stats', (req, res) => {
   // Cả hai vế đều quy về ngày theo giờ Việt Nam, nếu không thì hoá đơn bán
   // lúc sáng sớm (giờ UTC còn là hôm trước) sẽ bị đếm sai ngày.
   const today = db.prepare(`
-    SELECT COUNT(*) c, COALESCE(SUM(total), 0) s, COALESCE(SUM(discount), 0) d
+    SELECT COUNT(*) c, COALESCE(SUM(total), 0) s, COALESCE(SUM(discount + voucher_discount), 0) d
     FROM retail_invoices
     WHERE ${localDate('created_at')} = ${localDate("'now'")}
   `).get();

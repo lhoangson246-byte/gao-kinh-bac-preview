@@ -123,10 +123,11 @@ export const api = {
   adminUploadImage: uploadImage,
   adminImageLibrary: () => request('/admin/images', { auth: true }),
   /* --- Quản lý tài khoản khách --- */
-  adminCustomers: ({ q = '', locked = '', limit = 20, offset = 0 } = {}) => {
+  adminCustomers: ({ q = '', locked = '', segment = '', limit = 20, offset = 0 } = {}) => {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
     if (locked !== '') params.set('locked', locked);
+    if (segment) params.set('segment', segment);
     params.set('limit', String(limit));
     params.set('offset', String(offset));
     return request(`/admin/customers?${params}`, { auth: true });
@@ -140,6 +141,8 @@ export const api = {
   adminDeleteCustomer: (id) => request(`/admin/customers/${id}`, { method: 'DELETE', auth: true }),
   adminLockCustomer: (id, is_locked) =>
     request(`/admin/customers/${id}/lock`, { method: 'PATCH', body: { is_locked }, auth: true }),
+  adminSetCustomerSegment: (id, segment) =>
+    request(`/admin/customers/${id}/segment`, { method: 'PATCH', body: { segment }, auth: true }),
 
   /* --- Nhập kho --- */
   adminReceiveStock: (id, payload) =>
@@ -217,6 +220,38 @@ export function pointsFor(amountPaid) {
   return Math.floor(Math.max(0, amountPaid) / VND_PER_POINT);
 }
 
+/**
+ * Điểm theo từng loại gạo, giống hệt pointsForSale ở máy chủ: loại có điểm riêng
+ * tính theo túi/bao, loại còn lại theo tiền khách thực trả (1.000đ = 1 điểm).
+ * lines: [{ price, quantity, points_per_unit }]. Chỉ để hiển thị trước.
+ */
+export function pointsForLines(lines, amountPaid) {
+  let subtotal = 0;
+  let fixed = 0;
+  let byMoney = 0;
+  for (const line of lines) {
+    const value = Math.max(0, line.price) * Math.max(0, line.quantity);
+    subtotal += value;
+    if (line.points_per_unit === null || line.points_per_unit === undefined || line.points_per_unit === '') byMoney += value;
+    else fixed += Math.max(0, Math.floor(Number(line.points_per_unit) || 0)) * line.quantity;
+  }
+  const ratio = subtotal > 0 ? Math.min(1, Math.max(0, amountPaid) / subtotal) : 0;
+  return fixed + Math.floor((byMoney * ratio) / VND_PER_POINT);
+}
+
+/** Nhóm khách, cùng mã với máy chủ. */
+export const CUSTOMER_SEGMENTS = [
+  ['thuong', 'Khách thường'],
+  ['nha-hang', 'Khách nhà hàng'],
+  ['dai-ly', 'Khách buôn · đại lý'],
+];
+
+/** Link Google Maps tới một toạ độ, hoặc '' nếu chưa có. */
+export function mapLink(lat, lng) {
+  if (lat == null || lng == null || lat === '' || lng === '') return '';
+  return `https://www.google.com/maps/search/?api=1&query=${Number(lat)},${Number(lng)}`;
+}
+
 export const DELIVERY_AREA_CODE = 'bac-ninh';
 export const DELIVERY_AREA_LABEL = 'Bắc Ninh';
 
@@ -269,6 +304,13 @@ export const formatVND = (n) => {
   const locale = getLocale();
   if (!currencyFormatters.has(locale)) currencyFormatters.set(locale, new Intl.NumberFormat(locale));
   return currencyFormatters.get(locale).format(Number(n) || 0) + '₫';
+};
+
+/** Số theo ngôn ngữ đang chọn trong ứng dụng (3.000 / 3,000), không theo cài đặt của máy. */
+export const formatNumber = (n) => {
+  const locale = getLocale();
+  if (!currencyFormatters.has(locale)) currencyFormatters.set(locale, new Intl.NumberFormat(locale));
+  return currencyFormatters.get(locale).format(Number(n) || 0);
 };
 
 /** Nhóm hàng cửa hàng chọn cho từng sản phẩm; khớp PRODUCT_CATEGORIES ở máy chủ. */

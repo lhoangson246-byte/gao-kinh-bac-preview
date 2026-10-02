@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
-import { api, formatVND, pointsFor } from '../api';
+import { api, formatVND, pointsForLines } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 
 export default function Cart() {
@@ -125,7 +125,7 @@ export default function Cart() {
             <p>{t('cart.deliveryBody')}</p>
           </div>
           <div className="summary-row grand-total"><span>{t('cart.total')}</span><strong>{formatVND(total - discount)}</strong></div>
-          <p className="pos-hint">{t('cart.points', { n: pointsFor(total - discount) })}</p>
+          <p className="pos-hint">{t('cart.points', { n: pointsForLines(items.filter((item) => item.stock > 0), total - discount) })}</p>
           <button
             className="btn btn-primary btn-block btn-large"
             disabled={hasUnavailable || count === 0}

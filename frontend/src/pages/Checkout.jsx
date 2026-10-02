@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
 import AddressBook from '../components/AddressBook.jsx';
 import {
-  api, formatVND, pointsFor, DELIVERY_AREA_CODE, DELIVERY_SLOTS,
+  api, formatNumber, formatVND, pointsForLines, DELIVERY_AREA_CODE, DELIVERY_SLOTS,
 } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 
@@ -16,6 +16,28 @@ export default function Checkout() {
   // Xem trước ưu đãi đơn đầu tiên; máy chủ vẫn tự quyết khi tạo đơn.
   const [firstOrder, setFirstOrder] = useState(null);
   const discount = firstOrder?.available ? Math.min(firstOrder.amount, total) : 0;
+
+  // Đổi điểm: mỗi 1.000 điểm = 1 voucher giảm 30.000đ hoặc 1 phần quà 1kg.
+  const [vouchers, setVouchers] = useState(0);
+  const [gifts, setGifts] = useState({});           // { productId: quantity }
+  const points = firstOrder?.points ?? 0;
+  const perReward = firstOrder?.pointsPerReward ?? 1000;
+  const voucherAmount = firstOrder?.voucherAmount ?? 30000;
+  const rewardProducts = firstOrder?.rewards ?? [];
+  const affordable = Math.floor(points / perReward);
+  const giftCount = Object.values(gifts).reduce((sum, q) => sum + q, 0);
+  const chosen = vouchers + giftCount;
+  const left = affordable - chosen;
+  const voucherDiscount = vouchers * voucherAmount;
+  // Voucher không được vượt số tiền còn phải trả (máy chủ cũng chặn như vậy).
+  const maxVouchers = Math.floor(Math.max(0, total - discount) / voucherAmount);
+  const payable = total - discount - voucherDiscount;
+  const earnPoints = pointsForLines(orderable, payable);
+  const setGift = (id, quantity) => setGifts((current) => {
+    const next = { ...current };
+    if (quantity > 0) next[id] = quantity; else delete next[id];
+    return next;
+  });
 
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [form, setForm] = useState({
@@ -66,6 +88,10 @@ export default function Checkout() {
         ...form,
         address_id: selectedAddress.id,
         items: orderable.map((item) => ({ product_id: item.id, quantity: item.quantity })),
+        voucher_count: vouchers > 0 ? vouchers : undefined,
+        rewards: giftCount > 0
+          ? Object.entries(gifts).map(([id, quantity]) => ({ product_id: Number(id), quantity }))
+          : undefined,
       });
       clear();
       navigate('/don-hang', { replace: true, state: { justOrdered: true, code: order?.code } });
@@ -157,9 +183,51 @@ export default function Checkout() {
             </p>
           )}
 
+          {points > 0 && (
+            <>
+              <div className="form-section-title">
+                <span>4</span>
+                <div>
+                  <h2>{t('rewards.title')}</h2>
+                  <p>{t('rewards.have', { points: formatNumber(points), n: affordable })}</p>
+                </div>
+              </div>
+              {affordable === 0 ? (
+                <p className="reward-hint">{t('rewards.notEnough', { need: formatNumber(perReward - points) })}</p>
+              ) : (
+                <div className="reward-options online-rewards" role="group" aria-label={t('rewards.title')}>
+                  <RewardRow
+                    name={t('rewards.voucher', { amount: formatVND(voucherAmount) })}
+                    hint={maxVouchers === 0 ? t('rewards.voucherTooBig') : t('rewards.cost', { points: formatNumber(perReward) })}
+                    value={vouchers}
+                    max={Math.min(maxVouchers, vouchers + left)}
+                    onChange={setVouchers}
+                    t={t}
+                  />
+                  {rewardProducts.map((product) => (
+                    <RewardRow
+                      key={product.id}
+                      name={t('rewards.gift', { name: product.name })}
+                      hint={`${unit(product.unit)} · ${t('rewards.cost', { points: formatNumber(perReward) })}`}
+                      value={gifts[product.id] || 0}
+                      max={Math.min(product.stock, (gifts[product.id] || 0) + left)}
+                      onChange={(q) => setGift(product.id, q)}
+                      t={t}
+                    />
+                  ))}
+                </div>
+              )}
+              {chosen > 0 && (
+                <p className="reward-summary" role="status">
+                  {t('rewards.using', { n: chosen, points: formatNumber(chosen * perReward) })}
+                </p>
+              )}
+            </>
+          )}
+
           <button type="button" className="btn btn-primary btn-block btn-large mobile-submit"
                   disabled={busy} onClick={onSubmit}>
-            {busy ? t('checkout.sending') : t('checkout.submitTotal', { total: formatVND(total - discount) })}
+            {busy ? t('checkout.sending') : t('checkout.submitTotal', { total: formatVND(payable) })}
           </button>
         </div>
 
@@ -177,9 +245,18 @@ export default function Checkout() {
           {discount > 0 && (
             <div className="summary-row"><span>{t('cart.discount')} <small>{t('cart.discountFirst')}</small></span><strong className="free-tag">− {formatVND(discount)}</strong></div>
           )}
+          {voucherDiscount > 0 && (
+            <div className="summary-row"><span>{t('rewards.voucherLine', { n: vouchers })}</span><strong className="free-tag">− {formatVND(voucherDiscount)}</strong></div>
+          )}
+          {rewardProducts.filter((p) => gifts[p.id]).map((p) => (
+            <div key={p.id} className="summary-row">
+              <span><strong>{p.name}</strong><small>{t('rewards.giftLine', { n: gifts[p.id] })}</small></span>
+              <strong className="free-tag">0₫</strong>
+            </div>
+          ))}
           <div className="summary-row"><span>{t('cart.shipping')}</span><strong className="free-tag">{t('common.free')}</strong></div>
-          <div className="summary-row grand-total"><span>{t('cart.total')}</span><strong>{formatVND(total - discount)}</strong></div>
-          <p className="pos-hint">{t('cart.points', { n: pointsFor(total - discount) })}</p>
+          <div className="summary-row grand-total"><span>{t('cart.total')}</span><strong>{formatVND(payable)}</strong></div>
+          <p className="pos-hint">{t('cart.points', { n: earnPoints })}</p>
           <p className="summary-disclaimer">
             {t('checkout.disclaimer')}
           </p>
@@ -188,6 +265,22 @@ export default function Checkout() {
             {busy ? t('checkout.sending') : t('checkout.submit')}
           </button>
         </aside>
+      </div>
+    </div>
+  );
+}
+
+/** Một lựa chọn đổi điểm với nút − / +. */
+function RewardRow({ name, hint, value, max, onChange, t }) {
+  return (
+    <div className={`reward-option${value > 0 ? ' picked' : ''}`}>
+      <span className="reward-name">{name}<small>{hint}</small></span>
+      <div className="qty-stepper">
+        <button type="button" onClick={() => onChange(Math.max(0, value - 1))} disabled={value <= 0}
+                aria-label={t('rewards.less', { name })}>−</button>
+        <input type="number" value={value} readOnly aria-label={t('rewards.count', { name })} />
+        <button type="button" onClick={() => onChange(value + 1)} disabled={value >= max}
+                aria-label={t('rewards.more', { name })}>+</button>
       </div>
     </div>
   );

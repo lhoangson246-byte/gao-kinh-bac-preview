@@ -5,9 +5,11 @@ import { requireAuth } from '../middleware/auth.js';
 import {
   DELIVERY_AREA_CODE, DELIVERY_AREA_LABEL, DELIVERY_SLOT_CODES, LIMITS,
   mentionsOtherProvince, normalizeBacNinhAddress, FIRST_ORDER_DISCOUNT,
+  RETAIL_POINTS_PER_REWARD, REWARD_VOUCHER_AMOUNT, MAX_REWARDS_PER_SALE,
 } from '../constants.js';
 import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../validate.js';
 import { attachItems } from '../order-lists.js';
+import { loyaltyProfile, refundPoints, spendPoints } from '../loyalty.js';
 
 const router = Router();
 
@@ -17,7 +19,7 @@ router.use(requireAuth);
 router.use(validateRoutes('orders'));
 
 /** Cột dòng hàng được phép trả cho khách. KHÔNG gồm cost_price (giá nhập, chỉ cửa hàng thấy). */
-const ORDER_ITEM_COLUMNS = 'id, order_id, product_id, product_name, unit, price, quantity';
+const ORDER_ITEM_COLUMNS = 'id, order_id, product_id, product_name, unit, price, quantity, is_reward';
 
 /** Gộp các dòng trùng sản phẩm rồi kiểm tra số lượng. */
 function normalizeItems(items) {
@@ -45,9 +47,28 @@ function normalizeItems(items) {
   return merged;
 }
 
+/** Quà đổi điểm khách chọn: [{product_id, quantity}] → Map. */
+function normalizeRewardLines(rewards) {
+  if (rewards == null) return new Map();
+  if (!Array.isArray(rewards) || rewards.length > LIMITS.linesPerOrder) {
+    throw new HttpError(400, 'Danh sách quà đổi điểm không hợp lệ.');
+  }
+  const merged = new Map();
+  for (const line of rewards) {
+    const productId = toInteger(line?.product_id, { min: 1 });
+    const quantity = toInteger(line?.quantity, { min: 1, max: MAX_REWARDS_PER_SALE });
+    if (!productId || !quantity) throw new HttpError(400, 'Phần quà không hợp lệ.');
+    merged.set(productId, (merged.get(productId) || 0) + quantity);
+  }
+  return merged;
+}
+
 /** POST /api/orders — Tạo đơn hàng
  *  body: { address_id?, receiver_name?, phone?, address?, delivery_area, delivery_slot?, note?,
- *          payment_method?, items: [{product_id, quantity}] }
+ *          payment_method?, items: [{product_id, quantity}],
+ *          voucher_count?, rewards?: [{product_id, quantity}] }
+ *  Mỗi voucher (giảm 30.000đ) hoặc mỗi phần quà 1kg trừ 1.000 điểm của số điện thoại
+ *  đăng nhập. Điểm bị trừ ngay khi đặt và được hoàn lại nếu đơn bị huỷ.
  *  Khi có address_id, thông tin nhận hàng được đọc từ sổ địa chỉ của chính người dùng.
  *  Giá và tổng tiền luôn do máy chủ tự tính, không tin dữ liệu gửi từ trình duyệt.
  */
@@ -55,7 +76,7 @@ router.post('/', requireAuth, (req, res, next) => {
   try {
     const {
       address_id, receiver_name, phone, address, delivery_area,
-      delivery_slot, note, payment_method, items,
+      delivery_slot, note, payment_method, items, voucher_count, rewards,
     } = req.body || {};
     const errors = {};
 
@@ -63,7 +84,7 @@ router.post('/', requireAuth, (req, res, next) => {
     if (address_id != null && !addressId) errors.address_id = 'Địa chỉ giao hàng không hợp lệ.';
     const savedAddress = addressId
       ? db.prepare(`
-          SELECT receiver_name, phone, address FROM delivery_addresses
+          SELECT receiver_name, phone, address, latitude, longitude FROM delivery_addresses
           WHERE id = ? AND user_id = ?
         `).get(addressId, req.user.id)
       : null;
@@ -95,6 +116,21 @@ router.post('/', requireAuth, (req, res, next) => {
     const customerNote = cleanText(note, LIMITS.note);
     const customerPhone = normalizePhone(receiverPhone);
     const deliverySlot = DELIVERY_SLOT_CODES.includes(delivery_slot) ? delivery_slot : null;
+    const vouchers = voucher_count == null || voucher_count === '' ? 0
+      : toInteger(voucher_count, { min: 0, max: MAX_REWARDS_PER_SALE });
+    if (vouchers == null) throw new HttpError(400, 'Số voucher không hợp lệ.');
+    const wantedRewards = normalizeRewardLines(rewards);
+    const rewardCount = vouchers + [...wantedRewards.values()].reduce((sum, q) => sum + q, 0);
+    if (rewardCount > MAX_REWARDS_PER_SALE) {
+      throw new HttpError(400, `Mỗi đơn đổi tối đa ${MAX_REWARDS_PER_SALE} phần quà.`);
+    }
+    // Điểm thuộc về SỐ ĐIỆN THOẠI CỦA TÀI KHOẢN, giống lúc cộng điểm khi đơn giao xong.
+    const pointsPhone = rewardCount > 0
+      ? normalizePhone(db.prepare('SELECT phone FROM users WHERE id = ?').get(req.user.id)?.phone)
+      : null;
+    if (rewardCount > 0 && !pointsPhone) {
+      throw new HttpError(400, 'Tài khoản chưa có số điện thoại nên chưa dùng được điểm tích luỹ.');
+    }
 
     // Đọc giá, kiểm tra tồn kho, tạo đơn và trừ kho trong cùng một transaction.
     const createOrder = db.transaction(() => {
@@ -104,12 +140,14 @@ router.post('/', requireAuth, (req, res, next) => {
       const getProduct = db.prepare('SELECT * FROM products WHERE id = ? AND is_active = 1');
       const insOrder = db.prepare(
         `INSERT INTO orders (user_id, receiver_name, phone, address, note, payment_method,
-                             subtotal, discount, total, delivery_slot)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                             subtotal, discount, total, delivery_slot, delivery_lat, delivery_lng,
+                             voucher_discount, points_used, points_phone)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       const insItem = db.prepare(
-        `INSERT INTO order_items (order_id, product_id, product_name, unit, price, quantity, cost_price)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO order_items (order_id, product_id, product_name, unit, price, quantity, cost_price,
+                                  points_per_unit, is_reward)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       // Trừ kho có điều kiện: nếu người khác vừa mua trước thì không dòng nào đổi
       // và cả transaction bị huỷ bỏ, tránh bán vượt tồn kho.
@@ -134,6 +172,16 @@ router.post('/', requireAuth, (req, res, next) => {
         subtotal += product.price * quantity;
       }
 
+      // Quà đổi điểm: giá 0đ, vẫn trừ kho như hàng bán, không sinh điểm.
+      const rewardLines = [];
+      for (const [productId, quantity] of wantedRewards) {
+        const product = getProduct.get(productId);
+        if (!product || !product.is_reward) {
+          throw new HttpError(400, 'Có phần quà không còn trong danh sách đổi điểm. Vui lòng chọn lại.');
+        }
+        rewardLines.push({ product, quantity });
+      }
+
       // Đơn ĐẦU TIÊN của mỗi tài khoản được giảm 20.000đ. Đơn đã huỷ không tính là
       // đã mua, nhưng đơn còn chờ xác nhận thì có, nên khách không thể đặt liền hai
       // đơn để ăn giảm giá hai lần. Câu lệnh này nằm trong cùng transaction với
@@ -142,12 +190,25 @@ router.post('/', requireAuth, (req, res, next) => {
         .prepare("SELECT 1 FROM orders WHERE user_id = ? AND status <> 'cancelled' LIMIT 1")
         .get(req.user.id);
       // Không để tiền giảm vượt quá tiền hàng.
-      const discount = boughtBefore ? 0 : Math.min(FIRST_ORDER_DISCOUNT, subtotal);
+      const firstDiscount = boughtBefore ? 0 : Math.min(FIRST_ORDER_DISCOUNT, subtotal);
+      // Voucher đổi điểm không được vượt số tiền còn phải trả, để khách không mất điểm oan.
+      const voucherDiscount = vouchers * REWARD_VOUCHER_AMOUNT;
+      if (voucherDiscount > subtotal - firstDiscount) {
+        throw new HttpError(400,
+          `Đơn còn ${(subtotal - firstDiscount).toLocaleString('vi-VN')}đ, chưa đủ để dùng ${vouchers} voucher ${REWARD_VOUCHER_AMOUNT.toLocaleString('vi-VN')}đ.`,
+          { rewards: 'Bớt voucher hoặc thêm hàng.' });
+      }
+      // orders.discount là TỔNG tiền giảm (đơn đầu + voucher); voucher_discount là phần voucher.
+      const discount = firstDiscount + voucherDiscount;
       const total = subtotal - discount;
+      const pointsUsed = rewardCount * RETAIL_POINTS_PER_REWARD;
+      if (pointsUsed > 0) spendPoints(pointsPhone, pointsUsed);
 
       const orderId = insOrder.run(
         req.user.id, receiverName, customerPhone, deliveryAddress,
-        customerNote, paymentMethod, subtotal, discount, total, deliverySlot
+        customerNote, paymentMethod, subtotal, discount, total, deliverySlot,
+        savedAddress?.latitude ?? null, savedAddress?.longitude ?? null,
+        voucherDiscount, pointsUsed, pointsUsed > 0 ? pointsPhone : null
       ).lastInsertRowid;
       // Mã đơn tự tạo từ số thứ tự: DH000123, cùng kiểu mã hoá đơn quầy HD000123.
       db.prepare('UPDATE orders SET code = ? WHERE id = ?').run(orderCode(orderId), orderId);
@@ -157,7 +218,17 @@ router.post('/', requireAuth, (req, res, next) => {
         if (!changed) {
           throw new HttpError(409, `“${product.name}” vừa được mua hết. Vui lòng thử lại.`);
         }
-        insItem.run(orderId, product.id, product.name, product.unit, product.price, quantity, product.cost_price ?? 0);
+        insItem.run(orderId, product.id, product.name, product.unit, product.price, quantity,
+          product.cost_price ?? 0, product.points_per_unit ?? null, 0);
+      }
+      for (const { product, quantity } of rewardLines) {
+        const changed = decStock.run(quantity, product.id, quantity).changes;
+        if (!changed) {
+          throw new HttpError(409, `Quà “${product.name}” vừa hết hàng. Vui lòng chọn quà khác.`);
+        }
+        // Quà ghi giá 0 nhưng giữ giá vốn để báo cáo lãi không bị thổi phồng.
+        insItem.run(orderId, product.id, product.name, product.unit, 0, quantity,
+          product.cost_price ?? 0, 0, 1);
       }
 
       // Ghi nhớ SĐT / địa chỉ mặc định nếu tài khoản chưa có.
@@ -184,7 +255,20 @@ router.get('/discount', requireAuth, (req, res) => {
   const boughtBefore = db
     .prepare("SELECT 1 FROM orders WHERE user_id = ? AND status <> 'cancelled' LIMIT 1")
     .get(req.user.id);
-  res.json({ available: !boughtBefore, amount: FIRST_ORDER_DISCOUNT });
+  // Điểm tích luỹ và danh sách quà để trang đặt hàng cho khách đổi điểm.
+  const phone = db.prepare('SELECT phone FROM users WHERE id = ?').get(req.user.id)?.phone;
+  const points = loyaltyProfile(phone)?.points ?? 0;
+  res.json({
+    available: !boughtBefore,
+    amount: FIRST_ORDER_DISCOUNT,
+    points,
+    pointsPerReward: RETAIL_POINTS_PER_REWARD,
+    voucherAmount: REWARD_VOUCHER_AMOUNT,
+    rewards: db.prepare(`
+      SELECT id, name, unit, image_url, stock FROM products
+      WHERE is_reward = 1 AND is_active = 1 AND stock > 0 ORDER BY id
+    `).all(),
+  });
 });
 
 /** GET /api/orders — Lịch sử đơn hàng của tôi */
@@ -240,7 +324,11 @@ router.get('/:id', requireAuth, (req, res, next) => {
   }
 });
 
-/** Trả số lượng về kho. Luôn gọi bên trong transaction đã khoá trạng thái đơn. */
+/**
+ * Huỷ đơn: trả số lượng (cả quà) về kho và hoàn điểm đã dùng để đổi quà/voucher.
+ * Luôn gọi bên trong transaction đã khoá trạng thái đơn (UPDATE ... WHERE status = ?),
+ * nên mỗi đơn chỉ được hoàn kho và hoàn điểm đúng một lần.
+ */
 export function restoreStockForOrder(orderId) {
   const items = db
     .prepare('SELECT product_id, quantity FROM order_items WHERE order_id = ?')
@@ -249,6 +337,8 @@ export function restoreStockForOrder(orderId) {
   for (const item of items) {
     if (item.product_id) restore.run(item.quantity, item.product_id);
   }
+  const order = db.prepare('SELECT points_used, points_phone FROM orders WHERE id = ?').get(orderId);
+  if (order?.points_used > 0) refundPoints(order.points_phone, order.points_used);
 }
 
 function getOrderForUser(orderId, userId) {

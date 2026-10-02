@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { api, formatDateTime, formatVND, DELIVERY_SLOTS } from '../api';
+import { api, formatDateTime, formatNumber, formatVND, DELIVERY_SLOTS } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 
 const SLOT_TIME = Object.fromEntries(DELIVERY_SLOTS.map(([code, , time]) => [code, time]));
@@ -98,7 +98,7 @@ export default function Orders() {
                 {order.items.map((item) => (
                   <li key={item.id}>
                     <span>
-                      <strong>{item.product_name}</strong>
+                      <strong>{item.product_name}{!!item.is_reward && <span className="gift-tag">{t('orders.gift')}</span>}</strong>
                       <small>{t('line.qty', { qty: item.quantity, unit: unit(item.unit), price: formatVND(item.price) })}</small>
                     </span>
                     <span>{formatVND(item.price * item.quantity)}</span>
@@ -118,6 +118,9 @@ export default function Orders() {
                   <small>{PAYMENTS.includes(order.payment_method) ? t(`orders.${order.payment_method}`) : order.payment_method}</small>
                   {order.points_earned > 0 && (
                     <small>{t('orders.pointsEarned', { n: order.points_earned })}</small>
+                  )}
+                  {order.points_used > 0 && (
+                    <small>{t('orders.pointsUsed', { n: formatNumber(order.points_used) })}</small>
                   )}
                   {order.note && <small>{t('orders.note', { note: order.note })}</small>}
                 </div>

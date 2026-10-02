@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom';
 const ImagePicker = lazy(() => import('../components/ImagePicker.jsx'));
 const BannerSettings = lazy(() => import('../components/BannerSettings.jsx'));
-import { api, salePercent, PRODUCT_CATEGORIES, formatDateTime, formatVND, pointsFor, STATUS_LABEL, DELIVERY_SLOT_LABEL } from '../api';
+import { api, salePercent, PRODUCT_CATEGORIES, formatDateTime, formatVND, pointsForLines, mapLink, STATUS_LABEL, DELIVERY_SLOT_LABEL } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
 const RevenueReport = lazy(() => import('../components/RevenueReport.jsx'));
 const CustomerManager = lazy(() => import('../components/CustomerManager.jsx'));
@@ -12,7 +12,12 @@ import ProductImage from '../components/ProductImage.jsx';
 import OrdersExportButton from '../components/OrdersExportButton.jsx';
 import PageLoadBoundary from '../components/PageLoadBoundary.jsx';
 
-const EMPTY = { name: '', origin: '', price: '', original_price: '', cost_price: '', category: 'gao', unit: 'kg', weight_kg: '', stock: '', description: '', image_url: '' };
+const EMPTY = {
+  name: '', origin: '', price: '', original_price: '', cost_price: '', category: 'gao', unit: 'kg', weight_kg: '',
+  stock: '', description: '', image_url: '',
+  // Tích điểm: tắt điểm riêng = theo tiền (1.000đ = 1 điểm); bật = số điểm cố định mỗi túi/bao.
+  points_custom: false, points_per_unit: '', is_reward: false,
+};
 const FILTERS = [
   ['all', 'Tất cả'], ['pending', 'Chờ xác nhận'], ['confirmed', 'Đã xác nhận'],
   ['shipping', 'Đang giao'], ['completed', 'Hoàn thành'], ['cancelled', 'Đã huỷ'],
@@ -138,6 +143,12 @@ export default function Admin() {
     if (!Number.isFinite(stock) || !Number.isInteger(stock) || stock < 0) {
       errors.stock = 'Tồn kho phải là số nguyên từ 0 trở lên.';
     }
+    if (form.points_custom) {
+      const points = Number(form.points_per_unit);
+      if (form.points_per_unit === '' || !Number.isInteger(points) || points < 0 || points > 10000) {
+        errors.points_per_unit = 'Nhập số điểm nguyên từ 0 đến 10.000 (0 = không cộng điểm).';
+      }
+    }
     // Cho phép cả ảnh có sẵn trong ứng dụng ("/products/....jpg") lẫn ảnh trên mạng.
     const image = form.image_url.trim();
     const isInternal = image.startsWith('/') && !image.startsWith('//');
@@ -159,8 +170,11 @@ export default function Admin() {
     setFormErrors({});
     setBusyId(editingId || 'new-product');
     try {
+      const { points_custom: pointsCustom, ...fields } = form;
       const payload = {
-        ...form,
+        ...fields,
+        points_per_unit: pointsCustom ? Number(form.points_per_unit) : null,
+        is_reward: !!form.is_reward,
         price: Number(form.price),
         cost_price: form.cost_price === '' ? 0 : Number(form.cost_price),
         original_price: form.original_price === '' ? 0 : Number(form.original_price),
@@ -192,6 +206,9 @@ export default function Admin() {
       original_price: product.original_price || '', category: product.category || 'gao',
       weight_kg: product.weight_kg || '',
       stock: product.stock, description: product.description || '', image_url: product.image_url || '',
+      points_custom: product.points_per_unit != null,
+      points_per_unit: product.points_per_unit ?? '',
+      is_reward: !!product.is_reward,
     });
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -361,6 +378,11 @@ export default function Admin() {
                                 <h2>{order.receiver_name}</h2>
                                 <a href={`tel:${order.phone}`} className="phone-link">{order.phone}</a>
                                 <p className="address-text">{order.address}</p>
+                                {mapLink(order.delivery_lat, order.delivery_lng) && (
+                                  <a className="map-link" href={mapLink(order.delivery_lat, order.delivery_lng)} target="_blank" rel="noopener noreferrer">
+                                    📍 Mở vị trí khách ghim trên Google Maps
+                                  </a>
+                                )}
                                 {order.delivery_slot && (
                                   <p className="slot-text"><strong>Khung giờ giao:</strong> {DELIVERY_SLOT_LABEL[order.delivery_slot]}</p>
                                 )}
@@ -369,23 +391,36 @@ export default function Admin() {
                               <section>
                                 <p className="detail-label">Sản phẩm</p>
                                 <ul className="admin-order-items">
-                                  {order.items.map((item) => <li key={item.id}><span>{item.product_name}<small>{item.quantity} {item.unit}</small></span><strong>{formatVND(item.price * item.quantity)}</strong></li>)}
+                                  {order.items.map((item) => <li key={item.id}><span>{item.product_name}{!!item.is_reward && <span className="gift-tag">Quà đổi điểm</span>}<small>{item.quantity} {item.unit}</small></span><strong>{formatVND(item.price * item.quantity)}</strong></li>)}
                                 </ul>
                                 {order.discount > 0 && (
                                   <>
                                     <div className="admin-order-line"><span>Tiền hàng</span><span>{formatVND(order.subtotal || order.total + order.discount)}</span></div>
-                                    <div className="admin-order-line discount">
-                                      <span>Giảm giá <small>đơn đầu tiên của khách</small></span>
-                                      <span>− {formatVND(order.discount)}</span>
-                                    </div>
+                                    {order.discount - (order.voucher_discount || 0) > 0 && (
+                                      <div className="admin-order-line discount">
+                                        <span>Giảm giá <small>đơn đầu tiên của khách</small></span>
+                                        <span>− {formatVND(order.discount - (order.voucher_discount || 0))}</span>
+                                      </div>
+                                    )}
+                                    {order.voucher_discount > 0 && (
+                                      <div className="admin-order-line discount">
+                                        <span>Voucher đổi điểm</span>
+                                        <span>− {formatVND(order.voucher_discount)}</span>
+                                      </div>
+                                    )}
                                   </>
+                                )}
+                                {order.points_used > 0 && (
+                                  <small className="payment-label points">
+                                    Đã trừ {order.points_used.toLocaleString('vi-VN')} điểm đổi quà/voucher{order.status === 'cancelled' ? ' · đã hoàn lại khi huỷ' : ''}
+                                  </small>
                                 )}
                                 <div className="admin-order-total"><span>Khách trả</span><strong>{formatVND(order.total)}</strong></div>
                                 <small className="payment-label">{order.payment_method === 'bank' ? 'Khách chọn chuyển khoản' : 'Thanh toán khi nhận hàng'}</small>
                                 {order.status === 'completed'
                                   ? <small className="payment-label points">Đã cộng {order.points_earned || 0} điểm cho {order.phone}</small>
                                   : order.status !== 'cancelled' && (
-                                    <small className="payment-label points muted">Sẽ cộng {pointsFor(order.total)} điểm khi bấm Hoàn thành</small>
+                                    <small className="payment-label points muted">Sẽ cộng {pointsForLines(order.items.filter((item) => !item.is_reward), order.total)} điểm khi bấm Hoàn thành</small>
                                   )}
                               </section>
                             </div>
@@ -460,6 +495,35 @@ export default function Admin() {
                             {formErrors.stock && <small className="err">{formErrors.stock}</small>}
                           </label>
                         </div>
+                        <fieldset className="points-settings">
+                          <legend>Tích điểm cho loại này</legend>
+                          <div className="points-toggle" role="group" aria-label="Cách cộng điểm">
+                            <button type="button" className={form.points_custom ? '' : 'active'} aria-pressed={!form.points_custom}
+                                    onClick={() => setForm((current) => ({ ...current, points_custom: false }))}>
+                              Theo tiền <small>1.000₫ = 1 điểm</small>
+                            </button>
+                            <button type="button" className={form.points_custom ? 'active' : ''} aria-pressed={form.points_custom}
+                                    onClick={() => setForm((current) => ({ ...current, points_custom: true }))}>
+                              Điểm riêng <small>tự nhập số điểm mỗi {form.unit || 'đơn vị'}</small>
+                            </button>
+                          </div>
+                          {form.points_custom && (
+                            <label>Số điểm mỗi {form.unit || 'đơn vị'}
+                              <input className="input" type="number" name="points_per_unit" value={form.points_per_unit} onChange={onChange}
+                                     min="0" max="10000" step="1" inputMode="numeric" placeholder="Ví dụ: 150" aria-invalid={!!formErrors.points_per_unit} />
+                              {formErrors.points_per_unit
+                                ? <small className="err">{formErrors.points_per_unit}</small>
+                                : <small className="field-help">
+                                    Khách mua 1 {form.unit || 'đơn vị'} được cộng đúng số điểm này, không phụ thuộc giảm giá. Đặt 0 nếu loại này không cộng điểm.
+                                  </small>}
+                            </label>
+                          )}
+                          <label className="checkbox-label">
+                            <input type="checkbox" checked={!!form.is_reward}
+                                   onChange={(e) => setForm((current) => ({ ...current, is_reward: e.target.checked }))} />
+                            Làm quà đổi 1.000 điểm <small className="muted">(khách đổi lấy 1 {form.unit || 'đơn vị'} miễn phí, online hoặc tại quầy)</small>
+                          </label>
+                        </fieldset>
                         <label>Mô tả ngắn<textarea className="input" name="description" rows={3} value={form.description} onChange={onChange} placeholder="Đặc điểm hạt gạo, độ dẻo, mùi thơm…" /></label>
                         <ImagePicker
                           value={form.image_url}
@@ -512,8 +576,14 @@ export default function Admin() {
                               <span className="margin-tag"> · lãi {formatVND(product.price - product.cost_price)}</span>
                             )}
                           </p>
-                          {(salePercent(product) > 0 || product.category === 'do-kho') && (
+                          {(salePercent(product) > 0 || product.category === 'do-kho' || product.points_per_unit != null || !!product.is_reward) && (
                             <p className="product-tags">
+                              {product.points_per_unit != null && (
+                                <span className="admin-points-tag">
+                                  {product.points_per_unit > 0 ? `★ ${product.points_per_unit} điểm/${product.unit}` : 'Không cộng điểm'}
+                                </span>
+                              )}
+                              {!!product.is_reward && <span className="admin-reward-tag">Quà đổi điểm</span>}
                               {salePercent(product) > 0 && (
                                 <span className="admin-sale-tag">Giảm {salePercent(product)}% · giá gốc {formatVND(product.original_price)}</span>
                               )}

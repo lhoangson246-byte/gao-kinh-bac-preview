@@ -225,6 +225,9 @@ export default function Home() {
                     </span>
                   </div>
                   <h3>{product.name}</h3>
+                  {product.points_per_unit > 0 && (
+                    <p className="points-tag">{t('card.points', { n: product.points_per_unit, unit: unit(product.unit) })}</p>
+                  )}
                   <p className="desc">{product.description || t('card.descFallback')}</p>
                   <div className="product-bottom">
                     <div className="product-price">

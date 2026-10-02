@@ -22,11 +22,15 @@
 - Chọn thanh toán khi nhận hàng hoặc chuyển khoản
 - **Ưu đãi 20.000₫ cho đơn đầu tiên** của mỗi tài khoản; giỏ hàng và trang đặt hàng hiện sẵn số tiền được giảm
 - **Tích điểm cho mọi đơn**: đơn giao xong sẽ cộng điểm vào chính số điện thoại của tài khoản (1.000₫ = 1 điểm)
+- **Điểm theo loại gạo**: mỗi loại có thể đặt điểm riêng cho mỗi túi/bao, hoặc tính theo tiền như mặc định
+- **Đổi 1.000 điểm** lấy voucher 30.000₫ hoặc 1kg gạo nếp / gạo lứt / mì chũ, ngay ở trang đặt hàng; huỷ đơn thì hoàn điểm
+- **Ghim vị trí giao hàng** bằng GPS điện thoại; cửa hàng mở thẳng Google Maps từ đơn hàng
 - Theo dõi trạng thái và tự huỷ đơn còn chờ xác nhận
 - Cài ứng dụng lên màn hình chính từ trình duyệt hỗ trợ PWA
 
 ### Quản trị
 
+- **Nhóm khách**: xếp và lọc khách thường / nhà hàng / buôn · đại lý (dùng chung với bán tại quầy)
 - Khu vực `/quan-tri` tách biệt với ứng dụng khách hàng, chỉ tài khoản `admin` vào được
 - Mở trang là thấy ngay số đơn đang chờ xác nhận
 - Nút thao tác theo từng bước: xác nhận → giao hàng → hoàn thành
