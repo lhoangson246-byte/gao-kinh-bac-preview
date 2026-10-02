@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, formatVND, salePercent } from '../api';
 import { useCart } from '../context/CartContext.jsx';
 import ProductImage from '../components/ProductImage.jsx';
+import HeroSlider from '../components/HeroSlider.jsx';
 import { useI18n } from '../i18n/index.jsx';
 
 // Ảnh dự phòng nằm trong thư mục public, không phụ thuộc dịch vụ bên ngoài.
@@ -24,6 +25,9 @@ const GROUPS = [
   { code: 'do-kho', key: 'group.dry' },
 ];
 
+/** 0912345678 → 0912 345 678 cho dễ đọc. */
+const formatPhone = (phone) => phone.replace(/^(\d{4})(\d{3})(\d{3})$/, '$1 $2 $3');
+
 /** Chèn số in đậm vào câu đã dịch, đúng vị trí {n} của từng ngôn ngữ. */
 function splitCount(template, count) {
   const [before, after = ''] = template.split('{n}');
@@ -35,7 +39,8 @@ export default function Home() {
   const [q, setQ] = useState('');
   const [inStockOnly, setInStockOnly] = useState(false);
   const [group, setGroup] = useState('');
-  const [banner, setBanner] = useState('');
+  const [banners, setBanners] = useState([]);
+  const [contactPhone, setContactPhone] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [added, setAdded] = useState(null);
@@ -45,11 +50,18 @@ export default function Home() {
   const { add, count, total, syncWithProducts } = useCart();
   const { t, unit } = useI18n();
 
-  // Ảnh banner do cửa hàng tự đổi trong trang quản trị. Lỗi thì giữ banner màu mặc định.
+  // Ảnh banner và số tư vấn do cửa hàng tự đổi trong trang quản trị.
+  // Lỗi thì chỉ còn slide lời chào và ẩn khung liên hệ.
   useEffect(() => {
     let cancelled = false;
     api.storefront()
-      .then(({ settings }) => { if (!cancelled) setBanner(settings?.banner_image_url || ''); })
+      .then(({ settings }) => {
+        if (cancelled) return;
+        const list = Array.isArray(settings?.banner_images) ? settings.banner_images
+          : settings?.banner_image_url ? [settings.banner_image_url] : [];
+        setBanners(list);
+        setContactPhone(settings?.contact_phone || '');
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
@@ -93,18 +105,31 @@ export default function Home() {
 
   return (
     <div className="store-app">
-      <header className={`store-toolbar${banner ? ' has-banner' : ''}`}>
-        {banner && (
-          <img className="store-banner" src={banner} alt="" fetchpriority="high"
-               onError={() => setBanner('')} />
-        )}
-        <div className="store-toolbar-copy">
-          <p className="delivery-chip"><span aria-hidden="true">⌖</span> {t('home.deliveryIn')} <strong>Bắc Ninh</strong></p>
-          <h1>{t('home.title')}</h1>
-          <p className="toolbar-note">{t('home.note')}</p>
-        </div>
-        {!banner && <div className="toolbar-art" aria-hidden="true"><span>🌾</span></div>}
-      </header>
+      <HeroSlider images={banners}
+                  onImageError={(url) => setBanners((list) => list.filter((item) => item !== url))}>
+        <header className="store-toolbar">
+          <div className="store-toolbar-copy">
+            <p className="delivery-chip"><span aria-hidden="true">⌖</span> {t('home.deliveryIn')} <strong>Bắc Ninh</strong></p>
+            <h1>{t('home.title')}</h1>
+            <p className="toolbar-note">{t('home.note')}</p>
+          </div>
+          <div className="toolbar-art" aria-hidden="true"><span>🌾</span></div>
+        </header>
+      </HeroSlider>
+
+      {/* Chỉ hiện khi cửa hàng đã nhập số trong trang quản trị — không dùng số giả. */}
+      {contactPhone && (
+        <aside className="contact-strip" aria-label={t('contact.label')}>
+          <span className="contact-icon" aria-hidden="true">☏</span>
+          <div className="contact-copy">
+            <strong>{t('contact.title')}</strong>
+            <span>{t('contact.body')}</span>
+          </div>
+          <a className="btn btn-primary contact-call" href={`tel:${contactPhone}`}>
+            {t('contact.call', { phone: formatPhone(contactPhone) })}
+          </a>
+        </aside>
+      )}
 
       <section className="catalog-controls" aria-label={t('home.controls')}>
         <label className="search-box">

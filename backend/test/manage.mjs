@@ -782,7 +782,8 @@ const guestToken = (await call('/auth/register', {
 
 /* --- Ảnh banner trang chủ đổi được --- */
 {
-  const before = (await call('/settings/storefront')).data.settings?.banner_image_url ?? null;
+  const original = (await call('/settings/storefront')).data.settings || null;
+  const before = original?.banner_image_url ?? null;
   check('Khách xem được cài đặt banner mà không cần đăng nhập', before !== null, String(before));
 
   const set = await call('/admin/settings/storefront', {
@@ -806,8 +807,47 @@ const guestToken = (await call('/auth/register', {
 
   const clear = await call('/admin/settings/storefront', { method: 'PUT', token: admin, body: { banner_image_url: '' } });
   check('Bỏ ảnh banner để quay về banner màu', clear.status === 200 && clear.data.settings?.banner_image_url === '');
+
+  /* Nhiều ảnh chạy vòng, đúng thứ tự, bỏ ảnh trùng */
+  const many = await call('/admin/settings/storefront', {
+    method: 'PUT', token: admin,
+    body: { banner_images: ['/products/co-may-4-mua-5kg.jpg', '/logo-mark.png', '/products/co-may-4-mua-5kg.jpg'] },
+  });
+  check('Lưu được nhiều ảnh banner theo thứ tự, bỏ ảnh trùng',
+    many.status === 200 && JSON.stringify(many.data.settings?.banner_images) === JSON.stringify(['/products/co-may-4-mua-5kg.jpg', '/logo-mark.png']),
+    `status=${many.status} ${JSON.stringify(many.data.settings)}`);
+  check('Ảnh đầu vẫn trả ở banner_image_url cho bản cũ', many.data.settings?.banner_image_url === '/products/co-may-4-mua-5kg.jpg');
+  const seven = await call('/admin/settings/storefront', {
+    method: 'PUT', token: admin, body: { banner_images: Array.from({ length: 7 }, (_, i) => `/b${i}.jpg`) },
+  });
+  check('Quá 6 ảnh banner bị từ chối (400)', seven.status === 400, `status=${seven.status}`);
+  const badList = await call('/admin/settings/storefront', {
+    method: 'PUT', token: admin, body: { banner_images: ['/ok.jpg', 'javascript:alert(1)'] },
+  });
+  check('Một ảnh nguy hiểm trong danh sách thì từ chối cả lần lưu', badList.status === 400, `status=${badList.status}`);
+
+  /* Số điện thoại tư vấn */
+  const phoneSet = await call('/admin/settings/storefront', {
+    method: 'PUT', token: admin, body: { contact_phone: '+84 912 345 678' },
+  });
+  check('Lưu số tư vấn, tự chuẩn hoá về 0xxxxxxxxx',
+    phoneSet.status === 200 && phoneSet.data.settings?.contact_phone === '0912345678', JSON.stringify(phoneSet.data.settings));
+  check('Đổi số tư vấn không đụng tới danh sách ảnh',
+    JSON.stringify(phoneSet.data.settings?.banner_images) === JSON.stringify(['/products/co-may-4-mua-5kg.jpg', '/logo-mark.png']));
+  check('Khách thấy số tư vấn mà không cần đăng nhập',
+    (await call('/settings/storefront')).data.settings?.contact_phone === '0912345678');
+  const badPhone = await call('/admin/settings/storefront', { method: 'PUT', token: admin, body: { contact_phone: '12345' } });
+  check('Số tư vấn sai bị từ chối (400)', badPhone.status === 400 && !!badPhone.data.errors?.contact_phone, `status=${badPhone.status}`);
+  check('Khách thường không đổi được số tư vấn (403)',
+    (await call('/admin/settings/storefront', { method: 'PUT', token: guestToken, body: { contact_phone: '0912345678' } })).status === 403);
+  const phoneClear = await call('/admin/settings/storefront', { method: 'PUT', token: admin, body: { contact_phone: '' } });
+  check('Xoá số tư vấn để ẩn khung liên hệ', phoneClear.status === 200 && phoneClear.data.settings?.contact_phone === '');
+
   // Trả lại đúng như trước khi thử.
-  await call('/admin/settings/storefront', { method: 'PUT', token: admin, body: { banner_image_url: before || '' } });
+  await call('/admin/settings/storefront', {
+    method: 'PUT', token: admin,
+    body: { banner_images: original?.banner_images ?? (before ? [before] : []), contact_phone: original?.contact_phone || '' },
+  });
 }
 
 /* --- Mã đơn online tự tạo --- */

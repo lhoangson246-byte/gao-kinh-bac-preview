@@ -10,7 +10,8 @@
 - Danh mục hiện **3 sản phẩm một hàng** trên cả điện thoại, máy tính bảng và máy tính
 - **Lọc theo nhóm mặt hàng**: *Đang giảm giá*, *Gạo nhà hàng · bao 25kg*, *Thực phẩm khô*
 - Sản phẩm đang giảm giá có nhãn **−X%** và giá gốc bị gạch ngang, và luôn hiện lên đầu danh mục
-- **Ảnh banner trang chủ** do cửa hàng tự đổi trong trang quản trị
+- **Banner chạy vòng** (tối đa 6 ảnh, tự chuyển mỗi 2,5 giây, vuốt được trên điện thoại), ảnh hiện trọn không bị chữ che; cửa hàng tự thêm, bớt, sắp xếp trong trang quản trị
+- **Khung liên hệ tư vấn** cho nhà hàng, khách sạn dưới banner, kèm nút gọi; chỉ hiện khi cửa hàng đã nhập số điện thoại
 - Mỗi đơn online có **mã tự tạo** dạng `DH000123`
 - **Đổi ngôn ngữ Tiếng Việt · English · 中文** bằng nút VI · EN · 中 trên thanh trên cùng; lựa chọn được nhớ trên thiết bị
 - Giỏ hàng lưu trên thiết bị, tự cập nhật giá và tồn kho mới nhất từ cửa hàng

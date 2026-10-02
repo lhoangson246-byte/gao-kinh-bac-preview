@@ -7,11 +7,11 @@ import { creditPoints, loyaltyPhoneForOrder } from '../loyalty.js';
 import {
   ALLOWED_TRANSITIONS, ORDER_STATUSES, LIMITS, localDate, parseWeightKg, PRODUCT_CATEGORY_CODES,
 } from '../constants.js';
-import { HttpError, cleanImageUrl, cleanText, toInteger } from '../validate.js';
+import { HttpError, cleanImageUrl, cleanText, normalizePhone, toInteger } from '../validate.js';
 import { writeAdminAudit } from '../audit.js';
 import { listAdminOrders } from '../order-lists.js';
 import { buildOrdersWorkbook } from '../orders-export.js';
-import { readStorefront } from './settings.js';
+import { MAX_BANNERS, readStorefront } from './settings.js';
 
 const router = Router();
 
@@ -419,24 +419,55 @@ router.delete('/products/:id/permanent', (req, res, next) => {
 });
 
 /**
- * PUT /api/admin/settings/storefront — đổi ảnh banner trang chủ.
- * Gửi chuỗi rỗng để bỏ ảnh và quay về banner màu mặc định.
+ * PUT /api/admin/settings/storefront — đổi ảnh banner trang chủ và số điện thoại tư vấn.
+ * Chỉ trường nào được gửi mới bị đổi:
+ *  - banner_images: danh sách ảnh chạy vòng theo đúng thứ tự (mảng rỗng = banner màu mặc định)
+ *  - banner_image_url: cách cũ, một ảnh duy nhất ('' = bỏ ảnh)
+ *  - contact_phone: số điện thoại tư vấn ('' = ẩn khung liên hệ trên trang chủ)
  */
 router.put('/settings/storefront', (req, res, next) => {
   try {
-    const raw = cleanText(req.body?.banner_image_url, LIMITS.imageUrl) || '';
-    const url = raw ? cleanImageUrl(raw) : '';
-    if (raw && !url) {
-      throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', {
-        banner_image_url: 'Đường dẫn ảnh phải bắt đầu bằng http://, https:// hoặc / (ảnh có sẵn trong ứng dụng).',
-      });
+    const body = req.body || {};
+    const errors = {};
+    const updates = [];
+
+    let banners = null;
+    if (Array.isArray(body.banner_images)) {
+      banners = body.banner_images.map((raw) => cleanText(raw, LIMITS.imageUrl)).filter(Boolean);
+    } else if (body.banner_image_url !== undefined) {
+      const raw = cleanText(body.banner_image_url, LIMITS.imageUrl);
+      banners = raw ? [raw] : [];
     }
+    if (banners) {
+      const cleaned = banners.map((url) => cleanImageUrl(url));
+      if (cleaned.some((url) => !url)) {
+        errors.banner_images = 'Đường dẫn ảnh phải bắt đầu bằng http://, https:// hoặc / (ảnh có sẵn trong ứng dụng).';
+        errors.banner_image_url = errors.banner_images;
+      } else if (cleaned.length > MAX_BANNERS) {
+        errors.banner_images = `Tối đa ${MAX_BANNERS} ảnh banner.`;
+      } else {
+        // Bỏ ảnh trùng, giữ lần xuất hiện đầu tiên.
+        const unique = [...new Set(cleaned)];
+        updates.push(['banner_images', JSON.stringify(unique)], ['banner_image_url', unique[0] || '']);
+      }
+    }
+
+    if (body.contact_phone !== undefined && body.contact_phone !== null) {
+      const raw = cleanText(body.contact_phone, LIMITS.phone) || '';
+      const phone = raw ? normalizePhone(raw) : '';
+      if (raw && !phone) errors.contact_phone = 'Số điện thoại không hợp lệ (10 số, ví dụ 0912345678).';
+      else updates.push(['contact_phone', phone]);
+    }
+
+    if (Object.keys(errors).length) throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', errors);
+
     const before = readStorefront();
     db.transaction(() => {
-      db.prepare(`
-        INSERT INTO app_settings (key, value, updated_at) VALUES ('banner_image_url', ?, datetime('now'))
+      const upsert = db.prepare(`
+        INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-      `).run(url);
+      `);
+      for (const [key, value] of updates) upsert.run(key, value);
     })();
     const settings = readStorefront();
     writeAdminAudit(req, {

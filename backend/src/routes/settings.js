@@ -1,24 +1,50 @@
 import { Router } from 'express';
 import db from '../db.js';
+import { cleanImageUrl, normalizePhone } from '../validate.js';
 
 /**
- * Cài đặt cửa hàng khách được xem. Hiện chỉ có ảnh banner trang chủ; cửa hàng đổi
- * ảnh trong trang quản trị (PUT /api/admin/settings/storefront).
+ * Cài đặt cửa hàng khách được xem: các ảnh banner trang chủ (chạy vòng) và số
+ * điện thoại tư vấn. Cửa hàng đổi trong trang quản trị (PUT /api/admin/settings/storefront).
  */
 const router = Router();
 
-/** Các khoá được công khai. Khoá không nằm ở đây thì không bao giờ trả ra ngoài. */
-export const STOREFRONT_KEYS = ['banner_image_url'];
+/** Số ảnh banner tối đa trong vòng chạy. */
+export const MAX_BANNERS = 6;
 
-export function readStorefront() {
-  const placeholders = STOREFRONT_KEYS.map(() => '?').join(', ');
-  const rows = db.prepare(`SELECT key, value FROM app_settings WHERE key IN (${placeholders})`).all(...STOREFRONT_KEYS);
-  const settings = Object.fromEntries(STOREFRONT_KEYS.map((key) => [key, '']));
-  for (const row of rows) settings[row.key] = row.value || '';
-  return settings;
+/** Các khoá đọc từ app_settings. Khoá không nằm ở đây thì không bao giờ trả ra ngoài. */
+const STORED_KEYS = ['banner_images', 'banner_image_url', 'contact_phone'];
+
+/** Danh sách ảnh lưu dạng JSON; bỏ mọi phần tử không còn là đường dẫn ảnh an toàn. */
+function parseBanners(raw) {
+  try {
+    const list = JSON.parse(raw || '[]');
+    if (!Array.isArray(list)) return [];
+    return list.map((url) => (typeof url === 'string' ? cleanImageUrl(url) : null))
+      .filter(Boolean).slice(0, MAX_BANNERS);
+  } catch {
+    return [];
+  }
 }
 
-/** GET /api/settings/storefront — ảnh banner và các cài đặt công khai khác */
+export function readStorefront() {
+  const placeholders = STORED_KEYS.map(() => '?').join(', ');
+  const rows = db.prepare(`SELECT key, value FROM app_settings WHERE key IN (${placeholders})`).all(...STORED_KEYS);
+  const stored = Object.fromEntries(rows.map((row) => [row.key, row.value || '']));
+
+  // Trước đây chỉ có một ảnh (banner_image_url). Chưa lưu danh sách thì dùng ảnh cũ đó.
+  const banners = stored.banner_images !== undefined
+    ? parseBanners(stored.banner_images)
+    : [cleanImageUrl(stored.banner_image_url || '')].filter(Boolean);
+
+  return {
+    banner_images: banners,
+    // Giữ cho bản ứng dụng cũ còn trong bộ nhớ đệm của khách.
+    banner_image_url: banners[0] || '',
+    contact_phone: normalizePhone(stored.contact_phone || ''),
+  };
+}
+
+/** GET /api/settings/storefront — ảnh banner, số điện thoại tư vấn */
 router.get('/storefront', (req, res) => {
   // Giống danh mục: giống nhau với mọi khách nên cho CDN giữ ngắn hạn.
   res.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=300');

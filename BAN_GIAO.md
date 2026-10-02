@@ -693,17 +693,8 @@ bản schema lên `schema:2026-09-26-v1`; Production tự chạy migration khi b
 
 ### Ảnh banner trang chủ
 
-**Quản trị → Sản phẩm**, ô đầu tiên *Ảnh banner trang chủ*. Chọn ảnh bằng một trong bốn cách
-như ảnh sản phẩm (chọn tệp, kéo thả, dán Ctrl+V, chọn từ thư viện), rồi bấm **Lưu banner**.
-Ảnh chỉ đổi trên trang khi bấm Lưu, nên thử được vài ảnh trước. **Bỏ ảnh** rồi Lưu để quay về
-banner màu xanh mặc định.
-
-- Nên dùng ảnh ngang khoảng 1600 × 500 px, **không có chữ** trong ảnh, vì tiêu đề trang chủ
-  nằm đè lên. Ảnh banner được thu nhỏ tối đa 1920 px thay vì 1200 px như ảnh sản phẩm.
-- Lớp phủ tối (ngang trên máy tính, dọc trên điện thoại) giữ tiêu đề trắng luôn đọc rõ.
-- Ảnh lưu ở bảng mới `app_settings` (khoá `banner_image_url`). Khách đọc qua
-  `GET /api/settings/storefront`; chỉ quản trị đổi được qua `PUT /api/admin/settings/storefront`,
-  đường dẫn ảnh được kiểm tra như ảnh sản phẩm và mỗi lần đổi có ghi nhật ký.
+*Đã thay bằng banner chạy vòng nhiều ảnh, xem mục "Banner chạy vòng và khung liên hệ tư vấn"
+bên dưới.* Ảnh banner đơn cũ vẫn được giữ và tự thành ảnh đầu tiên của vòng chạy.
 
 ### Hàng đang giảm giá hiện lên đầu
 
@@ -740,6 +731,49 @@ lúc tạo đơn, trong cùng transaction, và đơn cũ được cấp mã tự
 Mã hiện ở trang *Đơn của tôi*, trong thông báo đặt hàng thành công, trên thẻ đơn của quản trị,
 trong hộp xác nhận huỷ đơn, và trong tệp Excel (trước đây Excel tự ghép `DH` + số không đệm).
 
+
+## Banner chạy vòng và khung liên hệ tư vấn (02/10/2026)
+
+### Banner chạy vòng
+
+Trước đây tiêu đề "Chọn gạo cho nhà mình" nằm đè lên ảnh banner, nên che mất chữ có sẵn trong
+ảnh (ví dụ ảnh voucher giảm 20K). Giờ banner là một vòng chạy:
+
+- Slide 1 là lời chào màu xanh. Các slide sau là từng ảnh cửa hàng tải lên, hiện **trọn vẹn và
+  không có chữ đè lên**.
+- Tự chuyển sau mỗi **2,5 giây** và quay vòng lại từ đầu. Dưới banner có chấm để chọn slide và
+  nút tạm dừng / chạy tiếp. Trên điện thoại vuốt trái hoặc phải để đổi slide.
+- Banner tự dừng khi khách rê chuột vào, khi dùng bàn phím trong banner (phím ← → để đổi
+  slide), và khi khách chuyển sang tab khác. Máy đặt "giảm chuyển động" thì banner không tự
+  chạy, khách vẫn bấm chấm để xem.
+- Ảnh có tỉ lệ khác khung thì phần thừa hai bên được lấp bằng bản mờ của chính ảnh đó. Ảnh
+  ngang tỉ lệ khoảng 3 : 1 (ví dụ 1500 × 500 px) sẽ lấp kín khung.
+
+**Quản trị → Sản phẩm**, ô đầu tiên *Trang chủ: banner và liên hệ*:
+
+- **+ Thêm ảnh banner** để thêm ảnh (tối đa 6), chọn ảnh bằng bốn cách như ảnh sản phẩm.
+- **↑ ↓** để đổi thứ tự, **Đổi ảnh** để thay, **Bỏ** để xoá khỏi vòng chạy.
+- Bấm **Lưu trang chủ** thì khách mới thấy thay đổi. Không còn ảnh nào thì trang chủ chỉ hiện
+  slide lời chào.
+
+### Khung liên hệ tư vấn
+
+Ngay dưới banner có khung *"Bạn cần tìm gạo chất lượng cho nhà hàng, khách sạn? Liên hệ để
+được tư vấn ngay hôm nay."* kèm nút **Gọi** (bấm trên điện thoại là gọi luôn). Khung có đủ
+ba ngôn ngữ.
+
+**Số điện thoại cửa hàng chưa được cung cấp**, nên khung này **đang ẩn** trên trang thật và
+mã nguồn không có số giả nào. Nhập số ở ô *Số điện thoại tư vấn* trong cùng khung quản trị
+rồi bấm Lưu thì khung hiện ra. Xoá số rồi Lưu để ẩn lại. Số được kiểm tra ở máy chủ và tự
+chuẩn hoá (`+84 912 345 678` thành `0912345678`).
+
+### Lưu ở đâu
+
+Vẫn là bảng `app_settings`, không đổi cấu trúc cơ sở dữ liệu. Có thêm khoá `banner_images`
+(danh sách JSON) và `contact_phone`. Khoá `banner_image_url` vẫn được giữ bằng ảnh đầu tiên,
+để bản ứng dụng cũ còn trong bộ nhớ đệm của khách không bị lỗi. `PUT /api/admin/settings/storefront`
+chỉ đổi những trường được gửi lên, mỗi đường dẫn ảnh được kiểm tra như ảnh sản phẩm (một ảnh
+sai thì cả lần lưu bị từ chối), và mỗi lần đổi đều ghi nhật ký.
 
 ## Đổi ngôn ngữ: Tiếng Việt · English · 中文 (26/09/2026)
 

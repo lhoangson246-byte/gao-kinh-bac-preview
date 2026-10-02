@@ -82,7 +82,12 @@ add('customers', 'DELETE', /^\/[^/]+\/?$/);
 add('admin', 'GET', /^\/orders\/?$/, empty, obj({ ...page, status: z.enum(ORDER_STATUSES).optional() }));
 add('admin', 'PATCH', /^\/orders\/[^/]+\/status\/?$/, obj({ status: z.enum(ORDER_STATUSES) }));
 add('admin', 'GET', /^\/(products|stats)\/?$/);
-add('admin', 'PUT', /^\/settings\/storefront\/?$/, obj({ banner_image_url: optionalText(LIMITS.imageUrl).refine((v) => !v || cleanImageUrl(v) !== null) }));
+const bannerUrl = text(LIMITS.imageUrl).refine((v) => !v || cleanImageUrl(v) !== null);
+add('admin', 'PUT', /^\/settings\/storefront\/?$/, obj({
+  banner_images: z.array(bannerUrl).max(6).optional(),
+  banner_image_url: bannerUrl.nullable().optional(),
+  contact_phone: optionalText(LIMITS.phone),
+}));
 add('admin', 'POST', /^\/products\/?$/, obj(product));
 add('admin', 'PUT', /^\/products\/[^/]+\/?$/, obj(product).partial());
 add('admin', 'DELETE', /^\/products\/[^/]+\/?$/);
