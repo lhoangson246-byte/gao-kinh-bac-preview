@@ -143,6 +143,9 @@ export function retailRewardsAffordable(points) {
  */
 export const REWARD_VOUCHER_AMOUNT = 30_000;
 
+/** Đơn mua nhanh (không tài khoản): giới hạn số lượng mỗi loại thấp hơn để chống giữ kho ảo. */
+export const GUEST_MAX_QTY_PER_LINE = 50;
+
 /** Số voucher / phần quà tối đa trong một đơn, chặn gõ nhầm. */
 export const MAX_REWARDS_PER_SALE = 20;
 

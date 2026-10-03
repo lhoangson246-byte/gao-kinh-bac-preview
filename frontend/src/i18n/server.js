@@ -7,6 +7,9 @@ import { translateUnit } from './state.js';
  */
 
 const EXACT = {
+  'Chức năng đặt hàng nhanh đang được cập nhật. Vui lòng đăng nhập để đặt hàng.': {
+    en: 'Quick checkout is being updated. Please log in to order.', zh: '快速下单功能正在更新，请登录后下单。',
+  },
   'Tài khoản chưa có số điện thoại nên chưa dùng được điểm tích luỹ.': {
     en: 'Your account has no phone number yet, so points cannot be used.', zh: '账户尚未绑定手机号，暂时无法使用积分。',
   },

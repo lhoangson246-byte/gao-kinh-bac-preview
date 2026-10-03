@@ -827,6 +827,68 @@ vàng. Ở `orders`, cột `discount` vẫn là **tổng** tiền giảm (đơn 
 `voucher_discount` là phần voucher.
 
 
+## Đặt hàng nhanh không cần tài khoản (03/10/2026)
+
+Khách chưa đăng nhập vào **Giỏ hàng** sẽ thấy nút chính **Đặt hàng ngay · Không cần tạo tài
+khoản**, dẫn tới trang `/dat-nhanh`. Bên dưới có link nhỏ "Đã có tài khoản? Đăng nhập để dùng
+điểm". Khách đã đăng nhập vẫn dùng trang đặt hàng cũ (sổ địa chỉ, đổi điểm).
+
+### Trang `/dat-nhanh`, dành cho người không quen dùng điện thoại
+
+- Một trang duy nhất. Chữ to (ô nhập khoảng 18px, cao 56px), nút lớn (cao 62px), ít ô nhất có
+  thể: **họ tên, số điện thoại, địa chỉ**; ghim vị trí là tuỳ chọn. Giờ giao và cách trả tiền chọn
+  bằng hai nút to; ghi chú ẩn sau link "+ Thêm ghi chú".
+- **Máy tính** (từ khoảng 1366×768): cả form và nút "Đặt hàng ngay · tổng tiền" nằm gọn trong một
+  màn hình. **Điện thoại**: phần form dài khoảng một màn hình. Thanh "Tổng tiền · Đặt hàng ngay"
+  luôn dính ở đáy (thanh tab dưới cùng được ẩn ở trang này), tóm tắt đơn nằm bên dưới form.
+- Khuyến khích chốt đơn: nhắc ưu đãi 20.000₫ cho đơn đầu tiên, "Cửa hàng gọi xác nhận trước khi
+  giao", "Miễn phí giao hàng", "Đơn giao xong được tích điểm vào số điện thoại".
+- Bấm đặt khi còn thiếu thông tin thì mỗi ô báo lỗi bằng chữ to, con trỏ nhảy vào ô đầu tiên bị sai.
+- Thông tin nhận hàng được nhớ trên máy của khách (`localStorage`, khoá `gao_quick_info`) để lần
+  sau khỏi gõ lại; có nút "Không phải tôi?" để xoá.
+- Đủ ba ngôn ngữ.
+
+### Sau khi đặt
+
+Màn hình "Đặt hàng thành công" hiện mã đơn (chữ lớn), số điện thoại cửa hàng sẽ gọi, tổng tiền,
+số tiền được giảm và số điểm sẽ cộng. Bên dưới là ô **Tạo tài khoản (không bắt buộc)**: tên và
+số điện thoại lấy sẵn từ đơn, khách chỉ cần đặt mật khẩu. Tạo xong thì đơn vừa đặt được chuyển
+vào "Đơn của tôi" của tài khoản mới. Bỏ qua thì đơn vẫn được giao bình thường.
+
+### Quy tắc
+
+- **Ưu đãi đơn đầu tiên 20.000₫**: mỗi tài khoản một lần **và mỗi số điện thoại một lần**. Đơn mua
+  nhanh được giảm nếu số điện thoại đó chưa từng có đơn (chưa huỷ), dù là đơn mua nhanh hay của
+  tài khoản mang số đó. Ngược lại, tài khoản cũng không được giảm lần nữa nếu số của tài khoản đã
+  từng đặt mua nhanh.
+- **Tích điểm**: đơn mua nhanh giao xong được cộng điểm vào số điện thoại trên đơn, theo đúng quy
+  tắc điểm của từng loại gạo. Đơn huỷ không được cộng.
+- **Đổi điểm**: mua nhanh **không** đổi điểm được (voucher/quà), vì không xác minh được người đặt
+  có phải chủ số điện thoại hay không. Khách muốn đổi điểm thì đăng nhập.
+- **Huỷ đơn**: khách mua nhanh không tự huỷ trên web được (gọi cửa hàng), trừ khi đã tạo tài khoản
+  ngay sau khi đặt. Cửa hàng huỷ như đơn thường; kho được trả lại.
+- **Chống đơn ảo**: tối đa 50 mỗi loại trong một đơn mua nhanh; tối đa 10 đơn mỗi giờ mỗi IP và 5
+  đơn mỗi giờ mỗi số điện thoại. Lưu ý: trên Vercel, bộ đếm tính riêng cho từng máy chủ nên đây chỉ
+  là lớp chặn cơ bản.
+- Giá, giảm giá và tồn kho vẫn do máy chủ tự tính, trong cùng transaction với việc trừ kho, như đơn
+  có tài khoản (hai loại đơn dùng chung một hàm tạo đơn).
+
+### Trong trang quản trị
+
+Đơn mua nhanh có nhãn cam **Mua nhanh** trên thẻ đơn; trong Excel, cột Kênh ghi
+"Online · mua nhanh". Xử lý (xác nhận, giao, hoàn thành, huỷ) như đơn thường.
+
+### Kỹ thuật
+
+Bảng `orders` bắt buộc có `user_id`, nên đơn mua nhanh đứng tên một **tài khoản hệ thống**
+(`role = 'guest'`, tên "Khách mua nhanh (không tài khoản)"). Tài khoản này không có email, không có
+số điện thoại, bị khoá và mật khẩu không hợp lệ, nên không ai đăng nhập được. Nó không hiện trong
+danh sách khách và không sửa, khoá hay xoá được. Migration `schema:2026-10-03-v2` chỉ thêm cột
+`orders.is_guest`, `orders.guest_token_hash` và tạo tài khoản này; không đụng dữ liệu cũ.
+Mã gắn đơn vào tài khoản là chuỗi ngẫu nhiên chỉ trình duyệt vừa đặt đơn nhận được. Máy chủ chỉ
+lưu mã băm, mã dùng một lần và hết hạn sau 1 ngày.
+
+
 ## Banner chạy vòng và khung liên hệ tư vấn (02/10/2026)
 
 ### Banner chạy vòng

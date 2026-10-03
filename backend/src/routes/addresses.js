@@ -61,7 +61,7 @@ function validateAddress(body = {}) {
  * Trả về undefined khi không gửi (giữ nguyên vị trí cũ), null khi khách bỏ vị trí,
  * hoặc { latitude, longitude, accuracy }.
  */
-function readLocation(body, errors) {
+export function readLocation(body, errors) {
   if (body.latitude === undefined && body.longitude === undefined) return undefined;
   if (body.latitude === null && body.longitude === null) return null;
   const latitude = Number(body.latitude);

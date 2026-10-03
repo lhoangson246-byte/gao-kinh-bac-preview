@@ -55,7 +55,11 @@ const page = { limit: integer(1, 100).optional(), offset: integer(0, 100000).opt
 const empty = obj({});
 const routes = [];
 const add = (group, method, path, body = empty, query = empty) => routes.push({ group, method, path, body, query });
-add('auth', 'POST', /^\/register\/?$/, obj({ full_name: name, email: optionalText(LIMITS.email), phone, password: newPassword }));
+add('auth', 'POST', /^\/register\/?$/, obj({
+  full_name: name, email: optionalText(LIMITS.email), phone, password: newPassword,
+  // Gắn đơn vừa đặt không cần tài khoản vào tài khoản mới (mã bí mật trình duyệt nhận khi đặt).
+  guest_order: obj({ id, token: z.string().regex(/^[a-f0-9]{48}$/) }).optional(),
+}));
 add('auth', 'POST', /^\/login\/?$/, obj({ identifier: optionalText(LIMITS.email), email: optionalText(LIMITS.email), phone, password: loginPassword }));
 add('auth', 'GET', /^\/me\/?$/);
 add('auth', 'PUT', /^\/me\/?$/, obj({ full_name: name.optional(), phone, address: optionalText(LIMITS.address) }));
@@ -77,6 +81,13 @@ add('orders', 'POST', /^\/?$/, obj({
   delivery_slot: z.enum(['sang', 'chieu', '']).nullable().optional(), note,
   payment_method: z.enum(['cod', 'bank']).optional(), items: lines.min(1),
   voucher_count: integer(0, 20).optional(), rewards: z.array(line).max(LIMITS.linesPerOrder).optional(),
+}));
+add('guest-orders', 'POST', /^\/guest\/?$/, obj({
+  receiver_name: name, phone: text(LIMITS.phone), address: text(LIMITS.address),
+  delivery_area: z.literal('bac-ninh'),
+  delivery_slot: z.enum(['sang', 'chieu', '']).nullable().optional(), note,
+  payment_method: z.enum(['cod', 'bank']).optional(), items: lines.min(1),
+  latitude: address.latitude, longitude: address.longitude, location_accuracy: address.location_accuracy,
 }));
 add('orders', 'GET', /^\/?$/);
 add('orders', 'GET', /^\/[^/]+\/?$/);

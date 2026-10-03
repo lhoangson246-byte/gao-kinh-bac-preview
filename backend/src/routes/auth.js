@@ -1,6 +1,7 @@
 import { validateRoutes } from '../schemas.js';
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import { createHash } from 'node:crypto';
 import db from '../db.js';
 import { signToken, requireAuth } from '../middleware/auth.js';
 import { LIMITS } from '../constants.js';
@@ -18,7 +19,7 @@ const PUBLIC_USER_COLUMNS = 'id, full_name, email, phone, address, role';
  */
 router.post('/register', async (req, res, next) => {
   try {
-    const { full_name, email, password, phone } = req.body || {};
+    const { full_name, email, password, phone, guest_order: guestOrder } = req.body || {};
     const errors = {};
 
     const fullName = cleanText(full_name, LIMITS.name);
@@ -50,16 +51,29 @@ router.post('/register', async (req, res, next) => {
     }
 
     const hash = await bcrypt.hash(password, 12);
-    const info = db
-      .prepare(
-        `INSERT INTO users (full_name, email, password_hash, phone, address)
-         VALUES (?, ?, ?, ?, NULL)`
-      )
-      .run(fullName, rawEmail, hash, customerPhone);
+    const userId = db.transaction(() => {
+      const id = db
+        .prepare(
+          `INSERT INTO users (full_name, email, password_hash, phone, address)
+           VALUES (?, ?, ?, ?, NULL)`
+        )
+        .run(fullName, rawEmail, hash, customerPhone).lastInsertRowid;
+      // Khách vừa đặt hàng không cần tài khoản rồi tạo tài khoản ngay: chuyển đơn đó sang
+      // tài khoản mới. Chỉ trình duyệt đã đặt đơn mới có mã bí mật; mã dùng một lần, hết hạn
+      // sau 1 ngày. Sai mã thì vẫn tạo tài khoản bình thường, chỉ không gắn đơn.
+      if (guestOrder) {
+        db.prepare(`
+          UPDATE orders SET user_id = ?, guest_token_hash = NULL
+          WHERE id = ? AND is_guest = 1 AND guest_token_hash = ?
+            AND created_at > datetime('now', '-1 day')
+        `).run(id, guestOrder.id, createHash('sha256').update(guestOrder.token).digest('hex'));
+      }
+      return id;
+    })();
 
     const user = db
       .prepare(`SELECT ${PUBLIC_USER_COLUMNS} FROM users WHERE id = ?`)
-      .get(info.lastInsertRowid);
+      .get(userId);
 
     deliverSession(req, res, user, signToken(user), 201);
   } catch (err) {

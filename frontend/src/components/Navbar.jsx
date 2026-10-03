@@ -1,4 +1,4 @@
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useCart } from '../context/CartContext.jsx';
 import { useI18n } from '../i18n/index.jsx';
@@ -10,6 +10,8 @@ export default function Navbar() {
   const { count } = useCart();
   const { t } = useI18n();
   const navigate = useNavigate();
+  // Trang đặt hàng nhanh có thanh "Đặt hàng ngay" riêng ở đáy màn hình.
+  const quickCheckout = useLocation().pathname === '/dat-nhanh';
 
   return (
     <>
@@ -58,7 +60,7 @@ export default function Navbar() {
       {/* Phải nằm NGOÀI .navbar: .navbar có backdrop-filter, mà thuộc tính đó biến nó
           thành khối chứa cho mọi con position:fixed — khiến thanh điều hướng dưới
           bị neo vào header thay vì đáy màn hình điện thoại. */}
-      <nav className="mobile-nav" aria-label={t('nav.app')}>
+      {!quickCheckout && <nav className="mobile-nav" aria-label={t('nav.app')}>
         <NavLink to="/" end><span aria-hidden="true">⌂</span><small>{t('nav.tabStore')}</small></NavLink>
         <NavLink to="/gio-hang"><span aria-hidden="true">⌑</span><small>{t('nav.tabCart')}</small>{count > 0 && <b>{count}</b>}</NavLink>
         <NavLink to="/don-hang"><span aria-hidden="true">▤</span><small>{t('nav.tabOrders')}</small></NavLink>
@@ -67,7 +69,7 @@ export default function Navbar() {
         ) : (
           <NavLink to={user ? '/tai-khoan' : '/dang-nhap'}><span aria-hidden="true">○</span><small>{t('nav.tabAccount')}</small></NavLink>
         )}
-      </nav>
+      </nav>}
     </>
   );
 }

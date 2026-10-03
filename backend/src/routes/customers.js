@@ -21,6 +21,8 @@ function findCustomer(id) {
   if (user.role === 'admin') {
     throw new HttpError(403, 'Không thao tác được trên tài khoản quản trị ở đây.');
   }
+  // Tài khoản hệ thống đứng tên đơn mua nhanh: không sửa, khoá hay xoá được.
+  if (user.role !== 'customer') throw new HttpError(404, 'Không tìm thấy tài khoản.');
   return user;
 }
 

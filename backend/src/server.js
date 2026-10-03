@@ -72,6 +72,17 @@ const accountLimiter = rateLimit({
 });
 app.use('/api/auth/login', accountLimiter);
 app.post('/api/orders', orderLimiter);
+// Đặt hàng không cần tài khoản: chặt hơn, theo IP và theo số điện thoại người nhận,
+// để một người không thể đặt hàng loạt đơn ảo giữ kho.
+const guestOrderLimiter = rateLimit({ ...limiterOptions, windowMs: 60 * 60 * 1000, limit: 10 });
+const guestPhoneLimiter = rateLimit({
+  ...limiterOptions, windowMs: 60 * 60 * 1000, limit: 5,
+  keyGenerator: (req) => {
+    const raw = typeof req.body?.phone === 'string' ? req.body.phone : '';
+    return createHash('sha256').update(`guest:${normalizePhone(raw) || raw.trim()}`).digest('hex');
+  },
+});
+app.post('/api/orders/guest', guestOrderLimiter, guestPhoneLimiter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);

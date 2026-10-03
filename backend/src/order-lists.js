@@ -20,6 +20,8 @@ export function listAdminOrders({ status, limit = 30, offset = 0 } = {}) {
   const rows = db.prepare(`SELECT o.*, u.email AS user_email, u.full_name AS user_name
     FROM orders o JOIN users u ON u.id = o.user_id
     WHERE o.id IN (${page}) ORDER BY o.id DESC`).all(...args);
+  // Mã băm bí mật của đơn mua nhanh không cần lộ ra, kể cả với quản trị.
+  for (const row of rows) delete row.guest_token_hash;
   const items = db.prepare(`SELECT * FROM order_items WHERE order_id IN (${page})
     ORDER BY order_id, id`).all(...args);
   const counts = Object.fromEntries(ORDER_STATUSES.map(s => [s, 0]));

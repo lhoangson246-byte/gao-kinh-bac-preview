@@ -369,7 +369,7 @@ export default function Admin() {
                         return (
                           <article key={order.id} className="admin-order-card">
                             <header>
-                              <div><span className="order-number">Đơn {order.code || `#${order.id}`}</span><span className={`status ${order.status}`}>{STATUS_LABEL[order.status]}</span></div>
+                              <div><span className="order-number">Đơn {order.code || `#${order.id}`}</span><span className={`status ${order.status}`}>{STATUS_LABEL[order.status]}</span>{!!order.is_guest && <span className="guest-tag" title="Khách đặt không cần đăng nhập">Mua nhanh</span>}</div>
                               <time>{formatDateTime(order.created_at)}</time>
                             </header>
                             <div className="admin-order-grid">

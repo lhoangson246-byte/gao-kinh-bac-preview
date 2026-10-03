@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
-import { api, formatVND, pointsForLines } from '../api';
+import { useAuth } from '../context/AuthContext.jsx';
+import { api, formatVND, pointsForLines, FIRST_ORDER_DISCOUNT } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 
 export default function Cart() {
   const { items, total, count, hasUnavailable, setQuantity, remove, clear, syncWithProducts } = useCart();
   const [syncError, setSyncError] = useState(false);
   const { t, unit } = useI18n();
+  const { user } = useAuth();
 
   // Ưu đãi đơn đầu tiên: hỏi máy chủ xem tài khoản này còn được giảm không.
   // Chỉ để xem trước; máy chủ vẫn tự quyết khi tạo đơn.
@@ -126,13 +128,31 @@ export default function Cart() {
           </div>
           <div className="summary-row grand-total"><span>{t('cart.total')}</span><strong>{formatVND(total - discount)}</strong></div>
           <p className="pos-hint">{t('cart.points', { n: pointsForLines(items.filter((item) => item.stock > 0), total - discount) })}</p>
-          <button
-            className="btn btn-primary btn-block btn-large"
-            disabled={hasUnavailable || count === 0}
-            onClick={() => navigate('/dat-hang')}
-          >
-            {t('cart.continue')}
-          </button>
+          {user ? (
+            <button
+              className="btn btn-primary btn-block btn-large"
+              disabled={hasUnavailable || count === 0}
+              onClick={() => navigate('/dat-hang')}
+            >
+              {t('cart.continue')}
+            </button>
+          ) : (
+            <>
+              {/* Chưa đăng nhập: đặt ngay không cần tài khoản là lựa chọn chính. */}
+              <p className="quick-promo">🎁 {t('quick.firstOrder', { amount: formatVND(FIRST_ORDER_DISCOUNT) })}</p>
+              <button
+                className="btn btn-primary btn-block btn-large quick-cta"
+                disabled={hasUnavailable || count === 0}
+                onClick={() => navigate('/dat-nhanh')}
+              >
+                {t('quick.cta')}
+                <small>{t('quick.ctaHint')}</small>
+              </button>
+              <p className="quick-login">
+                {t('quick.haveAccount')} <Link to="/dang-nhap" state={{ from: '/dat-hang' }}>{t('quick.login')}</Link>
+              </p>
+            </>
+          )}
         </aside>
       </div>
     </div>

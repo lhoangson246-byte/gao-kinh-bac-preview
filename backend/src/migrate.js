@@ -713,6 +713,30 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(firstSaleMigr
   addColumn('retail_customers', 'segment', "TEXT NOT NULL DEFAULT 'thuong'");
 }
 
+// Đặt hàng nhanh không cần tài khoản (03/10/2026). Bảng orders bắt buộc có user_id, nên các
+// đơn này đứng tên một tài khoản hệ thống role = 'guest': không email, không số điện thoại,
+// bị khoá và mật khẩu không phải bcrypt, nên không ai đăng nhập được. Các truy vấn khách hàng
+// đều lọc role = 'customer' nên tài khoản này không hiện trong danh sách khách.
+if (!db.prepare('PRAGMA table_info(orders)').all().some((c) => c.name === 'is_guest')) {
+  db.exec('ALTER TABLE orders ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0');
+  console.log('✅ Đã thêm cột is_guest vào bảng orders.');
+}
+// Mã băm của mã bí mật trả cho trình duyệt vừa đặt đơn: dùng một lần để gắn đơn vào tài khoản
+// nếu khách tạo tài khoản ngay sau khi đặt.
+if (!db.prepare('PRAGMA table_info(orders)').all().some((c) => c.name === 'guest_token_hash')) {
+  db.exec('ALTER TABLE orders ADD COLUMN guest_token_hash TEXT');
+  console.log('✅ Đã thêm cột guest_token_hash vào bảng orders.');
+}
+if (!db.prepare("SELECT 1 FROM users WHERE role = 'guest'").get()) {
+  db.transaction(() => {
+    db.prepare(`
+      INSERT INTO users (full_name, email, password_hash, phone, address, role, is_locked)
+      VALUES ('Khách mua nhanh (không tài khoản)', NULL, '!no-login', NULL, NULL, 'guest', 1)
+    `).run();
+  })();
+  console.log('✅ Đã tạo tài khoản hệ thống cho đơn mua nhanh.');
+}
+
 // Trả hàng tại quầy trừ lại điểm của phần tiền đã hoàn (03/10/2026): ghi số điểm đã trừ
 // vào phiếu để các lần trả tiếp theo không trừ trùng.
 if (!db.prepare('PRAGMA table_info(retail_returns)').all().some((c) => c.name === 'points_removed')) {

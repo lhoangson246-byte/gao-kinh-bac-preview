@@ -78,7 +78,7 @@ export async function buildOrdersWorkbook(period) {
         ? `https://www.google.com/maps/search/?api=1&query=${order.delivery_lat},${order.delivery_lng}`
         : '';
       orders.addRow([
-        order.code, order.day, order.clock, channel,
+        order.code, order.day, order.clock, online && order.is_guest ? 'Online · mua nhanh' : channel,
         online ? statusNames[order.status] : 'Hoàn thành',
         (online ? order.receiver_name : order.customer_name) || 'Khách vãng lai',
         String((online ? order.phone : order.customer_phone) || ''),

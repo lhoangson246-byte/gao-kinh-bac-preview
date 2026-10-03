@@ -101,6 +101,8 @@ export const api = {
     request('/admin/settings/storefront', { method: 'PUT', body: payload, auth: true }),
 
   createOrder: (payload) => request('/orders', { method: 'POST', body: payload, auth: true }),
+  /** Đặt hàng nhanh không cần tài khoản. */
+  createGuestOrder: (payload) => request('/orders/guest', { method: 'POST', body: payload }),
   myOrders: () => request('/orders', { auth: true }),
   cancelOrder: (id) => request(`/orders/${id}/cancel`, { method: 'PATCH', auth: true }),
   orderDiscount: () => request('/orders/discount', { auth: true }),

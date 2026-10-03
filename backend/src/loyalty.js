@@ -13,6 +13,8 @@ import { HttpError, normalizePhone } from './validate.js';
 
 /** Số điện thoại dùng để tích điểm cho một đơn online. */
 export function loyaltyPhoneForOrder(order) {
+  // Đơn mua nhanh không có tài khoản: tích vào số điện thoại khách ghi trên đơn.
+  if (order.is_guest) return normalizePhone(order.phone) || null;
   const account = db.prepare('SELECT phone FROM users WHERE id = ?').get(order.user_id);
   return normalizePhone(account?.phone) || null;
 }

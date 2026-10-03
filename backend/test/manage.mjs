@@ -1141,6 +1141,96 @@ const guestToken = (await call('/auth/register', {
   await call(`/admin/products/${product.id}/permanent`, { method: 'DELETE', token: admin });
 }
 
+/* ================================================================== *
+ * 03/10/2026: đặt hàng nhanh không cần tài khoản
+ * ================================================================== */
+{
+  const last8 = String(suffix).slice(-8);
+  const gp1 = `07${last8}`;
+  const gp2 = `03${last8}`;
+  const gp3 = `05${last8}`;
+  const product = (await call('/admin/products', {
+    method: 'POST', token: admin,
+    body: { name: `Gạo mua nhanh ${suffix}`, price: 100000, cost_price: 70000, unit: 'túi 5kg', stock: 100 },
+  })).data.product;
+  const guestBody = (phone, extra = {}) => ({
+    receiver_name: 'Cô Hoa', phone, address: 'Số 8 đường Lê Văn Thịnh, phường Suối Hoa',
+    delivery_area: 'bac-ninh', delivery_slot: 'chieu', payment_method: 'cod',
+    items: [{ product_id: product.id, quantity: 2 }], ...extra,
+  });
+
+  const first = await call('/orders/guest', {
+    method: 'POST', body: guestBody(gp1, { latitude: 21.18, longitude: 106.07, location_accuracy: 30 }),
+  });
+  const g1 = first.data.order;
+  check('Đặt hàng không cần đăng nhập (201)', first.status === 201 && g1?.is_guest === 1 && /^DH\d{6}$/.test(g1?.code || ''),
+    `status=${first.status} ${JSON.stringify(first.data).slice(0, 160)}`);
+  check('Đơn mua nhanh đầu tiên của số điện thoại được giảm 20.000đ', g1?.discount === 20000 && g1?.total === 180000);
+  check('Trả mã bí mật 48 ký tự để gắn đơn vào tài khoản sau', /^[a-f0-9]{48}$/.test(first.data.guest_token || ''));
+  check('Không lộ mã băm và giá nhập trong phản hồi',
+    !('guest_token_hash' in (g1 || {})) && !JSON.stringify(first.data).includes('cost_price'));
+  check('Đơn mua nhanh giữ vị trí khách ghim', g1?.delivery_lat === 21.18 && g1?.delivery_lng === 106.07);
+
+  const second = await call('/orders/guest', { method: 'POST', body: guestBody(gp1) });
+  check('Cùng số điện thoại đặt lần hai: không giảm nữa', second.status === 201 && second.data.order?.discount === 0);
+
+  const withVoucher = await call('/orders/guest', { method: 'POST', body: guestBody(gp3, { voucher_count: 1 }) });
+  check('Mua nhanh không đổi điểm được (400)', withVoucher.status === 400, `status=${withVoucher.status}`);
+  const tooMany = await call('/orders/guest', {
+    method: 'POST', body: guestBody(gp3, { items: [{ product_id: product.id, quantity: 51 }] }),
+  });
+  check('Mua nhanh tối đa 50 mỗi loại (400)', tooMany.status === 400, `status=${tooMany.status}`);
+  const badPhone = await call('/orders/guest', { method: 'POST', body: guestBody('12345') });
+  check('Số điện thoại sai bị từ chối (400)', badPhone.status === 400 && !!badPhone.data.errors?.phone);
+  const farAway = await call('/orders/guest', {
+    method: 'POST', body: guestBody(gp3, { address: 'Số 1 phố Huế, quận Hai Bà Trưng, Hà Nội' }),
+  });
+  check('Địa chỉ ngoài Bắc Ninh bị từ chối (400)', farAway.status === 400 && !!farAway.data.errors?.address);
+
+  /* Quản trị thấy đơn, nhãn mua nhanh, không lộ mã băm; tài khoản hệ thống không phải khách */
+  const adminList = await call('/admin/orders?status=pending&limit=100', { token: admin });
+  const listed = adminList.data.orders?.find((o) => o.id === g1.id);
+  check('Quản trị thấy đơn mua nhanh', !!listed && listed.is_guest === 1 && !('guest_token_hash' in listed));
+  const guestUserId = listed?.user_id;
+  const customers = await call('/admin/customers?limit=100', { token: admin });
+  check('Tài khoản hệ thống không nằm trong danh sách khách', !customers.data.customers?.some((c) => c.id === guestUserId));
+  check('Không mở/sửa được tài khoản hệ thống (404)',
+    (await call(`/admin/customers/${guestUserId}`, { token: admin })).status === 404
+      && (await call(`/admin/customers/${guestUserId}/lock`, { method: 'PATCH', token: admin, body: { is_locked: 0 } })).status === 404);
+
+  /* Giao xong: cộng điểm vào số điện thoại trên đơn */
+  for (const status of ['confirmed', 'shipping', 'completed']) {
+    await call(`/admin/orders/${g1.id}/status`, { method: 'PATCH', token: admin, body: { status } });
+  }
+  const pts = (await call(`/retail/customers?phone=${gp1}`, { token: admin })).data.customer?.points;
+  check('Đơn mua nhanh giao xong được tích điểm vào số điện thoại (180 điểm)', pts === 180, `diem=${pts}`);
+
+  /* Tạo tài khoản ngay sau khi đặt: đơn được gắn vào tài khoản */
+  const placed = await call('/orders/guest', { method: 'POST', body: guestBody(gp2) });
+  const claimToken = placed.data.guest_token;
+  const claim = await call('/auth/register', {
+    method: 'POST',
+    body: { full_name: 'Cô Hoa', phone: gp2, password: 'matkhau123!test',
+      guest_order: { id: placed.data.order.id, token: claimToken } },
+  });
+  const mine = (await call('/orders', { token: claim.data.token })).data.orders || [];
+  check('Tạo tài khoản sau khi đặt: đơn hiện trong "Đơn của tôi"',
+    claim.status === 201 && mine.some((o) => o.id === placed.data.order.id), `status=${claim.status} so don=${mine.length}`);
+  check('Khách huỷ được đơn vừa gắn vào tài khoản',
+    (await call(`/orders/${placed.data.order.id}/cancel`, { method: 'PATCH', token: claim.data.token })).status === 200);
+  const reuse = await call('/auth/register', {
+    method: 'POST',
+    body: { full_name: 'Kẻ Dùng Lại', phone: `04${last8}`, password: 'matkhau123!test',
+      guest_order: { id: placed.data.order.id, token: claimToken } },
+  });
+  const reusedOrders = reuse.data.token ? (await call('/orders', { token: reuse.data.token })).data.orders : null;
+  check('Mã bí mật dùng rồi (hoặc sai) thì vẫn tạo tài khoản nhưng không lấy được đơn',
+    reuse.status === 201 && Array.isArray(reusedOrders) && reusedOrders.length === 0,
+    `status=${reuse.status} ${JSON.stringify(reuse.data).slice(0, 160)} orders=${JSON.stringify(reusedOrders)?.slice(0, 80)}`);
+
+  await call(`/admin/products/${product.id}/permanent`, { method: 'DELETE', token: admin });
+}
+
 console.log(results.join('\n'));
 console.log(`\n${pass} PASS · ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

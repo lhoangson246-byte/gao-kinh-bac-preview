@@ -10,6 +10,7 @@ const Login = lazy(() => import('./pages/Login.jsx'));
 const Register = lazy(() => import('./pages/Register.jsx'));
 const Cart = lazy(() => import('./pages/Cart.jsx'));
 const Checkout = lazy(() => import('./pages/Checkout.jsx'));
+const QuickCheckout = lazy(() => import('./pages/QuickCheckout.jsx'));
 const Orders = lazy(() => import('./pages/Orders.jsx'));
 const Profile = lazy(() => import('./pages/Profile.jsx'));
 const Admin = lazy(() => import('./pages/Admin.jsx'));
@@ -21,6 +22,7 @@ const PAGE_TITLES = {
   '/': 'title.home',
   '/gio-hang': 'title.cart',
   '/dat-hang': 'title.checkout',
+  '/dat-nhanh': 'title.quick',
   '/don-hang': 'title.orders',
   '/tai-khoan': 'title.account',
   '/dang-nhap': 'title.login',
@@ -80,6 +82,7 @@ export default function App() {
           <Route path="/dang-nhap" element={<Login />} />
           <Route path="/dang-ky" element={<Register />} />
           <Route path="/gio-hang" element={<Cart />} />
+          <Route path="/dat-nhanh" element={<QuickCheckout />} />
           <Route
             path="/dat-hang"
             element={<ProtectedRoute><Checkout /></ProtectedRoute>}
