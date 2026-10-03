@@ -181,7 +181,7 @@ export const vi = {
   'cart.deliveryTitle': 'Giao hàng tại Bắc Ninh',
   'cart.deliveryBody': 'Giao hoả tốc trong ngày, miễn phí giao hàng. Cửa hàng gọi xác nhận địa chỉ trước khi giao.',
   'cart.total': 'Tạm tính',
-  'cart.points': 'Đơn này cộng {n} điểm tích luỹ khi giao xong.',
+  'cart.points': 'Đơn này cộng {n} điểm tích luỹ khi giao xong. Đơn bị huỷ không được cộng điểm.',
   'cart.continue': 'Tiếp tục đặt hàng',
 
   // Đặt hàng
@@ -239,7 +239,7 @@ export const vi = {
   'orders.cancel': 'Huỷ đơn hàng',
   'orders.cancelling': 'Đang huỷ…',
   'orders.confirmCancel': 'Huỷ đơn {code}? Số lượng gạo sẽ được trả lại cho cửa hàng.',
-  'orders.hintCancelled': 'Đơn đã huỷ, số lượng đã trả lại cửa hàng.',
+  'orders.hintCancelled': 'Đơn đã huỷ, số lượng đã trả lại cửa hàng. Đơn huỷ không được cộng điểm tích luỹ.',
   'orders.hintCompleted': 'Cảm ơn bạn đã mua gạo của cửa hàng.',
   'orders.hintOther': 'Cần thay đổi? Vui lòng liên hệ cửa hàng.',
   'orders.discounted': 'Đã giảm {amount}',
@@ -511,7 +511,7 @@ export const en = {
   'cart.deliveryTitle': 'Delivery in Bắc Ninh',
   'cart.deliveryBody': 'Same-day express delivery, free of charge. The shop calls to confirm your address first.',
   'cart.total': 'Total',
-  'cart.points': 'This order earns {n} loyalty points once delivered.',
+  'cart.points': 'This order earns {n} loyalty points once delivered. Cancelled orders earn no points.',
   'cart.continue': 'Continue to checkout',
 
   'checkout.emptyTitle': 'Nothing to order yet',
@@ -567,7 +567,7 @@ export const en = {
   'orders.cancel': 'Cancel order',
   'orders.cancelling': 'Cancelling…',
   'orders.confirmCancel': 'Cancel order {code}? The rice will go back to the shop’s stock.',
-  'orders.hintCancelled': 'Order cancelled; the items were returned to stock.',
+  'orders.hintCancelled': 'Order cancelled; the items were returned to stock. Cancelled orders earn no points.',
   'orders.hintCompleted': 'Thank you for buying rice from us.',
   'orders.hintOther': 'Need a change? Please contact the shop.',
   'orders.discounted': '{amount} off',
@@ -835,7 +835,7 @@ export const zh = {
   'cart.deliveryTitle': '北宁省送货',
   'cart.deliveryBody': '当日极速送达，免配送费。送货前店铺会致电确认地址。',
   'cart.total': '合计',
-  'cart.points': '订单送达后可获得 {n} 积分。',
+  'cart.points': '订单送达后可获得 {n} 积分。已取消的订单不累积积分。',
   'cart.continue': '去下单',
 
   'checkout.emptyTitle': '暂无可下单的商品',
@@ -891,7 +891,7 @@ export const zh = {
   'orders.cancel': '取消订单',
   'orders.cancelling': '正在取消…',
   'orders.confirmCancel': '确定取消订单 {code} 吗？商品将退回店铺库存。',
-  'orders.hintCancelled': '订单已取消，商品已退回店铺库存。',
+  'orders.hintCancelled': '订单已取消，商品已退回店铺库存。已取消的订单不累积积分。',
   'orders.hintCompleted': '感谢您购买我们的大米。',
   'orders.hintOther': '需要修改？请联系店铺。',
   'orders.discounted': '已优惠 {amount}',

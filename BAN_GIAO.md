@@ -800,6 +800,19 @@ sau giảm giá %, ghi riêng trên hoá đơn, trên bản in và trong thống
 quà phải nằm trong danh sách và còn hàng, voucher không vượt tiền hàng. Trình duyệt chỉ hiển thị
 trước.
 
+### Đơn huỷ không được cộng điểm (03/10/2026)
+
+- **Online**: điểm chỉ được cộng khi admin bấm *Hoàn thành*. Đơn bị huỷ ở bất kỳ bước nào trước
+  đó (chờ xác nhận, đã xác nhận, đang giao), dù khách tự huỷ hay cửa hàng huỷ, đều không được
+  cộng điểm. Đơn đã hoàn thành thì không huỷ được nữa, nên không có cách cộng điểm rồi huỷ đơn.
+  Điểm đã dùng để đổi voucher/quà trong đơn huỷ thì được hoàn lại như mục trên. Giỏ hàng, trang
+  đặt hàng, đơn đã huỷ của khách và thẻ đơn ở trang quản trị đều ghi rõ quy tắc này.
+- **Tại quầy**: lập phiếu **trả hàng** (có hoàn tiền) thì trừ lại điểm của phần hàng trả, theo tỉ
+  lệ tiền hoàn trên số tiền khách đã trả. Hoàn hết tiền thì trừ hết điểm của hoá đơn đó. Trả làm
+  nhiều lần cũng không bị trừ trùng. Khách đã lỡ tiêu số điểm đó thì chỉ trừ tới 0. Phiếu **đổi
+  hàng** (không hoàn tiền) giữ nguyên điểm. Số điểm đã trừ ghi trên phiếu (cột
+  `retail_returns.points_removed`, migration `schema:2026-10-03-v1`).
+
 ### Thay đổi cơ sở dữ liệu
 
 Migration `schema:2026-10-02-v1` chỉ **thêm cột**, không xoá hay sửa dữ liệu cũ:

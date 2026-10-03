@@ -111,12 +111,12 @@ router.get('/', requireAuth, (req, res) => {
 router.post('/', requireAuth, (req, res, next) => {
   try {
     const data = validateAddress(req.body);
-    const count = db.prepare('SELECT COUNT(*) count FROM delivery_addresses WHERE user_id = ?').get(req.user.id).count;
-    if (count >= MAX_ADDRESSES) {
-      throw new HttpError(400, `Bạn chỉ có thể lưu tối đa ${MAX_ADDRESSES} địa chỉ.`);
-    }
-
     const create = db.transaction(() => {
+      // Đếm và thêm trong cùng transaction để các request song song không vượt giới hạn.
+      const count = db.prepare('SELECT COUNT(*) count FROM delivery_addresses WHERE user_id = ?').get(req.user.id).count;
+      if (count >= MAX_ADDRESSES) {
+        throw new HttpError(400, `Bạn chỉ có thể lưu tối đa ${MAX_ADDRESSES} địa chỉ.`);
+      }
       const shouldDefault = count === 0 || req.body?.is_default === true || req.body?.is_default === 1;
       if (shouldDefault) {
         db.prepare('UPDATE delivery_addresses SET is_default = 0 WHERE user_id = ?').run(req.user.id);

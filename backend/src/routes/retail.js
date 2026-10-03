@@ -327,6 +327,10 @@ router.post('/invoices', (req, res, next) => {
         rewardLines.push({ product, quantity });
         rewardCount += quantity;
       }
+      // Giới hạn tổng quà và voucher, kể cả khi cùng loại quà được gửi nhiều dòng.
+      if (rewardCount + vouchers > MAX_REWARDS_PER_SALE) {
+        throw new HttpError(400, `Mỗi hoá đơn đổi tối đa ${MAX_REWARDS_PER_SALE} phần quà/voucher.`);
+      }
       // Mỗi voucher 30.000đ cũng tốn 1.000 điểm như một phần quà.
       const pointsUsed = (rewardCount + vouchers) * RETAIL_POINTS_PER_REWARD;
 
@@ -622,11 +626,38 @@ router.post('/returns', (req, res, next) => {
         }
       }
 
+      // Trả hàng (hoàn tiền) thì phần đó coi như huỷ mua: trừ lại điểm đã cộng, theo tỉ lệ
+      // tổng tiền đã hoàn trên số tiền khách trả. Hoàn hết tiền thì trừ hết điểm của hoá đơn.
+      // Cộng dồn qua các phiếu nên trả làm nhiều lần cũng không trừ trùng. Khách đã tiêu
+      // điểm rồi thì chỉ trừ tới 0, và ghi đúng số điểm thực trừ được.
+      let pointsRemoved = 0;
+      if (returnType === 'return' && refundAmount > 0 && invoice.customer_id && invoice.points_earned > 0) {
+        const prior = db.prepare(`
+          SELECT COALESCE(SUM(refund_amount), 0) refunded, COALESCE(SUM(points_removed), 0) removed
+          FROM retail_returns WHERE invoice_id = ? AND return_type = 'return'
+        `).get(invoiceId);
+        const refundedTotal = prior.refunded + refundAmount;
+        const shouldRemove = refundedTotal >= invoice.total
+          ? invoice.points_earned
+          : Math.round((invoice.points_earned * refundedTotal) / invoice.total);
+        const wanted = Math.max(0, Math.min(invoice.points_earned, shouldRemove) - prior.removed);
+        if (wanted > 0) {
+          const have = db.prepare('SELECT points FROM retail_customers WHERE id = ?').get(invoice.customer_id)?.points ?? 0;
+          pointsRemoved = Math.min(wanted, Math.max(0, have));
+          if (pointsRemoved > 0) {
+            db.prepare(`
+              UPDATE retail_customers SET points = points - ?, updated_at = datetime('now')
+              WHERE id = ? AND points >= ?
+            `).run(pointsRemoved, invoice.customer_id, pointsRemoved);
+          }
+        }
+      }
+
       const info = db.prepare(`
         INSERT INTO retail_returns
-          (invoice_id, return_type, reason, refund_amount, refund_method, note, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(invoiceId, returnType, reason, refundAmount, refundMethod, note, req.user.id);
+          (invoice_id, return_type, reason, refund_amount, refund_method, note, created_by, points_removed)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(invoiceId, returnType, reason, refundAmount, refundMethod, note, req.user.id, pointsRemoved);
       const returnId = info.lastInsertRowid;
       db.prepare('UPDATE retail_returns SET code = ? WHERE id = ?').run(returnCode(returnId), returnId);
 
@@ -652,7 +683,7 @@ router.post('/returns', (req, res, next) => {
       action: 'create', entityType: 'retail_return', entityId: saved.code,
       after: {
         code: saved.code, invoice_code: saved.invoice_code, return_type: saved.return_type,
-        refund_amount: saved.refund_amount, reason: saved.reason,
+        refund_amount: saved.refund_amount, reason: saved.reason, points_removed: saved.points_removed,
       },
     });
     res.status(201).json({ return: saved });

@@ -419,7 +419,9 @@ export default function Admin() {
                                 <small className="payment-label">{order.payment_method === 'bank' ? 'Khách chọn chuyển khoản' : 'Thanh toán khi nhận hàng'}</small>
                                 {order.status === 'completed'
                                   ? <small className="payment-label points">Đã cộng {order.points_earned || 0} điểm cho {order.phone}</small>
-                                  : order.status !== 'cancelled' && (
+                                  : order.status === 'cancelled'
+                                    ? <small className="payment-label points muted">Đơn huỷ không được cộng điểm tích luỹ</small>
+                                    : (
                                     <small className="payment-label points muted">Sẽ cộng {pointsForLines(order.items.filter((item) => !item.is_reward), order.total)} điểm khi bấm Hoàn thành</small>
                                   )}
                               </section>

@@ -1067,6 +1067,80 @@ const guestToken = (await call('/auth/register', {
   for (const p of [pointy, gift]) await call(`/admin/products/${p.id}/permanent`, { method: 'DELETE', token: admin });
 }
 
+/* ================================================================== *
+ * 03/10/2026: đơn huỷ không được cộng điểm; trả hàng tại quầy trừ lại điểm
+ * ================================================================== */
+{
+  const phone = `08${String(suffix).slice(-8)}`;
+  const signup = await call('/auth/register', {
+    method: 'POST', body: { full_name: 'Khách Huỷ Đơn', phone, password: 'matkhau123!test' },
+  });
+  const token = signup.data.token;
+  const product = (await call('/admin/products', {
+    method: 'POST', token: admin,
+    body: { name: `Gạo thử huỷ ${suffix}`, price: 100000, unit: 'túi 5kg', stock: 20 },
+  })).data.product;
+  const pointsNow = async () => (await call(`/retail/customers?phone=${phone}`, { token: admin })).data.customer?.points ?? 0;
+  const setStatus = (id, status) => call(`/admin/orders/${id}/status`, { method: 'PATCH', token: admin, body: { status } });
+  const body = {
+    receiver_name: 'Khách Huỷ Đơn', phone, address: 'Số 3 đường Nguyễn Trãi, phường Ninh Xá',
+    delivery_area: 'bac-ninh', payment_method: 'cod', items: [{ product_id: product.id, quantity: 1 }],
+  };
+
+  /* Đơn online bị huỷ ở bước đang giao: không cộng điểm */
+  const first = (await call('/orders', { method: 'POST', token, body })).data.order;
+  await setStatus(first.id, 'confirmed');
+  await setStatus(first.id, 'shipping');
+  const cancelled = await setStatus(first.id, 'cancelled');
+  check('Admin huỷ đơn đang giao', cancelled.status === 200 && cancelled.data.order?.status === 'cancelled');
+  check('Đơn huỷ không được cộng điểm', cancelled.data.order?.points_earned === 0 && (await pointsNow()) === 0,
+    `points_earned=${cancelled.data.order?.points_earned} diem=${await pointsNow()}`);
+
+  /* Khách tự huỷ đơn chờ xác nhận: cũng không cộng */
+  const selfCancel = (await call('/orders', { method: 'POST', token, body })).data.order;
+  await call(`/orders/${selfCancel.id}/cancel`, { method: 'PATCH', token });
+  check('Khách tự huỷ đơn: không cộng điểm', (await pointsNow()) === 0);
+
+  /* Đơn giao xong thì có điểm, và không huỷ được nữa để giữ điểm */
+  const done = (await call('/orders', { method: 'POST', token, body })).data.order;
+  for (const status of ['confirmed', 'shipping', 'completed']) await setStatus(done.id, status);
+  const earned = await pointsNow();
+  check('Đơn giao xong mới được cộng điểm (80.000đ sau ưu đãi đơn đầu = 80 điểm)', earned === 80, `diem=${earned}`);
+  const lateCancel = await setStatus(done.id, 'cancelled');
+  check('Không huỷ được đơn đã hoàn thành (400), điểm giữ nguyên',
+    lateCancel.status === 400 && (await pointsNow()) === 80, `status=${lateCancel.status}`);
+
+  /* Trả hàng tại quầy: trừ lại điểm theo tiền hoàn, không trừ trùng */
+  const inv = (await call('/retail/invoices', {
+    method: 'POST', token: admin, body: { phone, items: [{ product_id: product.id, quantity: 2 }] },
+  })).data.invoice;
+  check('Hoá đơn quầy 200.000đ cộng 200 điểm', inv?.points_earned === 200 && (await pointsNow()) === 280);
+  const line = inv.items.find((i) => !i.is_reward);
+  const ret = (extra) => call('/retail/returns', {
+    method: 'POST', token: admin,
+    body: { invoice_id: inv.id, reason: 'Khách trả hàng thử', items: [{ invoice_item_id: line.id, quantity: 1 }], ...extra },
+  });
+  const half = await ret({ return_type: 'return', refund_method: 'cash' });
+  check('Trả 1/2 hoá đơn: trừ 100 điểm', half.status === 201 && half.data.return?.points_removed === 100 && (await pointsNow()) === 180,
+    `status=${half.status} removed=${half.data.return?.points_removed} diem=${await pointsNow()}`);
+  const rest = await ret({ return_type: 'return', refund_method: 'cash' });
+  check('Trả nốt: trừ hết 200 điểm của hoá đơn, không trừ trùng',
+    rest.data.return?.points_removed === 100 && (await pointsNow()) === 80, `removed=${rest.data.return?.points_removed}`);
+
+  const inv2 = (await call('/retail/invoices', {
+    method: 'POST', token: admin, body: { phone, items: [{ product_id: product.id, quantity: 1 }] },
+  })).data.invoice;
+  const exchange = await call('/retail/returns', {
+    method: 'POST', token: admin,
+    body: { invoice_id: inv2.id, return_type: 'exchange', reason: 'Đổi loại khác',
+      items: [{ invoice_item_id: inv2.items[0].id, quantity: 1 }] },
+  });
+  check('Đổi hàng (không hoàn tiền) giữ nguyên điểm',
+    exchange.status === 201 && exchange.data.return?.points_removed === 0 && (await pointsNow()) === 180);
+
+  await call(`/admin/products/${product.id}/permanent`, { method: 'DELETE', token: admin });
+}
+
 console.log(results.join('\n'));
 console.log(`\n${pass} PASS · ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

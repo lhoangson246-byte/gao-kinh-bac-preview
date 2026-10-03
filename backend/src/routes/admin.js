@@ -64,6 +64,8 @@ router.patch('/orders/:id/status', (req, res, next) => {
       }
       if (status === 'cancelled') restoreStockForOrder(current.id);
 
+      // CHỈ đơn giao xong mới được cộng điểm. Đơn huỷ (ở bất kỳ bước nào trước đó)
+      // không bao giờ tới nhánh này, và ALLOWED_TRANSITIONS không cho huỷ đơn đã hoàn thành.
       // Đơn giao xong thì cộng điểm vào hồ sơ theo SỐ ĐIỆN THOẠI CỦA TÀI KHOẢN
       // đặt hàng — cùng hồ sơ với mua tại quầy. Nhờ câu UPDATE có điều kiện
       // "WHERE status = ?" ở trên, mỗi đơn chỉ cộng điểm đúng một lần.

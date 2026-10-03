@@ -713,6 +713,13 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(firstSaleMigr
   addColumn('retail_customers', 'segment', "TEXT NOT NULL DEFAULT 'thuong'");
 }
 
+// Trả hàng tại quầy trừ lại điểm của phần tiền đã hoàn (03/10/2026): ghi số điểm đã trừ
+// vào phiếu để các lần trả tiếp theo không trừ trùng.
+if (!db.prepare('PRAGMA table_info(retail_returns)').all().some((c) => c.name === 'points_removed')) {
+  db.exec('ALTER TABLE retail_returns ADD COLUMN points_removed INTEGER NOT NULL DEFAULT 0');
+  console.log('✅ Đã thêm cột points_removed vào bảng retail_returns.');
+}
+
 // Quà đổi 1.000 điểm theo yêu cầu cửa hàng ngày 02/10/2026: 1kg gạo nếp, 1kg gạo lứt
 // hoặc 1kg mì chũ (cùng voucher 30.000đ). Kê vàng không còn nằm trong danh sách quà.
 // Chỉ chạy một lần; sau đó chủ cửa hàng tự bật/tắt ở form sản phẩm.

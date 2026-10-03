@@ -86,7 +86,9 @@ export default function ReturnManager({ notify }) {
         note: note.trim() || undefined,
         items,
       });
-      notify?.(`Đã lưu phiếu ${result.return.code}.`);
+      notify?.(result.return.points_removed > 0
+        ? `Đã lưu phiếu ${result.return.code} và trừ lại ${result.return.points_removed.toLocaleString('vi-VN')} điểm của phần hàng trả.`
+        : `Đã lưu phiếu ${result.return.code}.`);
       reset();
       await loadRecent();
     } catch (err) {
@@ -198,7 +200,13 @@ export default function ReturnManager({ notify }) {
               <article className="return-history-card" key={item.id}>
                 <div><strong>{item.code}</strong><small>{TYPE_LABEL[item.return_type]} từ {item.invoice_code}</small></div>
                 <div><strong>{item.customer_name || item.customer_phone || 'Khách vãng lai'}</strong><small>{item.reason}</small></div>
-                <div><strong>{item.refund_amount ? formatVND(item.refund_amount) : 'Không hoàn tiền'}</strong><small>{REFUND_LABEL[item.refund_method]}</small></div>
+                <div>
+                  <strong>{item.refund_amount ? formatVND(item.refund_amount) : 'Không hoàn tiền'}</strong>
+                  <small>
+                    {REFUND_LABEL[item.refund_method]}
+                    {item.points_removed > 0 && ` · trừ ${item.points_removed.toLocaleString('vi-VN')} điểm`}
+                  </small>
+                </div>
                 <time>{formatDateTime(item.created_at)}</time>
               </article>
             ))}
