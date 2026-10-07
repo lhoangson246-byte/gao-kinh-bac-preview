@@ -1282,6 +1282,35 @@ const guestToken = (await call('/auth/register', {
   await call('/admin/settings/storefront', { method: 'PUT', token: admin, body: { branches: original.branches || [] } });
 }
 
+/* ================================================================== *
+ * 07/10/2026: báo đơn mới cho quản trị
+ * ================================================================== */
+{
+  const before = await call('/admin/orders/latest', { token: admin });
+  check('Quản trị đọc được đơn mới nhất và số đơn chờ',
+    before.status === 200 && typeof before.data.pending === 'number' && 'latest' in before.data, JSON.stringify(before.data).slice(0, 160));
+  check('Chưa đăng nhập không hỏi được đơn mới (401)', (await call('/admin/orders/latest')).status === 401);
+  check('Khách thường không hỏi được đơn mới (403)', (await call('/admin/orders/latest', { token: custToken })).status === 403);
+
+  const product = (await call('/admin/products', {
+    method: 'POST', token: admin, body: { name: `Gạo báo đơn ${suffix}`, price: 50000, unit: 'túi 5kg', stock: 10 },
+  })).data.product;
+  const placed = await call('/orders/guest', {
+    method: 'POST',
+    body: { receiver_name: 'Chị Báo Đơn', phone: `06${String(suffix).slice(-8)}`, address: 'Số 9 đường Thử Chuông, phường Suối Hoa',
+      delivery_area: 'bac-ninh', items: [{ product_id: product.id, quantity: 1 }] },
+  });
+  const after = await call('/admin/orders/latest', { token: admin });
+  check('Có đơn mới thì đơn mới nhất đổi theo, số đơn chờ tăng',
+    after.data.latest?.id === placed.data.order?.id && after.data.latest?.code === placed.data.order?.code
+      && after.data.pending === before.data.pending + 1 && after.data.latest?.is_guest === 1,
+    JSON.stringify(after.data).slice(0, 160));
+  check('Không lộ giá nhập hay mã băm trong thông báo đơn',
+    !/cost_price|guest_token_hash/.test(JSON.stringify(after.data)));
+  await call(`/admin/orders/${placed.data.order.id}/status`, { method: 'PATCH', token: admin, body: { status: 'cancelled' } });
+  await call(`/admin/products/${product.id}/permanent`, { method: 'DELETE', token: admin });
+}
+
 console.log(results.join('\n'));
 console.log(`\n${pass} PASS · ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

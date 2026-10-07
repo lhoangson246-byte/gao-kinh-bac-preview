@@ -105,6 +105,7 @@ add('customers', 'DELETE', /^\/[^/]+\/?$/);
 add('admin', 'GET', /^\/orders\/?$/, empty, obj({ ...page, status: z.enum(ORDER_STATUSES).optional() }));
 add('admin', 'PATCH', /^\/orders\/[^/]+\/status\/?$/, obj({ status: z.enum(ORDER_STATUSES) }));
 add('admin', 'GET', /^\/(products|stats)\/?$/);
+add('admin', 'GET', /^\/orders\/latest\/?$/);
 const bannerUrl = text(LIMITS.imageUrl).refine((v) => !v || cleanImageUrl(v) !== null);
 add('admin', 'PUT', /^\/settings\/storefront\/?$/, obj({
   banner_images: z.array(bannerUrl).max(6).optional(),

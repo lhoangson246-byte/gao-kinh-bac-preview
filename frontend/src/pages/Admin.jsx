@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom';
 const ImagePicker = lazy(() => import('../components/ImagePicker.jsx'));
 const BannerSettings = lazy(() => import('../components/BannerSettings.jsx'));
+import OrderAlerts from '../components/OrderAlerts.jsx';
 import { api, salePercent, PRODUCT_CATEGORIES, formatDateTime, formatVND, pointsForLines, mapLink, STATUS_LABEL, DELIVERY_SLOT_LABEL, deliveryDateLabel } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
 const RevenueReport = lazy(() => import('../components/RevenueReport.jsx'));
@@ -268,6 +269,10 @@ export default function Admin() {
       <header className="admin-topbar">
         <div className="admin-brand"><img src="/logo-mark.png" alt="" width="38" height="38" /><div><strong>Gạo Kinh Bắc</strong><small>Khu vực quản trị</small></div></div>
         <div className="admin-account">
+          <OrderAlerts
+            onNewOrder={() => reload({ refreshProducts: false })}
+            onView={() => { setTab('orders'); setFilter('pending'); setOffset(0); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+          />
           <span>Xin chào, <strong>{user?.full_name}</strong></span>
           <Link to="/" className="btn btn-secondary">Xem cửa hàng</Link>
           <button className="btn btn-ghost" onClick={() => { logout(); navigate('/'); }}>Đăng xuất</button>

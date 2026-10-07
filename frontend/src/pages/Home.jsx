@@ -25,6 +25,16 @@ const GROUPS = [
   { code: 'do-kho', key: 'group.dry' },
 ];
 
+/**
+ * Điểm khách được cộng cho mỗi túi/bao khi đơn giao xong: điểm riêng cửa hàng đặt cho loại
+ * đó, hoặc theo giá (1.000đ = 1 điểm). Giống cách máy chủ tính, chưa trừ ưu đãi đơn đầu.
+ */
+function pointsPerUnit(product) {
+  if (!(product.price > 0)) return 0;
+  if (product.points_per_unit !== null && product.points_per_unit !== undefined) return product.points_per_unit;
+  return Math.floor(product.price / 1000);
+}
+
 /** 0912345678 → 0912 345 678 cho dễ đọc. */
 const formatPhone = (phone) => phone.replace(/^(\d{4})(\d{3})(\d{3})$/, '$1 $2 $3');
 
@@ -152,7 +162,8 @@ export default function Home() {
               type="button"
               className={`${group === g.code ? 'active' : ''}${g.code === 'giam-gia' ? ' sale-chip' : ''}`}
               aria-pressed={group === g.code}
-              onClick={() => setGroup(g.code)}
+              // Chọn nhóm mới thì bỏ loại gạo / từ khoá đang chọn, để không ra 0 sản phẩm.
+              onClick={() => { setGroup(g.code); setQ(''); }}
             >{t(g.key)}</button>
           ))}
         </div>
@@ -163,7 +174,8 @@ export default function Home() {
               type="button"
               className={q === value ? 'active' : ''}
               aria-pressed={q === value}
-              onClick={() => setQ(value)}
+              // Chọn loại gạo thì quay về "Tất cả mặt hàng" để luôn thấy đúng loại đó.
+              onClick={() => { setQ(value); setGroup(''); }}
             >{t(label)}</button>
           ))}
           <button
@@ -181,6 +193,7 @@ export default function Home() {
           <h2>{t(`${current.key}.heading`)}</h2>
           {!loading && !error && <span>{t('home.count', { n: products.length })}</span>}
         </div>
+        <p className="points-info">★ {t('home.pointsInfo')}</p>
 
         {error && (
           <div className="alert error" role="alert">
@@ -225,8 +238,8 @@ export default function Home() {
                     </span>
                   </div>
                   <h3>{product.name}</h3>
-                  {product.points_per_unit > 0 && (
-                    <p className="points-tag">{t('card.points', { n: product.points_per_unit, unit: unit(product.unit) })}</p>
+                  {pointsPerUnit(product) > 0 && (
+                    <p className="points-tag">{t('card.points', { n: pointsPerUnit(product), unit: unit(product.unit) })}</p>
                   )}
                   <p className="desc">{product.description || t('card.descFallback')}</p>
                   <div className="product-bottom">

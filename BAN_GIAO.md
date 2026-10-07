@@ -935,6 +935,41 @@ Mã gắn đơn vào tài khoản là chuỗi ngẫu nhiên chỉ trình duyệt
 lưu mã băm, mã dùng một lần và hết hạn sau 1 ngày.
 
 
+## Bộ lọc chọn cái mới nhất, điểm trên từng sản phẩm, chuông báo đơn mới (07/10/2026)
+
+### Bộ lọc trang chủ
+
+Trước đây chọn "Thực phẩm khô" rồi chọn "Gạo ST25" thì ra 0 sản phẩm, vì hai bộ lọc chồng lên
+nhau. Giờ **bộ lọc chọn sau thay bộ lọc chọn trước**: chọn một loại gạo (ST25, nếp, lứt, G9,
+Cỏ May) thì nhóm tự về "Tất cả mặt hàng"; chọn một nhóm (giảm giá, nhà hàng, đồ khô) thì loại gạo
+và từ khoá tìm kiếm được xoá. Nút "Chỉ hàng còn" vẫn dùng kèm được với mọi bộ lọc.
+
+### Điểm tích trên từng sản phẩm
+
+Mỗi thẻ sản phẩm có giá đều ghi **"★ Tích X điểm / túi 5kg"**. X là điểm riêng cửa hàng đặt cho
+loại đó, hoặc theo giá (1.000₫ = 1 điểm; ví dụ túi 105.000₫ được 105 điểm). Đặt 0 điểm thì không
+hiện nhãn. Trên danh mục có thêm dòng giải thích: điểm được tích khi đơn giao xong, 1.000 điểm đổi
+voucher 30.000₫ hoặc 1kg gạo nếp, gạo lứt, mì chũ. Số điểm ghi trên thẻ là trước ưu đãi đơn đầu;
+riêng đơn đầu tiên, phần tính theo tiền ít hơn một chút vì tính trên số tiền đã giảm.
+
+### Chuông báo đơn online mới
+
+Trang **Quản trị** và trang **Bán hàng tại quầy** tự hỏi máy chủ khoảng **20 giây một lần**. Khi có
+đơn online mới (cả đơn mua nhanh):
+- kêu chuông **"xịch xing – xịch xing"**, tạo ngay trên trình duyệt, không cần file âm thanh;
+- hiện khung "Có đơn online mới!" (mã đơn, tên khách, tổng tiền) với nút **Xem đơn**;
+- tiêu đề tab đổi thành "🔔 Đơn mới · …" để nhìn thấy cả khi đang mở tab khác;
+- nếu đã cho phép thông báo, máy hiện thông báo hệ thống khi tab đang bị ẩn;
+- danh sách đơn tự tải lại.
+
+Nút **🔔 Âm báo đơn** ở góc trên dùng để bật hoặc tắt chuông (trình duyệt nhớ lựa chọn). Lưu ý:
+trình duyệt **không cho phát âm thanh trước khi người dùng bấm vào trang**. Mở trang quản trị
+xong, nếu nút hiện "Bấm để bật âm báo" (màu vàng) thì bấm một lần, hoặc bấm vào bất kỳ đâu trên
+trang. Lần bật sẽ phát chuông thử và hỏi quyền hiện thông báo. Muốn nghe chuông thì phải để trang
+quản trị mở (có thể để ở tab khác) và máy không tắt tiếng. Mỗi tab quản trị đang mở gọi máy chủ
+khoảng 180 lần một giờ; một hai tab thì không đáng kể.
+
+
 ## Banner chạy vòng và khung liên hệ tư vấn (02/10/2026)
 
 ### Banner chạy vòng

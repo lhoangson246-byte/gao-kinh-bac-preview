@@ -108,6 +108,8 @@ export const api = {
   orderDiscount: () => request('/orders/discount', { auth: true }),
 
   adminStats: () => request('/admin/stats', { auth: true }),
+  /** Đơn mới nhất + số đơn chờ, để báo chuông khi có đơn. */
+  adminLatestOrder: () => request('/admin/orders/latest', { auth: true }),
   adminOrders: (status, { limit = 30, offset = 0 } = {}) => {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (status && status !== 'all') params.set('status', status);

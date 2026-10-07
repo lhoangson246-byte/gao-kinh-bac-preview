@@ -37,6 +37,19 @@ router.get('/orders', (req, res, next) => {
   }
 });
 
+/**
+ * GET /api/admin/orders/latest — đơn mới nhất và số đơn chờ xác nhận.
+ * Trang quản trị hỏi định kỳ (khoảng 20 giây/lần) để kêu chuông khi có đơn mới, nên chỉ đọc
+ * đúng những gì cần, không kèm danh sách hàng.
+ */
+router.get('/orders/latest', (req, res) => {
+  const latest = db.prepare(`
+    SELECT id, code, receiver_name, total, is_guest, created_at FROM orders ORDER BY id DESC LIMIT 1
+  `).get() || null;
+  const pending = db.prepare("SELECT COUNT(*) c FROM orders WHERE status = 'pending'").get().c;
+  res.json({ latest, pending });
+});
+
 /** PATCH /api/admin/orders/:id/status — Đổi trạng thái đơn theo đúng quy trình */
 router.patch('/orders/:id/status', (req, res, next) => {
   try {

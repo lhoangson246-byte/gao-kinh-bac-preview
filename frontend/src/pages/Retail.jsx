@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api, formatDateTime, formatVND, isPhone, normalizePhone, pointsForLines, CUSTOMER_SEGMENTS } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
 import ReturnManager from '../components/ReturnManager.jsx';
+import OrderAlerts from '../components/OrderAlerts.jsx';
 import AccountSignup from '../components/AccountSignup.jsx';
 import ProductImage from '../components/ProductImage.jsx';
 
@@ -56,6 +57,7 @@ export default function Retail() {
           <div><strong>Gạo Kinh Bắc</strong><small>Bán hàng tại quầy</small></div>
         </div>
         <div className="admin-account">
+          <OrderAlerts onView={() => navigate('/quan-tri')} />
           <span>Xin chào, <strong>{user?.full_name}</strong></span>
           <Link to="/quan-tri" className="btn btn-secondary">Quản trị</Link>
           <button className="btn btn-ghost" onClick={() => { logout(); navigate('/'); }}>Đăng xuất</button>

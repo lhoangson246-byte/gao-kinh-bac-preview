@@ -1207,3 +1207,22 @@ label b { color: var(--danger); }
   .branch-row .input { grid-column: 2 / -1; }
   .branch-row .btn { grid-column: 3; grid-row: 1; }
 }
+
+/* --- Báo đơn mới ở trang quản trị --- */
+.order-sound { min-height: 38px; padding: 6px 12px; font-size: .8rem; }
+.order-sound.on { border-color: #b9d4c1; background: var(--green-100); color: var(--green-950); }
+.order-sound.locked { border-color: var(--gold); background: #fff3d6; color: #6b4a0c; animation: sound-nudge 2.4s ease-in-out infinite; }
+@keyframes sound-nudge { 0%, 85%, 100% { transform: none; } 90% { transform: rotate(-3deg); } 95% { transform: rotate(3deg); } }
+.order-alert { position: fixed; top: 86px; right: 18px; z-index: 60; display: flex; align-items: center; gap: 12px; max-width: min(460px, calc(100vw - 36px)); padding: 14px 14px 14px 16px; border: 2px solid var(--gold); border-radius: 16px; background: var(--paper); color: var(--ink); box-shadow: 0 16px 40px rgba(0, 0, 0, .18); animation: order-alert-in .35s ease-out; }
+.order-alert > div { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.order-alert strong { color: var(--green-950); font-size: 1rem; }
+.order-alert span { color: var(--muted); font-size: .84rem; }
+.order-alert-bell { font-size: 1.8rem; animation: order-bell 1s ease-in-out 3; }
+.order-alert .btn { min-height: 38px; padding: 6px 14px; }
+@keyframes order-alert-in { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+@keyframes order-bell { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-18deg); } 75% { transform: rotate(18deg); } }
+@media (prefers-reduced-motion: reduce) { .order-alert, .order-alert-bell, .order-sound.locked { animation: none; } }
+@media (max-width: 780px) { .order-sound { font-size: 0; padding: 6px 10px; } .order-sound span { font-size: 1rem; } }
+
+/* --- Giải thích điểm tích luỹ ở danh mục --- */
+.points-info { margin: -6px 0 14px; color: var(--gold-dark); font-size: .8rem; font-weight: 650; }
