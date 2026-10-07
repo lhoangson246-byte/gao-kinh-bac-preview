@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { api, formatDateTime, formatNumber, formatVND, DELIVERY_SLOTS } from '../api';
+import { api, formatDateTime, formatNumber, formatVND, DELIVERY_SLOTS, deliveryDateLabel } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 
 const SLOT_TIME = Object.fromEntries(DELIVERY_SLOTS.map(([code, , time]) => [code, time]));
@@ -112,7 +112,7 @@ export default function Orders() {
                   <p>{order.address}</p>
                   {SLOT_TIME[order.delivery_slot] && (
                     <small>{t('orders.delivery', {
-                      slot: `${t(`slot.${order.delivery_slot}`)} (${SLOT_TIME[order.delivery_slot]})`,
+                      slot: `${t(`slot.${order.delivery_slot}`)} ${deliveryDateLabel(order.created_at, order.delivery_slot)} (${SLOT_TIME[order.delivery_slot]})`,
                     })}</small>
                   )}
                   <small>{PAYMENTS.includes(order.payment_method) ? t(`orders.${order.payment_method}`) : order.payment_method}</small>

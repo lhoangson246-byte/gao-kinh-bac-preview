@@ -260,8 +260,61 @@ export const DELIVERY_AREA_LABEL = 'Bắc Ninh';
 /** Khung giờ giao hoả tốc trong ngày. Cửa hàng không thu phí giao hàng. */
 export const DELIVERY_SLOTS = [
   ['sang', 'Buổi sáng', '07h00 – 11h30'],
-  ['chieu', 'Buổi chiều', '14h00 – 18h00'],
+  ['chieu', 'Buổi chiều', '13h30 – 18h00'],
 ];
+
+/**
+ * Giờ làm việc của cửa hàng (phút trong ngày, giờ Việt Nam):
+ * sáng 07h00–11h30, nghỉ trưa 11h30–13h30, chiều 13h30–18h00, nghỉ từ 18h00.
+ */
+export const SHOP_HOURS = { open: 7 * 60, lunchStart: 11 * 60 + 30, lunchEnd: 13 * 60 + 30, close: 18 * 60 };
+const VN_OFFSET_MIN = 7 * 60;
+
+/** Phút trong ngày theo giờ Việt Nam, dù máy của khách đặt múi giờ nào. */
+const vietnamMinutes = (date) => (date.getUTCHours() * 60 + date.getUTCMinutes() + VN_OFFSET_MIN) % 1440;
+
+/** "10:05" theo giờ Việt Nam. */
+export function vietnamClock(date = new Date()) {
+  const m = vietnamMinutes(date);
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Đơn đặt vào thời điểm `date` được giao lúc nào:
+ *  - trước 07h00: buổi sáng hôm nay
+ *  - 07h00–11h30: trong buổi sáng
+ *  - 11h30–13h30 (nghỉ trưa): buổi chiều, từ 13h30
+ *  - 13h30–18h00: trong buổi chiều
+ *  - từ 18h00: sáng hôm sau
+ */
+export function deliveryPlan(date = new Date()) {
+  const m = vietnamMinutes(date);
+  if (m < SHOP_HOURS.open) return { phase: 'early', slot: 'sang' };
+  if (m < SHOP_HOURS.lunchStart) return { phase: 'morning', slot: 'sang' };
+  if (m < SHOP_HOURS.lunchEnd) return { phase: 'lunch', slot: 'chieu' };
+  if (m < SHOP_HOURS.close) return { phase: 'afternoon', slot: 'chieu' };
+  return { phase: 'closed', slot: 'sang' };
+}
+
+/** Chọn khung `slot` lúc `date` thì giao hôm nay hay ngày mai. */
+export function slotDay(slot, date = new Date()) {
+  const m = vietnamMinutes(date);
+  if (m >= SHOP_HOURS.close) return 'tomorrow';
+  if (slot === 'sang' && m >= SHOP_HOURS.lunchStart) return 'tomorrow';
+  return 'today';
+}
+
+/**
+ * Ngày giao (dd/mm, giờ Việt Nam) của một đơn đã đặt, suy từ giờ đặt và khung giờ khách chọn.
+ * created_at của máy chủ là giờ UTC dạng "YYYY-MM-DD HH:MM:SS".
+ */
+export function deliveryDateLabel(createdAt, slot) {
+  const placed = new Date(String(createdAt).replace(' ', 'T') + (/[zZ+]/.test(String(createdAt)) ? '' : 'Z'));
+  if (Number.isNaN(placed.getTime()) || !slot) return '';
+  const vn = new Date(placed.getTime() + VN_OFFSET_MIN * 60_000);
+  if (slotDay(slot, placed) === 'tomorrow') vn.setUTCDate(vn.getUTCDate() + 1);
+  return `${String(vn.getUTCDate()).padStart(2, '0')}/${String(vn.getUTCMonth() + 1).padStart(2, '0')}`;
+}
 export const DELIVERY_SLOT_LABEL = Object.fromEntries(
   DELIVERY_SLOTS.map(([code, name, time]) => [code, `${name} (${time})`])
 );

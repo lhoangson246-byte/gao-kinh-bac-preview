@@ -6,7 +6,7 @@ const MAX_ROWS = 50000;
 const DAY_MS = 86400000;
 const statusNames = { pending: 'Chờ xác nhận', confirmed: 'Đã xác nhận', shipping: 'Đang giao', completed: 'Hoàn thành', cancelled: 'Đã huỷ' };
 const paymentNames = { cod: 'Thanh toán khi nhận hàng', bank: 'Chuyển khoản', cash: 'Tiền mặt', transfer: 'Chuyển khoản' };
-const slotNames = { sang: 'Buổi sáng 07:00–11:30', chieu: 'Buổi chiều 14:00–18:00' };
+const slotNames = { sang: 'Buổi sáng 07:00–11:30', chieu: 'Buổi chiều 13:30–18:00' };
 
 export async function buildOrdersWorkbook(period) {
   const days = Math.round((Date.parse(period.to) - Date.parse(period.from)) / DAY_MS) + 1;

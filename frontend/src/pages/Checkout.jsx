@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
 import AddressBook from '../components/AddressBook.jsx';
+import DeliveryHours, { useNow } from '../components/DeliveryHours.jsx';
 import {
-  api, formatNumber, formatVND, pointsForLines, DELIVERY_AREA_CODE, DELIVERY_SLOTS,
+  api, formatNumber, formatVND, pointsForLines, DELIVERY_AREA_CODE, DELIVERY_SLOTS, deliveryPlan, slotDay,
 } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 
@@ -11,6 +12,7 @@ export default function Checkout() {
   const { items, total, hasUnavailable, clear } = useCart();
   const navigate = useNavigate();
   const { t, unit } = useI18n();
+  const now = useNow();
 
   const orderable = items.filter((item) => item.stock > 0 && item.quantity > 0);
   // Xem trước ưu đãi đơn đầu tiên; máy chủ vẫn tự quyết khi tạo đơn.
@@ -42,7 +44,8 @@ export default function Checkout() {
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [form, setForm] = useState({
     delivery_area: DELIVERY_AREA_CODE,
-    delivery_slot: 'sang',
+    // Chọn sẵn khung giao sớm nhất theo giờ hiện tại (đặt giờ nghỉ trưa thì giao chiều).
+    delivery_slot: deliveryPlan().slot,
     note: '',
     payment_method: 'cod',
   });
@@ -140,6 +143,8 @@ export default function Checkout() {
             <span>2</span><div><h2>{t('checkout.timeTitle')}</h2><p>{t('checkout.timeHint')}</p></div>
           </div>
 
+          <DeliveryHours now={now} />
+
           <fieldset className="slot-group">
             <legend>{t('checkout.slotLegend')} <span className="free-tag">{t('common.free')}</span></legend>
             <div className="payment-options">
@@ -148,7 +153,10 @@ export default function Checkout() {
                   <input type="radio" name="delivery_slot" value={code}
                          checked={form.delivery_slot === code} onChange={onChange} />
                   <span aria-hidden="true">◷</span>
-                  <div><strong>{t(`slot.${code}`)}</strong><small>{time}</small></div>
+                  <div>
+                    <strong>{t(`slot.${code}`)}</strong>
+                    <small>{time} · {t(`slot.day.${slotDay(code, now)}`)}</small>
+                  </div>
                 </label>
               ))}
             </div>

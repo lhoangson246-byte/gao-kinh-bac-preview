@@ -105,7 +105,7 @@ Năm loại có giá nhưng **chưa có ảnh bao bì**: Kê vàng, Gạo Thái,
 
 - Cửa hàng giao **hoả tốc trong ngày, miễn phí** → giỏ hàng và trang đặt hàng ghi rõ
   “Phí giao hàng: Miễn phí”, không còn dòng “xác nhận sau”.
-- Khách chọn **khung giờ mong muốn**: Buổi sáng 07h00–11h30 hoặc Buổi chiều 14h00–18h00.
+- Khách chọn **khung giờ mong muốn**: Buổi sáng 07h00–11h30 hoặc Buổi chiều 13h30–18h00 (đổi từ 14h00 ngày 07/10/2026, xem mục "Giờ giao gạo").
 - Khung giờ lưu ở cột `orders.delivery_slot` (`db.js` tự thêm cột cho cơ sở dữ liệu cũ),
   hiển thị lại cho khách ở trang Đơn hàng và cho cửa hàng ở trang quản trị.
 - Máy chủ chỉ nhận `sang` hoặc `chieu`; không chọn cũng đặt hàng được.
@@ -825,6 +825,32 @@ Migration `schema:2026-10-02-v1` chỉ **thêm cột**, không xoá hay sửa d�
 Migration dữ liệu duy nhất là danh sách quà nói trên (chạy một lần): bật mì chũ loại 1kg, tắt kê
 vàng. Ở `orders`, cột `discount` vẫn là **tổng** tiền giảm (đơn đầu + voucher), còn
 `voucher_discount` là phần voucher.
+
+
+## Giờ giao gạo và khung nhắc ở trang đặt hàng (07/10/2026)
+
+Giờ làm việc của cửa hàng: **sáng 07h00–11h30**, **nghỉ trưa 11h30–13h30**, **chiều 13h30–18h00**,
+nghỉ từ 18h00. Khung chiều đổi từ 14h00 sang 13h30.
+
+| Khách đặt lúc | Được giao |
+|---|---|
+| Trước 07h00 | Buổi sáng hôm đó, từ 7h00 |
+| 07h00 – 11h30 | Trong buổi sáng |
+| 11h30 – 13h30 (nghỉ trưa) | Buổi chiều, từ 13h30 |
+| 13h30 – 18h00 | Trong buổi chiều |
+| Từ 18h00 | Sáng hôm sau, từ 7h00 |
+
+- Trang đặt hàng (có tài khoản) và trang đặt hàng nhanh đều có khung nhắc. Dòng đầu nói rõ
+  "Đặt bây giờ (12:10): cửa hàng đang nghỉ trưa, đơn được giao chiều nay từ 13h30"; bên dưới là
+  lịch trong ngày, dòng đang áp dụng được tô đậm. Ở trang đặt nhanh, lịch thu gọn sau nút
+  "Xem giờ giao hàng trong ngày" để trang ngắn.
+- Khung giờ được **chọn sẵn** theo giờ hiện tại (đặt giờ nghỉ trưa thì chọn sẵn buổi chiều). Mỗi
+  nút ghi "Hôm nay" hoặc "Ngày mai"; ví dụ đặt lúc 15h mà chọn buổi sáng thì là sáng mai.
+- Giờ luôn tính theo **giờ Việt Nam**, kể cả khi điện thoại của khách đặt múi giờ khác. Khung nhắc
+  tự cập nhật mỗi phút nếu khách để trang mở lâu.
+- **Trang quản trị** và trang **Đơn của tôi** ghi kèm **ngày giao**, suy ra từ giờ đặt và khung
+  giờ khách chọn (ví dụ "Buổi chiều (13h30–18h00) · ngày 07/10").
+- Chưa xử lý ngày nghỉ, lễ Tết hay Chủ nhật. Nếu cửa hàng có lịch nghỉ, cần báo để thêm vào.
 
 
 ## Đặt hàng nhanh không cần tài khoản (03/10/2026)

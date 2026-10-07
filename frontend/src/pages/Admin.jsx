@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom';
 const ImagePicker = lazy(() => import('../components/ImagePicker.jsx'));
 const BannerSettings = lazy(() => import('../components/BannerSettings.jsx'));
-import { api, salePercent, PRODUCT_CATEGORIES, formatDateTime, formatVND, pointsForLines, mapLink, STATUS_LABEL, DELIVERY_SLOT_LABEL } from '../api';
+import { api, salePercent, PRODUCT_CATEGORIES, formatDateTime, formatVND, pointsForLines, mapLink, STATUS_LABEL, DELIVERY_SLOT_LABEL, deliveryDateLabel } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
 const RevenueReport = lazy(() => import('../components/RevenueReport.jsx'));
 const CustomerManager = lazy(() => import('../components/CustomerManager.jsx'));
@@ -384,7 +384,7 @@ export default function Admin() {
                                   </a>
                                 )}
                                 {order.delivery_slot && (
-                                  <p className="slot-text"><strong>Khung giờ giao:</strong> {DELIVERY_SLOT_LABEL[order.delivery_slot]}</p>
+                                  <p className="slot-text"><strong>Khung giờ giao:</strong> {DELIVERY_SLOT_LABEL[order.delivery_slot]} · ngày {deliveryDateLabel(order.created_at, order.delivery_slot)}</p>
                                 )}
                                 {order.note && <p className="customer-note"><strong>Khách dặn:</strong> {order.note}</p>}
                               </section>

@@ -18,7 +18,7 @@
 - Đăng ký chỉ bằng **số điện thoại** (email không bắt buộc), đăng nhập bằng SĐT hoặc email
 - Sổ địa chỉ giao hàng riêng (tối đa 10 địa chỉ): thêm/sửa/xoá, chọn địa chỉ khi thanh toán và đặt mặc định cho lần mua sau
 - Đặt hàng tới địa chỉ trong tỉnh Bắc Ninh (kiểm tra ở cả trình duyệt và máy chủ)
-- Chọn khung giờ giao trong ngày (sáng 07h00–11h30 hoặc chiều 14h00–18h00), giao hàng miễn phí
+- Chọn khung giờ giao trong ngày (sáng 07h00–11h30 hoặc chiều 13h30–18h00; nghỉ trưa 11h30–13h30, đặt giờ nghỉ trưa giao buổi chiều, đặt sau 18h giao sáng hôm sau), giao hàng miễn phí
 - Chọn thanh toán khi nhận hàng hoặc chuyển khoản
 - **Ưu đãi 20.000₫ cho đơn đầu tiên** của mỗi tài khoản; giỏ hàng và trang đặt hàng hiện sẵn số tiền được giảm
 - **Tích điểm cho mọi đơn**: đơn giao xong sẽ cộng điểm vào chính số điện thoại của tài khoản (1.000₫ = 1 điểm)

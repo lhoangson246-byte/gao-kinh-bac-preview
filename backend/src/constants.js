@@ -9,7 +9,7 @@ export const ORDER_STATUSES = ['pending', 'confirmed', 'shipping', 'completed', 
 /** Khung giờ giao hoả tốc trong ngày. Cửa hàng không thu phí giao hàng. */
 export const DELIVERY_SLOTS = {
   sang: 'Sáng: 07h00 – 11h30',
-  chieu: 'Chiều: 14h00 – 18h00',
+  chieu: 'Chiều: 13h30 – 18h00',
 };
 export const DELIVERY_SLOT_CODES = Object.keys(DELIVERY_SLOTS);
 

@@ -1150,3 +1150,28 @@ label b { color: var(--danger); }
   .quick-bar b { color: var(--green-900); font-size: 1.35rem; }
   .quick-bar .quick-submit { flex: 1; }
 }
+
+/* --- Khung nhắc giờ giao gạo ở trang đặt hàng --- */
+.delivery-hours { display: grid; gap: 8px; margin: 4px 0 14px; padding: 12px 14px; border: 1px solid #b9d4c1; border-radius: 14px; background: var(--green-100); color: var(--green-950); }
+.delivery-now { display: flex; align-items: flex-start; gap: 10px; margin: 0; }
+.delivery-now > span:first-child { font-size: 1.5rem; line-height: 1; }
+.delivery-now > span:last-child { display: flex; flex-direction: column; gap: 1px; }
+.delivery-now small { color: var(--green-800); font-size: .78rem; font-weight: 700; }
+.delivery-now strong { font-size: 1rem; line-height: 1.35; }
+.delivery-schedule { display: grid; gap: 2px; margin: 0; padding: 8px 0 0; border-top: 1px dashed #b9d4c1; list-style: none; }
+.delivery-schedule li { display: grid; grid-template-columns: 22px 108px 1fr; align-items: baseline; gap: 6px; padding: 3px 6px; border-radius: 8px; color: #3c5a49; font-size: .8rem; }
+.delivery-schedule li b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.delivery-schedule li.current { background: var(--white); color: var(--green-950); font-weight: 700; box-shadow: inset 3px 0 0 var(--green-800); }
+.quick-page .delivery-hours { margin: 0; }
+.quick-page .delivery-now strong { font-size: 1.05rem; }
+.quick-page .delivery-schedule li { font-size: .86rem; }
+.delivery-hours.compact .delivery-schedule li { grid-template-columns: 22px 104px 1fr; }
+@media (max-width: 420px) {
+  .delivery-schedule li { grid-template-columns: 20px 1fr; }
+  .delivery-schedule li > span:last-child { grid-column: 2; }
+  .delivery-hours.compact .delivery-schedule li { grid-template-columns: 20px 1fr; }
+}
+.delivery-more summary { cursor: pointer; padding: 4px 0; color: var(--green-800); font-size: .92rem; font-weight: 750; text-decoration: underline; text-underline-offset: 3px; }
+.delivery-more[open] summary { margin-bottom: 4px; }
+.quick-options button small.slot-day { margin-top: 2px; padding: 1px 8px; border-radius: 99px; background: var(--green-100); color: var(--green-900); font-size: .8rem; font-weight: 750; }
+.quick-options button small.slot-day.tomorrow { background: #fff3d6; color: #7a5410; }

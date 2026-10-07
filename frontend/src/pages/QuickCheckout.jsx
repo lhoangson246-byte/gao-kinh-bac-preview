@@ -4,10 +4,11 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useCart } from '../context/CartContext.jsx';
 import { useI18n } from '../i18n/index.jsx';
 import PasswordInput from '../components/PasswordInput.jsx';
+import DeliveryHours, { useNow } from '../components/DeliveryHours.jsx';
 import { passwordErrorKey } from '../password';
 import {
   api, formatVND, isPhone, mapLink, mentionsOtherProvince, normalizePhone, pointsForLines,
-  DELIVERY_AREA_CODE, DELIVERY_SLOTS, FIRST_ORDER_DISCOUNT,
+  DELIVERY_AREA_CODE, DELIVERY_SLOTS, FIRST_ORDER_DISCOUNT, deliveryPlan, slotDay,
 } from '../api';
 
 /** Thông tin nhận hàng lần trước, chỉ lưu trên máy của khách để lần sau khỏi gõ lại. */
@@ -41,12 +42,14 @@ export default function QuickCheckout() {
   const { items, total, clear } = useCart();
   const { t, unit } = useI18n();
   const saved = useRef(readSaved()).current;
+  const now = useNow();
 
   const [form, setForm] = useState({
     receiver_name: saved?.name || '',
     phone: saved?.phone || '',
     address: saved?.address || '',
-    delivery_slot: 'sang',
+    // Chọn sẵn khung giao sớm nhất theo giờ hiện tại (đặt giờ nghỉ trưa thì giao chiều).
+    delivery_slot: deliveryPlan().slot,
     payment_method: 'cod',
     note: '',
   });
@@ -211,13 +214,17 @@ export default function QuickCheckout() {
             )}
           </div>
 
+          <div className="quick-hours"><DeliveryHours now={now} compact /></div>
+
           <fieldset className="quick-choice quick-half">
             <legend>{t('quick.when')}</legend>
             <div className="quick-options">
               {DELIVERY_SLOTS.map(([code, , time]) => (
                 <button key={code} type="button" className={form.delivery_slot === code ? 'active' : ''}
                         aria-pressed={form.delivery_slot === code} onClick={() => set('delivery_slot', code)}>
-                  <strong>{t(`slot.${code}`)}</strong><small>{time}</small>
+                  <strong>{t(`slot.${code}`)}</strong>
+                  <small>{time}</small>
+                  <small className={`slot-day ${slotDay(code, now)}`}>{t(`slot.day.${slotDay(code, now)}`)}</small>
                 </button>
               ))}
             </div>
