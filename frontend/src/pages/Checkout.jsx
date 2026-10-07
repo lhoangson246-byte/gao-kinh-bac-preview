@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
 import AddressBook from '../components/AddressBook.jsx';
@@ -61,7 +61,18 @@ export default function Checkout() {
     return () => { cancelled = true; };
   }, []);
 
-  const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  // Khung giờ chọn sẵn theo giờ hiện tại; tự chỉnh lại khi đồng hồ được đồng bộ với máy chủ
+  // hoặc khi qua mốc giờ (ví dụ tới giờ nghỉ trưa), trừ khi khách đã tự chọn.
+  const slotTouched = useRef(false);
+  const plannedSlot = deliveryPlan(now).slot;
+  useEffect(() => {
+    if (!slotTouched.current) setForm((current) => ({ ...current, delivery_slot: plannedSlot }));
+  }, [plannedSlot]);
+
+  const onChange = (e) => {
+    if (e.target.name === 'delivery_slot') slotTouched.current = true;
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
   const onSelectAddress = (address) => {
     setSelectedAddress(address);
     if (address) setFieldErrors((current) => ({ ...current, address_id: undefined }));

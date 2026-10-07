@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar.jsx';
+import Footer from './components/Footer.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import PageLoadBoundary from './components/PageLoadBoundary.jsx';
 import { useI18n } from './i18n/index.jsx';
@@ -100,13 +101,7 @@ export default function App() {
         </Suspense>
         </PageLoadBoundary>
       </main>
-      <footer className="footer">
-        <div className="container footer-inner">
-          <strong>Gạo Kinh Bắc</strong>
-          <span>{t('footer.tagline')}</span>
-          <span>© {new Date().getFullYear()}</span>
-        </div>
-      </footer>
+      <Footer />
     </>
   );
 }

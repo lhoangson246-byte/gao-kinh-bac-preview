@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useI18n } from '../i18n/index.jsx';
-import { deliveryPlan, vietnamClock } from '../api';
+import { deliveryPlan, onShopClock, shopNow, syncShopClock, vietnamClock } from '../api';
 
 /** Bốn khoảng thời gian trong ngày của cửa hàng và đơn đặt lúc đó được giao khi nào. */
 const ROWS = [
@@ -10,12 +10,18 @@ const ROWS = [
   { phase: 'closed', icon: '🌙', time: '18h00 – 07h00' },
 ];
 
-/** Thời điểm hiện tại, cập nhật mỗi phút để khung nhắc luôn đúng khi khách để trang mở lâu. */
+/**
+ * Thời điểm hiện tại theo giờ máy chủ (bù khi đồng hồ máy khách lệch), cập nhật mỗi phút
+ * để khung nhắc luôn đúng khi khách để trang mở lâu.
+ */
 export function useNow() {
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState(shopNow);
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 60_000);
-    return () => window.clearInterval(timer);
+    const refresh = () => setNow(shopNow());
+    const stop = onShopClock(refresh);
+    syncShopClock();
+    const timer = window.setInterval(refresh, 60_000);
+    return () => { stop(); window.clearInterval(timer); };
   }, []);
   return now;
 }

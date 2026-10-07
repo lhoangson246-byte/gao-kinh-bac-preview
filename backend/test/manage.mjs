@@ -1231,6 +1231,57 @@ const guestToken = (await call('/auth/register', {
   await call(`/admin/products/${product.id}/permanent`, { method: 'DELETE', token: admin });
 }
 
+/* ================================================================== *
+ * 07/10/2026: giờ máy chủ cho trang khách, các cơ sở ở chân trang
+ * ================================================================== */
+{
+  const time = await call('/time');
+  check('Có giờ chuẩn của máy chủ (GET /api/time)',
+    time.status === 200 && Number.isFinite(Date.parse(time.data.now)), JSON.stringify(time.data));
+
+  const original = (await call('/settings/storefront')).data.settings || {};
+  check('Cài đặt công khai có danh sách cơ sở', Array.isArray(original.branches));
+
+  const set = await call('/admin/settings/storefront', {
+    method: 'PUT', token: admin,
+    body: { branches: [
+      { name: 'Cơ sở thử 1', address: 'Số 1 đường Thử Nghiệm, phường Suối Hoa', phone: '+84 912 345 678' },
+      { name: '', address: '', phone: '' },
+      { name: '', address: 'Số 2 đường Thử Nghiệm, phường Ninh Xá', phone: '' },
+    ] },
+  });
+  check('Lưu được các cơ sở, bỏ dòng trống, chuẩn hoá số điện thoại',
+    set.status === 200 && set.data.settings?.branches?.length === 2
+      && set.data.settings.branches[0].phone === '0912345678' && set.data.settings.branches[1].name === '',
+    JSON.stringify(set.data).slice(0, 200));
+  check('Khách thấy cơ sở mà không cần đăng nhập',
+    (await call('/settings/storefront')).data.settings?.branches?.[0]?.name === 'Cơ sở thử 1');
+  check('Đổi cơ sở không đụng tới banner và số tư vấn',
+    JSON.stringify(set.data.settings.banner_images) === JSON.stringify(original.banner_images)
+      && set.data.settings.contact_phone === original.contact_phone);
+
+  const short = await call('/admin/settings/storefront', {
+    method: 'PUT', token: admin, body: { branches: [{ name: 'A', address: 'ngắn' }] },
+  });
+  check('Địa chỉ cơ sở quá ngắn bị từ chối (400)', short.status === 400 && !!short.data.errors?.branches);
+  const badPhone = await call('/admin/settings/storefront', {
+    method: 'PUT', token: admin, body: { branches: [{ address: 'Số 3 đường Thử Nghiệm, phường Vệ An', phone: '123' }] },
+  });
+  check('Số điện thoại cơ sở sai bị từ chối (400)', badPhone.status === 400);
+  const six = await call('/admin/settings/storefront', {
+    method: 'PUT', token: admin,
+    body: { branches: Array.from({ length: 6 }, (_, i) => ({ address: `Số ${i + 10} đường Thử Nghiệm, phường Suối Hoa` })) },
+  });
+  check('Quá 5 cơ sở bị từ chối (400)', six.status === 400);
+  const odd = await call('/admin/settings/storefront', {
+    method: 'PUT', token: admin, body: { branches: [{ address: 'Số 4 đường Thử Nghiệm', map: 'x' }] },
+  });
+  check('Không nhận trường lạ trong cơ sở (400)', odd.status === 400);
+
+  // Trả lại như trước khi thử.
+  await call('/admin/settings/storefront', { method: 'PUT', token: admin, body: { branches: original.branches || [] } });
+}
+
 console.log(results.join('\n'));
 console.log(`\n${pass} PASS · ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

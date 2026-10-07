@@ -53,6 +53,8 @@ const apiLimiter = rateLimit({ ...limiterOptions, windowMs: 15 * 60 * 1000, limi
 const orderLimiter = rateLimit({ ...limiterOptions, windowMs: 60 * 60 * 1000, limit: 40 });
 
 app.get('/api/health', (req, res) => res.json({ ok: true, name: 'Gạo Kinh Bắc API' }));
+// Giờ chuẩn của máy chủ: trang khách dùng để tính giờ giao, phòng khi đồng hồ máy khách bị lệch.
+app.get('/api/time', (req, res) => res.json({ now: new Date().toISOString() }));
 
 app.use('/api', apiLimiter);
 app.use('/api/auth/login', authLimiter);

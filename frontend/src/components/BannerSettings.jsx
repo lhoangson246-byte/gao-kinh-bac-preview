@@ -5,6 +5,12 @@ import ImagePicker from './ImagePicker.jsx';
 const MAX_BANNERS = 6;
 
 const sameList = (a, b) => a.length === b.length && a.every((item, i) => item === b[i]);
+const MAX_BRANCHES = 5;
+const blankBranch = () => ({ name: '', address: '', phone: '' });
+/** So sánh danh sách cơ sở sau khi bỏ dòng trống. */
+const cleanBranches = (list) => list
+  .map((b) => ({ name: b.name.trim(), address: b.address.trim(), phone: normalizePhone(b.phone) || b.phone.trim() }))
+  .filter((b) => b.name || b.address || b.phone);
 
 /**
  * Trang chủ: các ảnh banner chạy vòng (mỗi 2,5 giây) và số điện thoại tư vấn.
@@ -14,6 +20,7 @@ export default function BannerSettings({ notify }) {
   const [saved, setSaved] = useState(null);     // null = đang tải
   const [images, setImages] = useState([]);
   const [phone, setPhone] = useState('');
+  const [branches, setBranches] = useState([]);
   const [editing, setEditing] = useState(null); // vị trí ảnh đang mở ô chọn ảnh
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -21,10 +28,15 @@ export default function BannerSettings({ notify }) {
 
   const load = (settings) => {
     const list = settings?.banner_images || (settings?.banner_image_url ? [settings.banner_image_url] : []);
-    const next = { images: list, phone: settings?.contact_phone || '' };
+    const next = {
+      images: list,
+      phone: settings?.contact_phone || '',
+      branches: (settings?.branches || []).map((b) => ({ name: b.name || '', address: b.address || '', phone: b.phone || '' })),
+    };
     setSaved(next);
     setImages(next.images);
     setPhone(next.phone);
+    setBranches(next.branches);
     setEditing(null);
   };
 
@@ -38,7 +50,12 @@ export default function BannerSettings({ notify }) {
 
   const cleanImages = images.filter(Boolean);
   const dirty = saved !== null && (!sameList(cleanImages, saved.images) || normalizePhone(phone) !== saved.phone
-    || (phone.trim() !== '' && !isPhone(phone)));
+    || (phone.trim() !== '' && !isPhone(phone))
+    || JSON.stringify(cleanBranches(branches)) !== JSON.stringify(cleanBranches(saved.branches)));
+  const setBranch = (index, field, value) => {
+    setBranches((list) => list.map((b, i) => (i === index ? { ...b, [field]: value } : b)));
+    setFieldErrors((current) => ({ ...current, branches: undefined }));
+  };
 
   const setImage = (index, url) => setImages((list) => list.map((item, i) => (i === index ? url : item)));
   const removeImage = (index) => {
@@ -67,14 +84,26 @@ export default function BannerSettings({ notify }) {
       setFieldErrors({ contact_phone: 'Số điện thoại không hợp lệ (10 số, ví dụ 0912345678).' });
       return;
     }
+    const branchList = cleanBranches(branches);
+    const badBranch = branchList.findIndex((b) => b.address.length < 8 || (b.phone && !isPhone(b.phone)));
+    if (badBranch !== -1) {
+      const b = branchList[badBranch];
+      setFieldErrors({
+        branches: b.address.length < 8
+          ? `Cơ sở ${badBranch + 1}: nhập địa chỉ đầy đủ (số nhà, đường, phường/xã).`
+          : `Cơ sở ${badBranch + 1}: số điện thoại không hợp lệ.`,
+      });
+      return;
+    }
     setBusy(true);
     try {
       const { settings } = await api.adminUpdateStorefront({
         banner_images: cleanImages,
         contact_phone: normalizePhone(phone),
+        branches: branchList.map((b) => ({ name: b.name, address: b.address, phone: normalizePhone(b.phone) })),
       });
       load(settings);
-      notify('Đã lưu banner và số điện thoại tư vấn trang chủ.');
+      notify('Đã lưu banner, số tư vấn và các cơ sở cửa hàng.');
     } catch (err) {
       setError(err.message);
       setFieldErrors(err.errors || {});
@@ -86,6 +115,7 @@ export default function BannerSettings({ notify }) {
   const reset = () => {
     setImages(saved.images);
     setPhone(saved.phone);
+    setBranches(saved.branches);
     setEditing(null);
     setError('');
     setFieldErrors({});
@@ -171,6 +201,30 @@ export default function BannerSettings({ notify }) {
               ngay hôm nay” kèm nút gọi số này. Để trống thì khung liên hệ được ẩn.
             </small>}
       </label>
+
+      <fieldset className="branches-field">
+        <legend>Các cơ sở cửa hàng (hiện ở chân trang)</legend>
+        <p className="field-help">
+          Khách thấy tên, địa chỉ, nút chỉ đường Google Maps và số điện thoại của từng cơ sở ở cuối mọi
+          trang. Chưa nhập cơ sở nào thì phần này được ẩn. Tối đa {MAX_BRANCHES} cơ sở.
+        </p>
+        {branches.map((branch, index) => (
+          <div className="branch-row" key={index}>
+            <span className="banner-order">{index + 1}</span>
+            <input className="input" value={branch.name} placeholder="Tên, ví dụ: Cơ sở chính"
+                   aria-label={`Tên cơ sở ${index + 1}`} onChange={(e) => setBranch(index, 'name', e.target.value)} />
+            <input className="input branch-address" value={branch.address} placeholder="Số nhà, đường, phường/xã, tỉnh"
+                   aria-label={`Địa chỉ cơ sở ${index + 1}`} onChange={(e) => setBranch(index, 'address', e.target.value)} />
+            <input className="input" value={branch.phone} inputMode="tel" placeholder="SĐT (không bắt buộc)"
+                   aria-label={`Số điện thoại cơ sở ${index + 1}`} onChange={(e) => setBranch(index, 'phone', e.target.value)} />
+            <button type="button" className="btn btn-danger" disabled={busy}
+                    onClick={() => setBranches((list) => list.filter((_, i) => i !== index))}>Bỏ</button>
+          </div>
+        ))}
+        {fieldErrors.branches && <small className="err">{fieldErrors.branches}</small>}
+        <button type="button" className="btn btn-secondary" disabled={busy || branches.length >= MAX_BRANCHES}
+                onClick={() => setBranches((list) => [...list, blankBranch()])}>+ Thêm cơ sở</button>
+      </fieldset>
 
       <div className="form-actions">
         <button type="button" className="btn btn-primary" disabled={!dirty || busy} onClick={save}>

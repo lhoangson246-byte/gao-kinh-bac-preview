@@ -12,7 +12,7 @@ import { HttpError, cleanImageUrl, cleanText, normalizePhone, toInteger } from '
 import { writeAdminAudit } from '../audit.js';
 import { listAdminOrders } from '../order-lists.js';
 import { buildOrdersWorkbook } from '../orders-export.js';
-import { MAX_BANNERS, readStorefront } from './settings.js';
+import { MAX_BANNERS, MAX_BRANCHES, readStorefront } from './settings.js';
 
 const router = Router();
 
@@ -480,6 +480,26 @@ router.put('/settings/storefront', (req, res, next) => {
       const phone = raw ? normalizePhone(raw) : '';
       if (raw && !phone) errors.contact_phone = 'Số điện thoại không hợp lệ (10 số, ví dụ 0912345678).';
       else updates.push(['contact_phone', phone]);
+    }
+
+    // Các cơ sở của cửa hàng (chân trang): tên, địa chỉ bắt buộc, số điện thoại tuỳ chọn.
+    if (Array.isArray(body.branches)) {
+      if (body.branches.length > MAX_BRANCHES) {
+        errors.branches = `Tối đa ${MAX_BRANCHES} cơ sở.`;
+      } else {
+        const branches = [];
+        body.branches.forEach((raw, index) => {
+          const name = cleanText(raw?.name, 80) || '';
+          const address = cleanText(raw?.address, LIMITS.address) || '';
+          const rawPhone = cleanText(raw?.phone, LIMITS.phone) || '';
+          const phone = rawPhone ? normalizePhone(rawPhone) : '';
+          if (!name && !address && !rawPhone) return;            // dòng để trống: bỏ qua
+          if (address.length < 8) errors.branches = `Cơ sở ${index + 1}: nhập địa chỉ đầy đủ.`;
+          else if (rawPhone && !phone) errors.branches = `Cơ sở ${index + 1}: số điện thoại không hợp lệ.`;
+          else branches.push({ name, address, phone });
+        });
+        if (!errors.branches) updates.push(['store_branches', JSON.stringify(branches)]);
+      }
     }
 
     if (Object.keys(errors).length) throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', errors);

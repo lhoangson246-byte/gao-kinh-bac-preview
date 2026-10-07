@@ -61,6 +61,13 @@ export default function QuickCheckout() {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(null);        // { order, token }
   const fieldRefs = { receiver_name: useRef(null), phone: useRef(null), address: useRef(null) };
+  // Khung giờ chọn sẵn theo giờ hiện tại; tự chỉnh khi đồng bộ giờ máy chủ hoặc qua mốc giờ,
+  // trừ khi khách đã tự chọn.
+  const slotTouched = useRef(false);
+  const plannedSlot = deliveryPlan(now).slot;
+  useEffect(() => {
+    if (!slotTouched.current) setForm((current) => ({ ...current, delivery_slot: plannedSlot }));
+  }, [plannedSlot]);
 
   const orderable = items.filter((item) => item.stock > 0 && item.quantity > 0);
   const count = orderable.reduce((sum, item) => sum + item.quantity, 0);
@@ -221,7 +228,8 @@ export default function QuickCheckout() {
             <div className="quick-options">
               {DELIVERY_SLOTS.map(([code, , time]) => (
                 <button key={code} type="button" className={form.delivery_slot === code ? 'active' : ''}
-                        aria-pressed={form.delivery_slot === code} onClick={() => set('delivery_slot', code)}>
+                        aria-pressed={form.delivery_slot === code}
+                        onClick={() => { slotTouched.current = true; set('delivery_slot', code); }}>
                   <strong>{t(`slot.${code}`)}</strong>
                   <small>{time}</small>
                   <small className={`slot-day ${slotDay(code, now)}`}>{t(`slot.day.${slotDay(code, now)}`)}</small>

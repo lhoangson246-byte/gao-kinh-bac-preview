@@ -847,9 +847,28 @@ label b { color: var(--danger); }
 .payment-label.points.muted { color: var(--muted); font-weight: 600; }
 
 /* Footer */
-.footer { padding: 30px 0; background: var(--green-950); color: #dce8df; }
-.footer-inner { display: flex; justify-content: space-between; gap: 20px; font-size: .76rem; }
+.footer { padding: 34px 0 18px; background: var(--green-950); color: #dce8df; }
+.footer-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr); gap: 28px; font-size: .86rem; }
+.footer-grid:not(:has(.footer-branches)) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .footer strong { color: white; font-family: Cambria, Constantia, "Noto Serif", "Times New Roman", Times, serif; font-size: 1rem; }
+.footer h2 { margin: 0 0 10px; color: var(--gold); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .78rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.footer a { color: #fff; font-weight: 700; text-underline-offset: 3px; }
+.footer-brand { display: flex; flex-direction: column; gap: 6px; }
+.footer-hotline { margin-top: 4px; font-size: 1.05rem; text-decoration: none; }
+.footer-hours ul, .footer-branches ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.footer-hours li { display: flex; justify-content: space-between; gap: 12px; max-width: 260px; }
+.footer-hours li b { color: #fff; font-variant-numeric: tabular-nums; }
+.footer-hours li.muted-row, .footer-hours li.muted-row b { color: #9fb8a8; font-weight: 500; }
+.footer-hours small { display: block; max-width: 280px; margin-top: 8px; color: #b8ccbf; font-size: .76rem; line-height: 1.45; }
+.footer-branches li { display: flex; flex-direction: column; gap: 2px; padding-bottom: 8px; border-bottom: 1px solid rgba(255, 255, 255, .1); }
+.footer-branches li:last-child { border-bottom: 0; }
+.footer-branches li strong { font-size: .95rem; }
+.footer-links { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 2px; font-size: .82rem; }
+.footer-bottom { margin-top: 24px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, .1); color: #9fb8a8; font-size: .74rem; }
+@media (max-width: 780px) {
+  .footer { padding-bottom: 96px; }
+  .footer-grid, .footer-grid:not(:has(.footer-branches)) { grid-template-columns: 1fr; gap: 20px; }
+}
 
 @media (max-width: 980px) {
   /* Ba sản phẩm một hàng cả trên máy tính bảng: bỏ mô tả, dồn giá và nút xuống dưới. */
@@ -1175,3 +1194,16 @@ label b { color: var(--danger); }
 .delivery-more[open] summary { margin-bottom: 4px; }
 .quick-options button small.slot-day { margin-top: 2px; padding: 1px 8px; border-radius: 99px; background: var(--green-100); color: var(--green-900); font-size: .8rem; font-weight: 750; }
 .quick-options button small.slot-day.tomorrow { background: #fff3d6; color: #7a5410; }
+
+/* --- Danh sách cơ sở trong trang quản trị --- */
+.branches-field { display: grid; gap: 8px; margin: 18px 0 0; padding: 0; border: 0; }
+.branches-field legend { padding: 0; font-weight: 800; }
+.branches-field .field-help { margin: 0; font-size: .78rem; }
+.branch-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.branch-row .btn { min-height: 40px; }
+.branches-field > .btn { justify-self: start; }
+@media (max-width: 700px) {
+  .branch-row { grid-template-columns: 26px 1fr auto; }
+  .branch-row .input { grid-column: 2 / -1; }
+  .branch-row .btn { grid-column: 3; grid-row: 1; }
+}

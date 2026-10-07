@@ -851,6 +851,26 @@ nghỉ từ 18h00. Khung chiều đổi từ 14h00 sang 13h30.
 - **Trang quản trị** và trang **Đơn của tôi** ghi kèm **ngày giao**, suy ra từ giờ đặt và khung
   giờ khách chọn (ví dụ "Buổi chiều (13h30–18h00) · ngày 07/10").
 - Chưa xử lý ngày nghỉ, lễ Tết hay Chủ nhật. Nếu cửa hàng có lịch nghỉ, cần báo để thêm vào.
+- **Giờ theo máy chủ**: trang hỏi giờ chuẩn của máy chủ (`GET /api/time`) một lần rồi bù chênh lệch,
+  nên máy khách đặt sai giờ vẫn thấy đúng giờ giao. Khung giờ chọn sẵn tự chỉnh khi đồng bộ xong
+  hoặc khi qua mốc giờ, trừ khi khách đã tự bấm chọn.
+
+## Chân trang: giờ làm việc và các cơ sở (07/10/2026)
+
+Cuối mọi trang khách có:
+- **Giờ làm việc**: sáng 07h00–11h30, nghỉ trưa 11h30–13h30, chiều 13h30–18h00, kèm ghi chú
+  "Đặt online lúc nghỉ trưa giao buổi chiều; đặt sau 18h00 giao sáng hôm sau". Giờ này lấy cùng
+  nguồn với khung nhắc ở trang đặt hàng; muốn đổi giờ thì sửa `SHOP_HOURS` trong
+  `frontend/src/api.js` và các dòng giờ trong `Footer.jsx`, `DeliveryHours.jsx`.
+- **Số điện thoại tư vấn** (nếu đã nhập), bấm là gọi.
+- **Các cơ sở**: tên, địa chỉ, nút **Chỉ đường** (mở Google Maps theo địa chỉ) và số điện thoại
+  từng cơ sở.
+
+**Địa chỉ các cơ sở chưa được cung cấp nên chưa có trên trang**, mã nguồn không có địa chỉ mẫu.
+Nhập ở **Quản trị → Sản phẩm → Trang chủ: banner và liên hệ → Các cơ sở cửa hàng**: bấm
+"+ Thêm cơ sở", điền tên (không bắt buộc, để trống thì hiện "Cơ sở 1, 2…"), địa chỉ đầy đủ và
+số điện thoại (không bắt buộc), rồi bấm **Lưu trang chủ**. Tối đa 5 cơ sở. Chưa có cơ sở nào thì
+phần này được ẩn. Dữ liệu lưu ở `app_settings` (khoá `store_branches`), không đổi cấu trúc bảng.
 
 
 ## Đặt hàng nhanh không cần tài khoản (03/10/2026)

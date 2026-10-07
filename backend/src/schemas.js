@@ -110,6 +110,9 @@ add('admin', 'PUT', /^\/settings\/storefront\/?$/, obj({
   banner_images: z.array(bannerUrl).max(6).optional(),
   banner_image_url: bannerUrl.nullable().optional(),
   contact_phone: optionalText(LIMITS.phone),
+  branches: z.array(obj({
+    name: optionalText(80), address: optionalText(LIMITS.address), phone: optionalText(LIMITS.phone),
+  })).max(5).optional(),
 }));
 add('admin', 'POST', /^\/products\/?$/, obj(product));
 add('admin', 'PUT', /^\/products\/[^/]+\/?$/, obj(product).partial());

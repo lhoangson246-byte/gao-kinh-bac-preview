@@ -270,11 +270,48 @@ export const DELIVERY_SLOTS = [
 export const SHOP_HOURS = { open: 7 * 60, lunchStart: 11 * 60 + 30, lunchEnd: 13 * 60 + 30, close: 18 * 60 };
 const VN_OFFSET_MIN = 7 * 60;
 
+/*
+ * Đồng hồ theo máy chủ. Điện thoại/máy tính của khách có thể đặt sai giờ; khi đó trang sẽ
+ * báo sai giờ giao. Trang hỏi giờ chuẩn của máy chủ một lần (GET /api/time) rồi bù chênh lệch.
+ * Lệch dưới 30 giây thì bỏ qua.
+ */
+let clockOffset = 0;
+let clockSync = null;
+const clockListeners = new Set();
+
+/** Thời điểm hiện tại đã bù theo giờ máy chủ. */
+export const shopNow = () => new Date(Date.now() + clockOffset);
+
+/** Báo khi đã đồng bộ xong với máy chủ; trả về hàm huỷ đăng ký. */
+export function onShopClock(listener) {
+  clockListeners.add(listener);
+  return () => clockListeners.delete(listener);
+}
+
+export function syncShopClock() {
+  if (clockSync) return clockSync;
+  clockSync = (async () => {
+    try {
+      const sentAt = Date.now();
+      const { now } = await request('/time');
+      const receivedAt = Date.now();
+      const server = Date.parse(now);
+      if (!Number.isFinite(server)) return;
+      const offset = server - (sentAt + receivedAt) / 2;
+      clockOffset = Math.abs(offset) < 30_000 ? 0 : Math.round(offset);
+      clockListeners.forEach((listener) => listener());
+    } catch {
+      clockSync = null;   // mạng lỗi: dùng giờ máy, lần sau thử lại
+    }
+  })();
+  return clockSync;
+}
+
 /** Phút trong ngày theo giờ Việt Nam, dù máy của khách đặt múi giờ nào. */
 const vietnamMinutes = (date) => (date.getUTCHours() * 60 + date.getUTCMinutes() + VN_OFFSET_MIN) % 1440;
 
 /** "10:05" theo giờ Việt Nam. */
-export function vietnamClock(date = new Date()) {
+export function vietnamClock(date = shopNow()) {
   const m = vietnamMinutes(date);
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 }
@@ -287,7 +324,7 @@ export function vietnamClock(date = new Date()) {
  *  - 13h30–18h00: trong buổi chiều
  *  - từ 18h00: sáng hôm sau
  */
-export function deliveryPlan(date = new Date()) {
+export function deliveryPlan(date = shopNow()) {
   const m = vietnamMinutes(date);
   if (m < SHOP_HOURS.open) return { phase: 'early', slot: 'sang' };
   if (m < SHOP_HOURS.lunchStart) return { phase: 'morning', slot: 'sang' };
@@ -297,7 +334,7 @@ export function deliveryPlan(date = new Date()) {
 }
 
 /** Chọn khung `slot` lúc `date` thì giao hôm nay hay ngày mai. */
-export function slotDay(slot, date = new Date()) {
+export function slotDay(slot, date = shopNow()) {
   const m = vietnamMinutes(date);
   if (m >= SHOP_HOURS.close) return 'tomorrow';
   if (slot === 'sang' && m >= SHOP_HOURS.lunchStart) return 'tomorrow';
