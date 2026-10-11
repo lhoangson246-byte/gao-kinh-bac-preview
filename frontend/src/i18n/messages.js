@@ -321,6 +321,7 @@ export const vi = {
 
   // Đăng nhập, đăng ký
   'login.title': 'Đăng nhập',
+  'login.expired': 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để tiếp tục.',
   'login.identifier': 'Số điện thoại hoặc email',
   'login.identifierPlaceholder': '0912345678 hoặc email',
   'login.password': 'Mật khẩu',
@@ -716,6 +717,7 @@ export const en = {
   'status.cancelled': 'Cancelled',
 
   'login.title': 'Log in',
+  'login.expired': 'Your session has expired. Please log in again to continue.',
   'login.identifier': 'Phone number or email',
   'login.identifierPlaceholder': '0912345678 or email',
   'login.password': 'Password',
@@ -1108,6 +1110,7 @@ export const zh = {
   'status.cancelled': '已取消',
 
   'login.title': '登录',
+  'login.expired': '登录已过期，请重新登录以继续。',
   'login.identifier': '手机号或邮箱',
   'login.identifierPlaceholder': '0912345678 或邮箱',
   'login.password': '密码',

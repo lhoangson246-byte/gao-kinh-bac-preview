@@ -8,6 +8,12 @@ if (configuredSecret && (Buffer.byteLength(configuredSecret) < 32 || /gao_nha_mi
 if (production && !configuredSecret) throw new Error('JWT_SECRET is required in production.');
 export const JWT_SECRET = configuredSecret || randomBytes(48).toString('hex');
 export const JWT_OPTIONS = { algorithm: 'HS256', issuer: 'gao-shop', audience: 'gao-shop-api', expiresIn: '1h' };
+/**
+ * Mỗi token chỉ sống 1 giờ, nhưng trang đang mở tự gia hạn (POST /api/auth/refresh) nên không bị
+ * đăng xuất giữa chừng. Gia hạn được tối đa 16 giờ kể từ lúc đăng nhập (đủ một ngày bán hàng),
+ * sau đó phải đăng nhập lại.
+ */
+export const SESSION_MAX_SECONDS = 16 * 60 * 60;
 export const COOKIE_NAME = production ? '__Host-gao_session' : 'gao_session';
 export const COOKIE_OPTIONS = {
   httpOnly: true, secure: production, path: '/',

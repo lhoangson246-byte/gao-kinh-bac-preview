@@ -3,9 +3,13 @@ import db from '../db.js';
 
 import { JWT_SECRET as SECRET, JWT_OPTIONS, sessionCookie } from '../security.js';
 
-export function signToken(user) {
+/**
+ * Ký token phiên. `authTime` (giây) là lúc đăng nhập thật sự; gia hạn giữ nguyên giá trị này để
+ * giới hạn tổng thời gian của một lần đăng nhập.
+ */
+export function signToken(user, authTime = Math.floor(Date.now() / 1000)) {
   const row = db.prepare('SELECT session_version FROM users WHERE id = ?').get(user.id);
-  return jwt.sign({ id: user.id, version: row.session_version }, SECRET, JWT_OPTIONS);
+  return jwt.sign({ id: user.id, version: row.session_version, auth_time: authTime }, SECRET, JWT_OPTIONS);
 }
 
 /** Bắt buộc đăng nhập */
@@ -30,6 +34,8 @@ export function requireAuth(req, res, next) {
     delete user.session_version;
     delete user.is_locked;
     req.user = user;
+    // Token cũ (trước khi có auth_time) tính từ lúc cấp.
+    req.authTime = Number.isSafeInteger(payload.auth_time) ? payload.auth_time : payload.iat;
   } catch {
     return res.status(401).json({ message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.' });
   }

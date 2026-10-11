@@ -31,6 +31,8 @@ async function request(path, { method = 'GET', body, auth = false, signal } = {}
     const err = new Error(translateServerMessage(data.message || 'Có lỗi xảy ra. Vui lòng thử lại.', lang));
     err.errors = translateServerErrors(data.errors, lang);
     err.status = res.status;
+    // Yêu cầu cần đăng nhập bị từ chối vì hết phiên: báo cho AuthProvider đưa về trang đăng nhập.
+    if (res.status === 401 && auth) window.dispatchEvent(new Event('gao:session-expired'));
     throw err;
   }
   return data;
@@ -74,6 +76,8 @@ async function uploadImage(blob) {
 
 export const api = {
   register: (payload) => request('/auth/register', { method: 'POST', body: payload }),
+  /** Gia hạn phiên đăng nhập (trang đang mở gọi khoảng 15 phút/lần). */
+  refreshSession: () => request('/auth/refresh', { method: 'POST', auth: true }),
   login: (payload) => request('/auth/login', { method: 'POST', body: payload }),
   logout: () => request('/auth/logout', { method: 'POST', auth: true }),
   changePassword: (payload) => request('/auth/password', { method: 'PUT', body: payload, auth: true }),

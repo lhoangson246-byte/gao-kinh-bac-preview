@@ -64,6 +64,7 @@ add('auth', 'POST', /^\/login\/?$/, obj({ identifier: optionalText(LIMITS.email)
 add('auth', 'GET', /^\/me\/?$/);
 add('auth', 'PUT', /^\/me\/?$/, obj({ full_name: name.optional(), phone, address: optionalText(LIMITS.address) }));
 add('auth', 'POST', /^\/logout\/?$/);
+add('auth', 'POST', /^\/refresh\/?$/);
 add('auth', 'PUT', /^\/password\/?$/, obj({ current_password: loginPassword, password: newPassword }));
 add('products', 'GET', /^\/?$/, empty, obj({
   q: text(LIMITS.name).optional(), in_stock: z.enum(['0', '1']).optional(),

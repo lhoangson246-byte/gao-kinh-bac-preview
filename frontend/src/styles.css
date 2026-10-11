@@ -1226,3 +1226,4 @@ label b { color: var(--danger); }
 
 /* --- Giải thích điểm tích luỹ ở danh mục --- */
 .points-info { margin: -6px 0 14px; color: var(--gold-dark); font-size: .8rem; font-weight: 650; }
+.order-sound.offline { border-color: #e0c0ba; background: var(--danger-light); color: var(--danger); }

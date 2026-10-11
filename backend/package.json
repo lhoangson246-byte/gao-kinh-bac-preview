@@ -18,6 +18,7 @@
     "test:security": "node test/security.mjs",
     "test:db-config": "node --test test/database-config.mjs",
     "test:isolated": "node test/isolated.mjs",
+    "test:session": "node test/session-refresh.mjs",
     "check:live": "node test/live-security.mjs"
   },
   "dependencies": {

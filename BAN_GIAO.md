@@ -935,6 +935,34 @@ Mã gắn đơn vào tài khoản là chuỗi ngẫu nhiên chỉ trình duyệt
 lưu mã băm, mã dùng một lần và hết hạn sau 1 ngày.
 
 
+## Sửa lỗi admin bị đăng xuất nhanh và chuông không kêu (11/10/2026)
+
+**Nguyên nhân chung**: mỗi phiên đăng nhập chỉ sống 1 giờ và không tự gia hạn. Sau 1 giờ admin bị
+đăng xuất. Bộ hỏi đơn mới của chuông cũng bị máy chủ từ chối, nhưng lỗi bị bỏ qua trong im lặng nên
+chuông không kêu mà không ai biết.
+
+**Đã sửa**:
+- **Phiên tự gia hạn**: trang đang mở tự gia hạn khoảng 15 phút một lần, và ngay khi quay lại tab,
+  máy thức dậy hoặc có mạng lại (`POST /api/auth/refresh`). Mỗi token vẫn chỉ sống 1 giờ (an toàn
+  nếu bị lộ), nhưng một lần đăng nhập dùng được tối đa **16 giờ**. Qua 16 giờ (ví dụ để máy qua
+  đêm) thì đăng nhập lại. Đăng xuất, đổi mật khẩu hay khoá tài khoản vẫn làm mọi phiên cũ mất hiệu
+  lực ngay.
+- **Không còn hỏng trong im lặng**: nếu phiên vẫn hết hạn (máy ngủ quá 1 giờ, hoặc đăng xuất ở máy
+  khác), trang tự về màn hình đăng nhập với lời báo "Phiên đăng nhập đã hết hạn". Đăng nhập lại thì
+  quay về đúng trang đang làm. Nút chuông chuyển màu đỏ "Mất kết nối – chưa báo được đơn" khi
+  không hỏi được máy chủ.
+
+**Để chuông kêu ổn định trên máy tính của cửa hàng**:
+- Mở trang quản trị và **bấm vào trang một lần** sau khi mở (trình duyệt chặn âm thanh trước lần
+  bấm đầu tiên). Nút góc trên phải hiện "🔔 Âm báo đơn: bật" màu xanh.
+- Để trang quản trị mở; có thể để ở tab khác hoặc thu nhỏ. Khi tab bị ẩn lâu, Chrome có thể kiểm
+  tra thưa hơn (khoảng 1 phút/lần), nên chuông có thể kêu chậm tới 1 phút.
+- Nếu Chrome bật **Tiết kiệm bộ nhớ (Memory Saver)**, tab để lâu có thể bị cho "ngủ" và ngừng báo.
+  Vào Chrome → Cài đặt → Hiệu suất → "Luôn giữ các trang web này ở trạng thái hoạt động" và thêm
+  địa chỉ trang web của cửa hàng.
+- Máy không tắt tiếng, không ở chế độ ngủ.
+
+
 ## Bộ lọc chọn cái mới nhất, điểm trên từng sản phẩm, chuông báo đơn mới (07/10/2026)
 
 ### Bộ lọc trang chủ

@@ -77,6 +77,7 @@ export default function OrderAlerts({ onNewOrder, onView }) {
   const [soundOn, setSoundOn] = useState(readSoundPref);
   const [locked, setLocked] = useState(true);   // âm thanh chưa được trình duyệt cho phép
   const [alert, setAlert] = useState(null);     // { order, count }
+  const [offline, setOffline] = useState(false); // không hỏi được đơn mới (mất mạng / máy chủ lỗi)
   const lastId = useRef(null);
   const baseTitle = useRef(document.title);
   const soundRef = useRef(soundOn);
@@ -103,6 +104,7 @@ export default function OrderAlerts({ onNewOrder, onView }) {
   const check = useCallback(async () => {
     try {
       const { latest } = await api.adminLatestOrder();
+      setOffline(false);
       if (!latest) { lastId.current ??= 0; return; }
       if (lastId.current === null) { lastId.current = latest.id; return; }   // lần đầu: chỉ ghi nhớ
       if (latest.id <= lastId.current) return;
@@ -122,7 +124,9 @@ export default function OrderAlerts({ onNewOrder, onView }) {
       }
       onNewOrderRef.current?.();
     } catch {
-      /* mất mạng hay hết phiên: thử lại ở lượt sau */
+      // Hết phiên thì AuthProvider đưa về trang đăng nhập; mất mạng thì báo để chủ cửa hàng biết
+      // chuông đang không hoạt động, và thử lại ở lượt sau.
+      setOffline(true);
     }
   }, []);
 
@@ -154,11 +158,12 @@ export default function OrderAlerts({ onNewOrder, onView }) {
 
   const dismiss = () => { setAlert(null); clearTitle(); };
 
-  const label = !soundOn ? 'Âm báo đơn: tắt' : locked ? 'Bấm để bật âm báo' : 'Âm báo đơn: bật';
+  const label = offline ? 'Mất kết nối – chưa báo được đơn'
+    : !soundOn ? 'Âm báo đơn: tắt' : locked ? 'Bấm để bật âm báo' : 'Âm báo đơn: bật';
 
   return (
     <>
-      <button type="button" className={`btn btn-secondary order-sound${soundOn && !locked ? ' on' : ''}${soundOn && locked ? ' locked' : ''}`}
+      <button type="button" className={`btn btn-secondary order-sound${soundOn && !locked && !offline ? ' on' : ''}${soundOn && locked ? ' locked' : ''}${offline ? ' offline' : ''}`}
               onClick={toggleSound} aria-pressed={soundOn && !locked} title="Kêu “xịch xing” khi có đơn online mới">
         <span aria-hidden="true">{soundOn && !locked ? '🔔' : '🔕'}</span> {label}
       </button>

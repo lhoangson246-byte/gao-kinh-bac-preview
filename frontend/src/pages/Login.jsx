@@ -8,7 +8,7 @@ export default function Login() {
   const [form, setForm] = useState({ identifier: '', password: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const { login } = useAuth();
+  const { login, sessionExpired } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useI18n();
@@ -32,6 +32,7 @@ export default function Login() {
   return (
     <div className="form-card">
       <h2>{t('login.title')}</h2>
+      {sessionExpired && !error && <p className="alert warning" role="status">{t('login.expired')}</p>}
       {error && <p className="alert error">{error}</p>}
 
       <form onSubmit={onSubmit}>
