@@ -51,6 +51,7 @@ export default function Home() {
   const [group, setGroup] = useState('');
   const [banners, setBanners] = useState([]);
   const [contactPhone, setContactPhone] = useState('');
+  const [zaloPhone, setZaloPhone] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [added, setAdded] = useState(null);
@@ -71,6 +72,8 @@ export default function Home() {
           : settings?.banner_image_url ? [settings.banner_image_url] : [];
         setBanners(list);
         setContactPhone(settings?.contact_phone || '');
+        // Chưa nhập số Zalo riêng thì dùng số tư vấn.
+        setZaloPhone(settings?.zalo_phone || settings?.contact_phone || '');
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -137,6 +140,20 @@ export default function Home() {
           </div>
           <a className="btn btn-primary contact-call" href={`tel:${contactPhone}`}>
             {t('contact.call', { phone: formatPhone(contactPhone) })}
+          </a>
+        </aside>
+      )}
+
+      {/* Chốt đơn số lượng lớn qua Zalo: bếp ăn, khu công nghiệp, nhà hàng. */}
+      {zaloPhone && (
+        <aside className="zalo-strip" aria-label={t('zalo.label')}>
+          <span className="zalo-badge" aria-hidden="true">Zalo</span>
+          <div className="contact-copy">
+            <strong>{t('zalo.title')}</strong>
+            <span>{t('zalo.body')}</span>
+          </div>
+          <a className="btn zalo-button" href={`https://zalo.me/${zaloPhone}`} target="_blank" rel="noopener noreferrer">
+            {t('zalo.button', { phone: formatPhone(zaloPhone) })}
           </a>
         </aside>
       )}

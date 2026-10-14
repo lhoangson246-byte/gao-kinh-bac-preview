@@ -14,7 +14,7 @@ export const MAX_BANNERS = 6;
 export const MAX_BRANCHES = 5;
 
 /** Các khoá đọc từ app_settings. Khoá không nằm ở đây thì không bao giờ trả ra ngoài. */
-const STORED_KEYS = ['banner_images', 'banner_image_url', 'contact_phone', 'store_branches'];
+const STORED_KEYS = ['banner_images', 'banner_image_url', 'contact_phone', 'zalo_phone', 'store_branches'];
 
 /** Danh sách ảnh lưu dạng JSON; bỏ mọi phần tử không còn là đường dẫn ảnh an toàn. */
 function parseBanners(raw) {
@@ -61,6 +61,8 @@ export function readStorefront() {
     // Giữ cho bản ứng dụng cũ còn trong bộ nhớ đệm của khách.
     banner_image_url: banners[0] || '',
     contact_phone: normalizePhone(stored.contact_phone || ''),
+    // Số Zalo riêng; để trống thì trang khách dùng số tư vấn ở trên.
+    zalo_phone: normalizePhone(stored.zalo_phone || ''),
     branches: parseBranches(stored.store_branches),
   };
 }

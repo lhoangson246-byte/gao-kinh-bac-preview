@@ -31,6 +31,7 @@ export default function Footer() {
   const settings = useStorefront();
   const branches = settings?.branches || [];
   const hotline = settings?.contact_phone || '';
+  const zalo = settings?.zalo_phone || hotline;
 
   return (
     <footer className="footer">
@@ -40,6 +41,11 @@ export default function Footer() {
           <span>{t('footer.tagline')}</span>
           {hotline && (
             <a className="footer-hotline" href={`tel:${hotline}`}>☏ {formatPhone(hotline)}</a>
+          )}
+          {zalo && (
+            <a className="footer-zalo" href={`https://zalo.me/${zalo}`} target="_blank" rel="noopener noreferrer">
+              <span aria-hidden="true">Zalo</span> {t('zalo.footer', { phone: formatPhone(zalo) })}
+            </a>
           )}
         </section>
 

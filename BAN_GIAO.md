@@ -935,6 +935,20 @@ Mã gắn đơn vào tài khoản là chuỗi ngẫu nhiên chỉ trình duyệt
 lưu mã băm, mã dùng một lần và hết hạn sau 1 ngày.
 
 
+## Khung báo giá qua Zalo ở trang chủ (14/10/2026)
+
+Ngay dưới khung "Bạn cần tìm gạo chất lượng cho nhà hàng, khách sạn? … Gọi", trang chủ có thêm
+khung màu xanh Zalo: **"Bạn cần tư vấn loại gạo phù hợp cho các bếp ăn, khu công nghiệp, nhà hàng?
+Liên hệ Zalo, báo giá ngay trong 2 giờ làm việc."** kèm nút **Nhắn Zalo**. Nút mở
+`https://zalo.me/<số>`: trên điện thoại mở thẳng ứng dụng Zalo, trên máy tính mở Zalo web/ứng dụng.
+Chân trang cũng có link Zalo. Có đủ ba ngôn ngữ.
+
+**Số Zalo**: ô "Số Zalo nhận báo giá" trong **Quản trị → Sản phẩm → Trang chủ: banner và liên hệ**.
+Để trống thì dùng **số tư vấn** (hiện là 0979 848 405). Nếu Zalo của cửa hàng dùng số khác, nhập
+số đó rồi bấm Lưu trang chủ. Cả hai số đều trống thì khung Zalo được ẩn. Lưu ở `app_settings`
+(khoá `zalo_phone`), không đổi cấu trúc bảng.
+
+
 ## Sửa lỗi admin bị đăng xuất nhanh và chuông không kêu (11/10/2026)
 
 **Nguyên nhân chung**: mỗi phiên đăng nhập chỉ sống 1 giờ và không tự gia hạn. Sau 1 giờ admin bị

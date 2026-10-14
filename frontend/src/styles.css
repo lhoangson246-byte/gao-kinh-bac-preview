@@ -1227,3 +1227,22 @@ label b { color: var(--danger); }
 /* --- Giải thích điểm tích luỹ ở danh mục --- */
 .points-info { margin: -6px 0 14px; color: var(--gold-dark); font-size: .8rem; font-weight: 650; }
 .order-sound.offline { border-color: #e0c0ba; background: var(--danger-light); color: var(--danger); }
+
+/* --- Khung báo giá qua Zalo dưới khung gọi điện --- */
+.zalo-strip { display: flex; align-items: center; gap: 14px; margin: 0 0 14px; padding: 14px 18px; border: 1px solid #bcd3f5; border-radius: 15px; background: linear-gradient(90deg, #e8f1ff 0%, var(--paper) 100%); }
+.zalo-badge { display: grid; place-items: center; width: 44px; height: 44px; flex: 0 0 44px; border-radius: 12px; background: #0068ff; color: #fff; font-size: .78rem; font-weight: 900; letter-spacing: .01em; }
+.zalo-strip .contact-copy strong { color: #0b3a82; }
+.zalo-button { flex: 0 0 auto; border-color: #0068ff; background: #0068ff; color: #fff; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.zalo-button:hover { background: #0057d6; color: #fff; }
+.zalo-button:focus-visible { outline: 3px solid #9cc2ff; outline-offset: 2px; }
+.zalo-strip + .catalog-controls { margin-top: 0; border-top: 1px solid var(--border); border-radius: 15px; }
+/* Có cả khung gọi điện và khung Zalo thì hai khung sát nhau hơn. */
+.contact-strip:has(+ .zalo-strip) { margin-bottom: 10px; }
+.footer-zalo { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+.footer-zalo span { padding: 1px 6px; border-radius: 6px; background: #0068ff; color: #fff; font-size: .7rem; font-weight: 900; }
+@media (max-width: 560px) {
+  .zalo-strip { flex-wrap: wrap; gap: 10px 12px; padding: 13px 14px; }
+  .zalo-badge { width: 38px; height: 38px; flex-basis: 38px; font-size: .7rem; }
+  .zalo-strip .contact-copy strong { font-size: .9rem; }
+  .zalo-button { width: 100%; justify-content: center; }
+}

@@ -1311,6 +1311,25 @@ const guestToken = (await call('/auth/register', {
   await call(`/admin/products/${product.id}/permanent`, { method: 'DELETE', token: admin });
 }
 
+/* ================================================================== *
+ * 14/10/2026: số Zalo nhận báo giá
+ * ================================================================== */
+{
+  const original = (await call('/settings/storefront')).data.settings || {};
+  check('Cài đặt công khai có số Zalo', typeof original.zalo_phone === 'string');
+  const set = await call('/admin/settings/storefront', { method: 'PUT', token: admin, body: { zalo_phone: '+84 987 654 321' } });
+  check('Lưu số Zalo, tự chuẩn hoá',
+    set.status === 200 && set.data.settings?.zalo_phone === '0987654321', JSON.stringify(set.data.settings).slice(0, 160));
+  check('Đổi số Zalo không đụng số tư vấn', set.data.settings?.contact_phone === original.contact_phone);
+  const bad = await call('/admin/settings/storefront', { method: 'PUT', token: admin, body: { zalo_phone: 'abc' } });
+  check('Số Zalo sai bị từ chối (400)', bad.status === 400 && !!bad.data.errors?.zalo_phone);
+  check('Khách thường không đổi được số Zalo (403)',
+    (await call('/admin/settings/storefront', { method: 'PUT', token: custToken, body: { zalo_phone: '0912345678' } })).status === 403);
+  const clear = await call('/admin/settings/storefront', { method: 'PUT', token: admin, body: { zalo_phone: '' } });
+  check('Xoá số Zalo (trang khách dùng số tư vấn)', clear.status === 200 && clear.data.settings?.zalo_phone === '');
+  await call('/admin/settings/storefront', { method: 'PUT', token: admin, body: { zalo_phone: original.zalo_phone || '' } });
+}
+
 console.log(results.join('\n'));
 console.log(`\n${pass} PASS · ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

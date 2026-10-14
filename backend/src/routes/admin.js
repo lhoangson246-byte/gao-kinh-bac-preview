@@ -460,6 +460,7 @@ router.delete('/products/:id/permanent', (req, res, next) => {
  *  - banner_images: danh sách ảnh chạy vòng theo đúng thứ tự (mảng rỗng = banner màu mặc định)
  *  - banner_image_url: cách cũ, một ảnh duy nhất ('' = bỏ ảnh)
  *  - contact_phone: số điện thoại tư vấn ('' = ẩn khung liên hệ trên trang chủ)
+ *  - zalo_phone: số Zalo nhận báo giá ('' = dùng số tư vấn)
  */
 router.put('/settings/storefront', (req, res, next) => {
   try {
@@ -493,6 +494,13 @@ router.put('/settings/storefront', (req, res, next) => {
       const phone = raw ? normalizePhone(raw) : '';
       if (raw && !phone) errors.contact_phone = 'Số điện thoại không hợp lệ (10 số, ví dụ 0912345678).';
       else updates.push(['contact_phone', phone]);
+    }
+
+    if (body.zalo_phone !== undefined && body.zalo_phone !== null) {
+      const raw = cleanText(body.zalo_phone, LIMITS.phone) || '';
+      const phone = raw ? normalizePhone(raw) : '';
+      if (raw && !phone) errors.zalo_phone = 'Số Zalo không hợp lệ (10 số, ví dụ 0912345678).';
+      else updates.push(['zalo_phone', phone]);
     }
 
     // Các cơ sở của cửa hàng (chân trang): tên, địa chỉ bắt buộc, số điện thoại tuỳ chọn.

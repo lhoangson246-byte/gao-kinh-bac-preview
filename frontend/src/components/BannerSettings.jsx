@@ -20,6 +20,7 @@ export default function BannerSettings({ notify }) {
   const [saved, setSaved] = useState(null);     // null = đang tải
   const [images, setImages] = useState([]);
   const [phone, setPhone] = useState('');
+  const [zalo, setZalo] = useState('');
   const [branches, setBranches] = useState([]);
   const [editing, setEditing] = useState(null); // vị trí ảnh đang mở ô chọn ảnh
   const [busy, setBusy] = useState(false);
@@ -31,11 +32,13 @@ export default function BannerSettings({ notify }) {
     const next = {
       images: list,
       phone: settings?.contact_phone || '',
+      zalo: settings?.zalo_phone || '',
       branches: (settings?.branches || []).map((b) => ({ name: b.name || '', address: b.address || '', phone: b.phone || '' })),
     };
     setSaved(next);
     setImages(next.images);
     setPhone(next.phone);
+    setZalo(next.zalo);
     setBranches(next.branches);
     setEditing(null);
   };
@@ -51,6 +54,7 @@ export default function BannerSettings({ notify }) {
   const cleanImages = images.filter(Boolean);
   const dirty = saved !== null && (!sameList(cleanImages, saved.images) || normalizePhone(phone) !== saved.phone
     || (phone.trim() !== '' && !isPhone(phone))
+    || normalizePhone(zalo) !== saved.zalo || (zalo.trim() !== '' && !isPhone(zalo))
     || JSON.stringify(cleanBranches(branches)) !== JSON.stringify(cleanBranches(saved.branches)));
   const setBranch = (index, field, value) => {
     setBranches((list) => list.map((b, i) => (i === index ? { ...b, [field]: value } : b)));
@@ -84,6 +88,10 @@ export default function BannerSettings({ notify }) {
       setFieldErrors({ contact_phone: 'Số điện thoại không hợp lệ (10 số, ví dụ 0912345678).' });
       return;
     }
+    if (zalo.trim() && !isPhone(zalo)) {
+      setFieldErrors({ zalo_phone: 'Số Zalo không hợp lệ (10 số, ví dụ 0912345678).' });
+      return;
+    }
     const branchList = cleanBranches(branches);
     const badBranch = branchList.findIndex((b) => b.address.length < 8 || (b.phone && !isPhone(b.phone)));
     if (badBranch !== -1) {
@@ -100,6 +108,7 @@ export default function BannerSettings({ notify }) {
       const { settings } = await api.adminUpdateStorefront({
         banner_images: cleanImages,
         contact_phone: normalizePhone(phone),
+        zalo_phone: normalizePhone(zalo),
         branches: branchList.map((b) => ({ name: b.name, address: b.address, phone: normalizePhone(b.phone) })),
       });
       load(settings);
@@ -115,6 +124,7 @@ export default function BannerSettings({ notify }) {
   const reset = () => {
     setImages(saved.images);
     setPhone(saved.phone);
+    setZalo(saved.zalo);
     setBranches(saved.branches);
     setEditing(null);
     setError('');
@@ -199,6 +209,20 @@ export default function BannerSettings({ notify }) {
           : <small className="field-help">
               Khách thấy khung “Bạn cần tìm gạo chất lượng cho nhà hàng, khách sạn? Liên hệ để được tư vấn
               ngay hôm nay” kèm nút gọi số này. Để trống thì khung liên hệ được ẩn.
+            </small>}
+      </label>
+
+      <label className="contact-phone-field">Số Zalo nhận báo giá <span className="optional">Không bắt buộc</span>
+        <input className="input" value={zalo} inputMode="tel" autoComplete="off"
+               placeholder={phone ? `Để trống để dùng số tư vấn ${phone}` : 'Ví dụ 0912345678'}
+               onChange={(e) => { setZalo(e.target.value); setFieldErrors((current) => ({ ...current, zalo_phone: undefined })); }}
+               aria-invalid={!!fieldErrors.zalo_phone} />
+        {fieldErrors.zalo_phone
+          ? <small className="err">{fieldErrors.zalo_phone}</small>
+          : <small className="field-help">
+              Dưới khung gọi điện, khách thấy “Bạn cần tư vấn loại gạo phù hợp cho các bếp ăn, khu công nghiệp,
+              nhà hàng? Liên hệ Zalo, báo giá ngay trong 2 giờ làm việc” kèm nút mở Zalo tới số này.
+              Để trống thì dùng số tư vấn; cả hai đều trống thì khung Zalo được ẩn.
             </small>}
       </label>
 
