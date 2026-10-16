@@ -1246,3 +1246,35 @@ label b { color: var(--danger); }
   .zalo-strip .contact-copy strong { font-size: .9rem; }
   .zalo-button { width: 100%; justify-content: center; }
 }
+
+/* --- Khuyến mãi theo đợt (20/10): băng rôn trang chủ, nhắc ở giỏ hàng --- */
+.promo-banner { position: relative; display: flex; align-items: center; gap: 14px; margin: 14px 0; padding: 16px 20px; overflow: hidden; border: 1px solid #f1b8c8; border-radius: 16px; background: linear-gradient(110deg, #ffe3ec 0%, #fff4f7 55%, #fffaf0 100%); color: #6d1834; }
+.promo-banner.upcoming { border-style: dashed; }
+.promo-flower { font-size: 2rem; line-height: 1; }
+.promo-gift { margin-left: auto; font-size: 2.2rem; line-height: 1; }
+.promo-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.promo-when { margin: 0; color: #a3214f; font-size: .78rem; font-weight: 700; letter-spacing: .02em; }
+.promo-when b { padding: 2px 8px; border-radius: 99px; background: #c2185b; color: #fff; font-weight: 800; }
+.promo-copy strong { font-size: 1.12rem; line-height: 1.3; color: #5a1029; }
+.promo-copy span { color: #7d3a52; font-size: .84rem; }
+.promo-banner + .contact-strip { margin-top: 0; }
+.promo-progress { display: flex; align-items: flex-start; gap: 10px; margin: 10px 0; padding: 10px 12px; border: 1px dashed #f1b8c8; border-radius: 12px; background: #fff4f7; color: #6d1834; }
+.promo-progress.earned { border-style: solid; background: #ffe3ec; }
+.promo-progress > span { font-size: 1.3rem; line-height: 1.2; }
+.promo-progress p { margin: 0; font-size: .86rem; font-weight: 650; line-height: 1.4; }
+.promo-progress small { display: block; color: #a3214f; font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.quick-page .promo-progress p { font-size: .95rem; }
+.promo-gift-row small { color: #a3214f !important; }
+.gift-tag.promo { background: #c2185b; color: #fff; }
+.pos-line.promo { border-color: #f1b8c8; background: #fff4f7; }
+.promo-hint { color: #a3214f; }
+@media (max-width: 560px) {
+  .promo-banner { padding: 14px; gap: 10px; }
+  .promo-flower { font-size: 1.6rem; }
+  .promo-gift { display: none; }
+  .promo-copy strong { font-size: 1rem; }
+}
+.quick-total-row.promo-gift-row { align-items: center; gap: 10px; }
+.quick-total-row.promo-gift-row > span { display: flex; flex-direction: column; min-width: 0; }
+.quick-total-row.promo-gift-row small { font-size: .82rem; font-weight: 650; }
+.promo-banner + .catalog-controls { margin-top: 0; border-top: 1px solid var(--border); border-radius: 15px; }

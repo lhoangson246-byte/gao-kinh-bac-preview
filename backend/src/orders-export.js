@@ -105,7 +105,7 @@ export async function buildOrdersWorkbook(period) {
       const cost = item.cost_price * item.quantity;
       items.addRow([order.code, order.day, channel,
         item.product_name, item.unit, item.quantity, item.price, amount, item.cost_price,
-        amount - cost, item.is_reward ? 'Có' : 'Không']);
+        amount - cost, item.is_reward || item.promo ? 'Có' : 'Không']);
       // Giá vốn chỉ tính cùng các giao dịch được ghi nhận doanh thu, kể cả quà.
       if (channel !== 'Online' || order.status === 'completed') byDay.get(order.day).cost += cost;
     }

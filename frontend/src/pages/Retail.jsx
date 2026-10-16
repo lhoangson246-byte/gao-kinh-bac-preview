@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, formatDateTime, formatVND, isPhone, normalizePhone, pointsForLines, CUSTOMER_SEGMENTS } from '../api';
+import { api, formatDateTime, formatVND, isPhone, normalizePhone, pointsForLines, CUSTOMER_SEGMENTS, promoGiftKg, riceKg } from '../api';
+import { usePromotion } from '../components/Promotion.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import ReturnManager from '../components/ReturnManager.jsx';
 import OrderAlerts from '../components/OrderAlerts.jsx';
@@ -179,6 +180,11 @@ function SellTab({ products, policy, onDone, notify }) {
   const voucherDiscount = vouchers * voucherAmount;
   const maxVouchers = Math.floor(Math.max(0, subtotal - discount) / voucherAmount);
   const total = subtotal - discount - voucherDiscount;
+  // Quà khuyến mãi theo đợt (máy chủ tự thêm khi lưu hoá đơn; ở đây chỉ xem trước).
+  const { promotion: promo, status: promoNow } = usePromotion();
+  const promoKg = riceKg(lines.map((l) => ({ ...l.product, stock: undefined, quantity: l.quantity })));
+  const promoGift = promoNow === 'active' ? promoGiftKg(promoKg, promo) : 0;
+  const promoNeed = promo ? Math.max(0, promo.min_kg * (promoGift + 1) - promoKg) : 0;
   const earnPoints = pointsForLines(
     lines.map((l) => ({ price: l.product.price, quantity: l.quantity, points_per_unit: l.product.points_per_unit })),
     total,
@@ -465,6 +471,20 @@ function SellTab({ products, policy, onDone, notify }) {
                 <strong className="pos-line-total free-tag">0₫</strong>
               </div>
             ))}
+            {promoGift > 0 && (
+              <div className="pos-line gift promo">
+                <div className="pos-line-main">
+                  <strong>{promo.gift_name} <span className="gift-tag promo">Quà {promo.title.replace(/^Khuyến mãi\s*/i, '')}</span></strong>
+                  <small>{promoGift}kg tặng kèm · tự thêm khi lưu hoá đơn</small>
+                </div>
+                <strong className="pos-line-total free-tag">0₫</strong>
+              </div>
+            )}
+            {promoNow === 'active' && lines.length > 0 && promoGift < promo.max_gift_kg && (
+              <p className="pos-hint promo-hint">
+                {promo.title}: hoá đơn có {Math.round(promoKg * 10) / 10}kg gạo, thêm {Math.round(promoNeed * 10) / 10}kg để được tặng {promoGift + 1}kg {promo.gift_name}.
+              </p>
+            )}
             {vouchers > 0 && (
               <div className="pos-line gift">
                 <div className="pos-line-main">
@@ -576,7 +596,7 @@ function Receipt({ data, onClose }) {
       <ul className="receipt-items">
         {invoice.items.map((i) => (
           <li key={i.id}>
-            <span>{i.product_name}<small>{i.quantity} {i.unit} × {formatVND(i.price)}</small></span>
+            <span>{i.product_name}{i.promo && <span className="gift-tag promo">Quà khuyến mãi</span>}<small>{i.quantity} {i.unit} × {formatVND(i.price)}</small></span>
             <strong>{formatVND(i.price * i.quantity)}</strong>
           </li>
         ))}
@@ -834,7 +854,7 @@ function InvoiceLookupTab() {
                     <ul className="receipt-items">
                       {inv.items.map((i) => (
                         <li key={i.id}>
-                          <span>{i.product_name}<small>{i.quantity} {i.unit} × {formatVND(i.price)}</small></span>
+                          <span>{i.product_name}{i.promo && <span className="gift-tag promo">Quà khuyến mãi</span>}<small>{i.quantity} {i.unit} × {formatVND(i.price)}</small></span>
                           <strong>{formatVND(i.price * i.quantity)}</strong>
                         </li>
                       ))}
@@ -896,7 +916,7 @@ function PrintableInvoice({ invoice }) {
         <tbody>
           {invoice.items.map((item) => (
             <tr key={item.id}>
-              <td>{item.product_name}<small>{item.unit}</small></td>
+              <td>{item.product_name}{item.promo ? ' (quà khuyến mãi)' : ''}<small>{item.unit}</small></td>
               <td>{item.quantity}</td><td>{formatVND(item.price)}</td>
               <td>{formatVND(item.price * item.quantity)}</td>
             </tr>

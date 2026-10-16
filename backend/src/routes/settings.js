@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import db from '../db.js';
 import { cleanImageUrl, normalizePhone } from '../validate.js';
+import { publicPromotion } from '../promotions.js';
 
 /**
  * Cài đặt cửa hàng khách được xem: các ảnh banner trang chủ (chạy vòng) và số
@@ -64,6 +65,8 @@ export function readStorefront() {
     // Số Zalo riêng; để trống thì trang khách dùng số tư vấn ở trên.
     zalo_phone: normalizePhone(stored.zalo_phone || ''),
     branches: parseBranches(stored.store_branches),
+    // Đợt khuyến mãi đang hoặc sắp diễn ra, để trang chủ và giỏ hàng báo cho khách.
+    promotion: publicPromotion(),
   };
 }
 

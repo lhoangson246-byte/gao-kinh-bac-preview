@@ -21,6 +21,8 @@ function readStoredCart() {
         stock: Math.max(0, Math.round(Number(item.stock) || 0)),
         quantity: Math.max(1, Math.round(Number(item.quantity) || 1)),
         points_per_unit: pointsRule(item.points_per_unit),
+        category: typeof item.category === 'string' ? item.category : 'gao',
+        weight_kg: Number(item.weight_kg) || 0,
       }));
   } catch {
     return [];
@@ -63,11 +65,14 @@ export function CartProvider({ children }) {
           stock: product.stock,
           quantity,
           points_per_unit: pointsRule(product.points_per_unit),
+          category: product.category || 'gao',
+          weight_kg: Number(product.weight_kg) || 0,
         };
         if (
           updated.price !== item.price || updated.stock !== item.stock ||
           updated.quantity !== item.quantity || updated.name !== item.name ||
           updated.unit !== item.unit || updated.points_per_unit !== item.points_per_unit
+          || updated.category !== item.category || updated.weight_kg !== item.weight_kg
         ) changed = true;
         next.push(updated);
       }
@@ -97,6 +102,8 @@ export function CartProvider({ children }) {
             unit: product.unit,
             stock: product.stock,
             points_per_unit: pointsRule(product.points_per_unit),
+            category: product.category || 'gao',
+            weight_kg: Number(product.weight_kg) || 0,
           };
           if (found) {
             return prev.map((item) => item.id === product.id

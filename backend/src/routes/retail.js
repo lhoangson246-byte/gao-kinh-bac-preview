@@ -11,6 +11,7 @@ import {
 } from '../constants.js';
 import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../validate.js';
 import { writeAdminAudit } from '../audit.js';
+import { promoGiftFor } from '../promotions.js';
 import { loyaltyProfile, onlineAccount } from '../loyalty.js';
 import { attachItems } from '../order-lists.js';
 
@@ -424,6 +425,16 @@ router.post('/invoices', (req, res, next) => {
       for (const { product, quantity } of rewardLines) {
         insItem.run(invoiceId, product.id, product.name, product.unit,
           0, quantity, product.cost_price ?? 0, 1);
+      }
+      // Quà khuyến mãi theo đợt, tính từ hàng thật trong hoá đơn (bán quầy không trừ kho online).
+      const gift = promoGiftFor(lines);
+      if (gift) {
+        db.prepare(`
+          INSERT INTO retail_invoice_items
+            (invoice_id, product_id, product_name, unit, price, quantity, cost_price, is_reward, promo)
+          VALUES (?, ?, ?, ?, 0, ?, ?, 0, ?)
+        `).run(invoiceId, gift.product?.id ?? null, gift.product?.name || gift.promo.giftName,
+          gift.product?.unit || 'kg', gift.kg, gift.product?.cost_price ?? 0, gift.promo.code);
       }
       return invoiceId;
     });

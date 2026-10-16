@@ -935,6 +935,39 @@ Mã gắn đơn vào tài khoản là chuỗi ngẫu nhiên chỉ trình duyệt
 lưu mã băm, mã dùng một lần và hết hạn sau 1 ngày.
 
 
+## Khuyến mãi 20/10: mua gạo từ 15kg tặng 1kg nếp cái hoa vàng (16/10/2026)
+
+**Thời gian**: 19, 20 và 21/10/2026 (theo giờ Việt Nam, trọn 3 ngày).
+**Quy tắc**: cứ mỗi **15kg gạo** trong một đơn được tặng **1kg gạo nếp cái hoa vàng**, tối đa
+**3kg**. 15–29kg tặng 1kg, 30–44kg tặng 2kg, từ 45kg trở lên tặng 3kg. Chỉ tính **gạo**, không tính
+đồ khô (kê, mì chũ…), quà đổi điểm hay chính quà khuyến mãi. Áp dụng cho **đơn online** (có tài
+khoản và mua nhanh) và **hoá đơn tại quầy**.
+
+**Khách thấy gì**:
+- **Trang chủ**: băng rôn hồng "Khuyến mãi 20/10". Từ bây giờ đến 18/10 ghi "Từ 19/10 đến 21/10"
+  để báo trước; trong 3 ngày ghi "Đang diễn ra đến hết 21/10"; từ 22/10 tự ẩn.
+- **Giỏ hàng, trang đặt hàng, trang đặt nhanh** (trong 3 ngày): dòng nhắc "Đơn có 10kg gạo. Mua thêm
+  5kg để được tặng 1kg…", hoặc "Được tặng 2kg… Mua thêm 15kg để được 3kg", hoặc "…mức tặng cao
+  nhất". Phần tóm tắt đơn có dòng quà **0₫**.
+- Sau khi đặt: màn hình thành công, "Đơn của tôi" và thẻ đơn ở trang quản trị đều có dòng
+  **"Quà khuyến mãi"**.
+
+**Máy chủ tự quyết**: quà được tính lúc tạo đơn từ hàng thật trong đơn, theo ngày của máy chủ
+(giờ Việt Nam). Khách không tự thêm hay sửa quà được.
+- **Online**: quà lấy từ sản phẩm *Gạo nếp cái hoa vàng* loại túi 1kg và **trừ kho** như hàng bán.
+  Huỷ đơn thì hoàn túi quà về kho. Nếu túi 1kg hết hàng, quà vẫn được ghi trên đơn và thẻ đơn hiện
+  "Quà khuyến mãi · giao tay" để nhân viên tự lấy hàng.
+- **Tại quầy**: khung hoá đơn xem trước dòng quà và nhắc "thêm X kg để được thêm". Khi lưu, quà
+  được ghi vào hoá đơn và bản in, giá 0₫. Bán tại quầy vẫn không trừ kho online như trước.
+- Quà không cộng điểm tích luỹ và không tính vào tiền hàng. Excel ghi dòng quà ở cột "Quà tặng".
+
+**Kỹ thuật**: cấu hình đợt nằm ở `backend/src/promotions.js` (ngày, 15kg, tối đa 3kg, tên quà).
+Lần sau có đợt tương tự, chỉ cần thêm một mục vào danh sách `PROMOTIONS`. Migration
+`schema:2026-10-16-v1` chỉ thêm cột `promo` vào `order_items` và `retail_invoice_items`. Kiểm thử:
+`npm --prefix backend run test:promo` (ghim ngày 18, 20 và 22/10). Biến `PROMO_TODAY` chỉ dùng cho
+kiểm thử và bị bỏ qua trên Vercel.
+
+
 ## Khung báo giá qua Zalo ở trang chủ (14/10/2026)
 
 Ngay dưới khung "Bạn cần tìm gạo chất lượng cho nhà hàng, khách sạn? … Gọi", trang chủ có thêm

@@ -19,6 +19,7 @@
     "test:db-config": "node --test test/database-config.mjs",
     "test:isolated": "node test/isolated.mjs",
     "test:session": "node test/session-refresh.mjs",
+    "test:promo": "node test/promo-2010.mjs",
     "check:live": "node test/live-security.mjs"
   },
   "dependencies": {

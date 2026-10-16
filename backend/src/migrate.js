@@ -744,6 +744,15 @@ if (!db.prepare('PRAGMA table_info(retail_returns)').all().some((c) => c.name ==
   console.log('✅ Đã thêm cột points_removed vào bảng retail_returns.');
 }
 
+// Dòng quà khuyến mãi theo đợt (16/10/2026): ghi mã đợt để hiển thị "Quà 20/10" và để báo cáo
+// phân biệt với hàng bán và quà đổi điểm.
+for (const table of ['order_items', 'retail_invoice_items']) {
+  if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === 'promo')) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN promo TEXT`);
+    console.log(`✅ Đã thêm cột promo vào bảng ${table}.`);
+  }
+}
+
 // Quà đổi 1.000 điểm theo yêu cầu cửa hàng ngày 02/10/2026: 1kg gạo nếp, 1kg gạo lứt
 // hoặc 1kg mì chũ (cùng voucher 30.000đ). Kê vàng không còn nằm trong danh sách quà.
 // Chỉ chạy một lần; sau đó chủ cửa hàng tự bật/tắt ở form sản phẩm.

@@ -4,6 +4,7 @@ import { useCart } from '../context/CartContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api, formatVND, pointsForLines, FIRST_ORDER_DISCOUNT } from '../api';
 import { useI18n } from '../i18n/index.jsx';
+import { PromoGiftRow, PromoProgress } from '../components/Promotion.jsx';
 
 export default function Cart() {
   const { items, total, count, hasUnavailable, setQuantity, remove, clear, syncWithProducts } = useCart();
@@ -126,7 +127,9 @@ export default function Cart() {
             <strong>{t('cart.deliveryTitle')}</strong>
             <p>{t('cart.deliveryBody')}</p>
           </div>
+          <PromoGiftRow items={items} />
           <div className="summary-row grand-total"><span>{t('cart.total')}</span><strong>{formatVND(total - discount)}</strong></div>
+          <PromoProgress items={items} />
           <p className="pos-hint">{t('cart.points', { n: pointsForLines(items.filter((item) => item.stock > 0), total - discount) })}</p>
           {user ? (
             <button

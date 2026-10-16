@@ -396,7 +396,7 @@ export default function Admin() {
                               <section>
                                 <p className="detail-label">Sản phẩm</p>
                                 <ul className="admin-order-items">
-                                  {order.items.map((item) => <li key={item.id}><span>{item.product_name}{!!item.is_reward && <span className="gift-tag">Quà đổi điểm</span>}<small>{item.quantity} {item.unit}</small></span><strong>{formatVND(item.price * item.quantity)}</strong></li>)}
+                                  {order.items.map((item) => <li key={item.id}><span>{item.product_name}{!!item.is_reward && <span className="gift-tag">Quà đổi điểm</span>}{item.promo && <span className="gift-tag promo">Quà khuyến mãi{item.product_id ? '' : ' · giao tay'}</span>}<small>{item.quantity} {item.unit}</small></span><strong>{formatVND(item.price * item.quantity)}</strong></li>)}
                                 </ul>
                                 {order.discount > 0 && (
                                   <>

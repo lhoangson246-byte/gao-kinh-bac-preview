@@ -10,6 +10,7 @@ import {
 import { createHash, randomBytes } from 'node:crypto';
 import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../validate.js';
 import { readLocation } from './addresses.js';
+import { promoGiftFor } from '../promotions.js';
 import { attachItems } from '../order-lists.js';
 import { loyaltyProfile, refundPoints, spendPoints } from '../loyalty.js';
 
@@ -19,7 +20,7 @@ const router = Router();
 export const orderCode = (id) => `DH${String(id).padStart(6, '0')}`;
 
 /** Cột dòng hàng được phép trả cho khách. KHÔNG gồm cost_price (giá nhập, chỉ cửa hàng thấy). */
-const ORDER_ITEM_COLUMNS = 'id, order_id, product_id, product_name, unit, price, quantity, is_reward';
+const ORDER_ITEM_COLUMNS = 'id, order_id, product_id, product_name, unit, price, quantity, is_reward, promo';
 
 /** Gộp các dòng trùng sản phẩm rồi kiểm tra số lượng. */
 function normalizeItems(items, maxPerLine = LIMITS.quantityPerLine) {
@@ -166,6 +167,22 @@ function placeOrder({
       // Quà ghi giá 0 nhưng giữ giá vốn để báo cáo lãi không bị thổi phồng.
       insItem.run(orderId, product.id, product.name, product.unit, 0, quantity,
         product.cost_price ?? 0, 0, 1);
+    }
+
+    // Quà khuyến mãi theo đợt (ví dụ 20/10: mỗi 15kg gạo tặng 1kg nếp, tối đa 3kg). Máy chủ tự
+    // tính từ hàng thật trong đơn. Còn túi quà trong kho thì trừ kho (huỷ đơn sẽ hoàn lại như
+    // hàng thường); hết thì vẫn ghi quà theo tên để cửa hàng giao tay, không chặn đơn.
+    const gift = promoGiftFor(lines);
+    if (gift) {
+      const insGift = db.prepare(
+        `INSERT INTO order_items (order_id, product_id, product_name, unit, price, quantity, cost_price,
+                                  points_per_unit, is_reward, promo)
+         VALUES (?, ?, ?, ?, 0, ?, ?, 0, 0, ?)`
+      );
+      const stocked = gift.product && decStock.run(gift.kg, gift.product.id, gift.kg).changes;
+      insGift.run(orderId, stocked ? gift.product.id : null,
+        gift.product?.name || gift.promo.giftName, gift.product?.unit || 'kg', gift.kg,
+        gift.product?.cost_price ?? 0, gift.promo.code);
     }
 
     // Ghi nhớ địa chỉ mặc định nếu tài khoản chưa có (đơn mua nhanh không có tài khoản riêng).

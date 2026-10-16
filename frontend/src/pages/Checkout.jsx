@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
 import AddressBook from '../components/AddressBook.jsx';
 import DeliveryHours, { useNow } from '../components/DeliveryHours.jsx';
+import { PromoGiftRow, PromoProgress } from '../components/Promotion.jsx';
 import {
   api, formatNumber, formatVND, pointsForLines, DELIVERY_AREA_CODE, DELIVERY_SLOTS, deliveryPlan, slotDay,
 } from '../api';
@@ -274,7 +275,9 @@ export default function Checkout() {
             </div>
           ))}
           <div className="summary-row"><span>{t('cart.shipping')}</span><strong className="free-tag">{t('common.free')}</strong></div>
+          <PromoGiftRow items={orderable} />
           <div className="summary-row grand-total"><span>{t('cart.total')}</span><strong>{formatVND(payable)}</strong></div>
+          <PromoProgress items={orderable} />
           <p className="pos-hint">{t('cart.points', { n: earnPoints })}</p>
           <p className="summary-disclaimer">
             {t('checkout.disclaimer')}

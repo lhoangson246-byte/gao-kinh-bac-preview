@@ -4,6 +4,7 @@ import { api, formatVND, salePercent } from '../api';
 import { useCart } from '../context/CartContext.jsx';
 import ProductImage from '../components/ProductImage.jsx';
 import HeroSlider from '../components/HeroSlider.jsx';
+import { PromoBanner } from '../components/Promotion.jsx';
 import { useI18n } from '../i18n/index.jsx';
 
 // Ảnh dự phòng nằm trong thư mục public, không phụ thuộc dịch vụ bên ngoài.
@@ -131,6 +132,8 @@ export default function Home() {
       </HeroSlider>
 
       {/* Chỉ hiện khi cửa hàng đã nhập số trong trang quản trị — không dùng số giả. */}
+      <PromoBanner />
+
       {contactPhone && (
         <aside className="contact-strip" aria-label={t('contact.label')}>
           <span className="contact-icon" aria-hidden="true">☏</span>

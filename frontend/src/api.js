@@ -339,6 +339,41 @@ export function deliveryPlan(date = shopNow()) {
   return { phase: 'closed', slot: 'sang' };
 }
 
+/** Ngày theo giờ Việt Nam (YYYY-MM-DD) của thời điểm `date`. */
+export function vietnamDate(date = shopNow()) {
+  return new Date(date.getTime() + VN_OFFSET_MIN * 60_000).toISOString().slice(0, 10);
+}
+
+/** Khuyến mãi đang diễn ra ('active'), sắp diễn ra ('upcoming') hay không (null), theo giờ VN. */
+export function promoStatus(promotion, date = shopNow()) {
+  if (!promotion) return null;
+  const today = vietnamDate(date);
+  if (today > promotion.end) return null;
+  return today >= promotion.start ? 'active' : 'upcoming';
+}
+
+/** Số kg trong tên quy cách: "bao 25kg" → 25. */
+export const unitKg = (unit) => {
+  const match = String(unit || '').match(/(\d+(?:[.,]\d+)?)\s*kg/i);
+  return match ? Number(match[1].replace(',', '.')) : 0;
+};
+
+/** Tổng kg GẠO (không tính đồ khô) của các dòng giỏ hàng, giống cách máy chủ tính. */
+export function riceKg(items) {
+  return items.reduce((sum, item) => {
+    if (item.category && item.category !== 'gao') return sum;
+    if (!(item.stock > 0) && item.stock !== undefined) return sum;
+    const kg = Number(item.weight_kg) || unitKg(item.unit);
+    return sum + kg * (Number(item.quantity) || 0);
+  }, 0);
+}
+
+/** Số kg quà: mỗi min_kg được 1kg, tối đa max_gift_kg. */
+export function promoGiftKg(kg, promotion) {
+  if (!promotion) return 0;
+  return Math.min(promotion.max_gift_kg, Math.floor((kg + 1e-9) / promotion.min_kg));
+}
+
 /** Chọn khung `slot` lúc `date` thì giao hôm nay hay ngày mai. */
 export function slotDay(slot, date = shopNow()) {
   const m = vietnamMinutes(date);

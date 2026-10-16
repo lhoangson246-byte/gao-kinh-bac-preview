@@ -98,7 +98,11 @@ export default function Orders() {
                 {order.items.map((item) => (
                   <li key={item.id}>
                     <span>
-                      <strong>{item.product_name}{!!item.is_reward && <span className="gift-tag">{t('orders.gift')}</span>}</strong>
+                      <strong>
+                        {item.product_name}
+                        {!!item.is_reward && <span className="gift-tag">{t('orders.gift')}</span>}
+                        {item.promo && <span className="gift-tag promo">{t('promo.tag')}</span>}
+                      </strong>
                       <small>{t('line.qty', { qty: item.quantity, unit: unit(item.unit), price: formatVND(item.price) })}</small>
                     </span>
                     <span>{formatVND(item.price * item.quantity)}</span>

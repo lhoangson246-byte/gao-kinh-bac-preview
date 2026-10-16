@@ -5,6 +5,7 @@ import { useCart } from '../context/CartContext.jsx';
 import { useI18n } from '../i18n/index.jsx';
 import PasswordInput from '../components/PasswordInput.jsx';
 import DeliveryHours, { useNow } from '../components/DeliveryHours.jsx';
+import { PromoGiftRow, PromoProgress } from '../components/Promotion.jsx';
 import { passwordErrorKey } from '../password';
 import {
   api, formatVND, isPhone, mapLink, mentionsOtherProvince, normalizePhone, pointsForLines,
@@ -278,7 +279,9 @@ export default function QuickCheckout() {
             ))}
           </ul>
           <div className="quick-total-row"><span>{t('cart.shipping')}</span><b className="free-tag">{t('common.free')}</b></div>
+          <PromoGiftRow items={orderable} className="quick-total-row" />
           <div className="quick-total-row grand"><span>{t('quick.total')}</span><b>{formatVND(total)}</b></div>
+          <PromoProgress items={orderable} compact />
           <p className="quick-promo">🎁 {t('quick.firstOrder', { amount: formatVND(FIRST_ORDER_DISCOUNT) })}</p>
           <ul className="quick-trust">
             <li>✓ {t('quick.trustCall')}</li>
@@ -346,6 +349,9 @@ function QuickSuccess({ order, token }) {
         <p>{t('quick.successCall', { phone: formatPhone(order.phone) })}</p>
         <div className="quick-total-row grand"><span>{t('quick.total')}</span><b>{formatVND(order.total)}</b></div>
         {order.discount > 0 && <p className="quick-promo">🎁 {t('orders.discounted', { amount: formatVND(order.discount) })}</p>}
+        {order.items.filter((item) => item.promo).map((item) => (
+          <p key={item.id} className="quick-promo">🌸 {t('promo.received', { kg: item.quantity, name: item.product_name })}</p>
+        ))}
         {points > 0 && <p className="quick-points">★ {t('quick.successPoints', { n: points, phone: formatPhone(order.phone) })}</p>}
         <Link className="btn btn-secondary btn-block quick-continue" to="/">{t('quick.continue')}</Link>
       </section>
