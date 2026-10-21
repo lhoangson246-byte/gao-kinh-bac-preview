@@ -13,6 +13,22 @@ import ProductImage from '../components/ProductImage.jsx';
 import OrdersExportButton from '../components/OrdersExportButton.jsx';
 import PageLoadBoundary from '../components/PageLoadBoundary.jsx';
 
+/**
+ * Cảnh báo khi khối lượng nhập lệch với số kg ghi trong tên hoặc đơn vị (ví dụ tên "25KG" mà
+ * khối lượng 50). Khối lượng sai làm sai quà khuyến mãi và mốc giảm giá tại quầy.
+ */
+function weightMismatch(form) {
+  const weight = Number(String(form.weight_kg).replace(',', '.'));
+  if (!(weight > 0)) return '';
+  const said = [...`${form.name} ${form.unit}`.matchAll(/(\d+(?:[.,]\d+)?)\s*kg/gi)]
+    .map((m) => Number(m[1].replace(',', '.')))
+    .filter((kg) => kg > 0);
+  const other = said.find((kg) => Math.abs(kg - weight) > 1e-9);
+  return other !== undefined && !said.includes(weight)
+    ? `Tên/đơn vị ghi ${other}kg nhưng khối lượng đang nhập ${weight}kg. Kiểm tra lại: khối lượng sai làm sai quà khuyến mãi và giảm giá tại quầy.`
+    : '';
+}
+
 const EMPTY = {
   name: '', origin: '', price: '', original_price: '', cost_price: '', category: 'gao', unit: 'kg', weight_kg: '',
   stock: '', description: '', image_url: '',
@@ -495,7 +511,9 @@ export default function Admin() {
                             <input className="input" type="number" name="weight_kg" value={form.weight_kg} onChange={onChange} min="0" step="0.5" inputMode="decimal" placeholder="Tự suy từ đơn vị" aria-invalid={!!formErrors.weight_kg} />
                             {formErrors.weight_kg
                               ? <small className="err">{formErrors.weight_kg}</small>
-                              : <small className="field-help">Dùng để tính mốc 50kg được giảm giá tại quầy.</small>}
+                              : weightMismatch(form)
+                                ? <small className="err" role="alert">{weightMismatch(form)}</small>
+                                : <small className="field-help">Dùng để tính mốc 50kg giảm giá tại quầy và quà khuyến mãi theo kg.</small>}
                           </label>
                           <label>Số lượng còn lại
                             <input className="input" type="number" name="stock" value={form.stock} onChange={onChange} min="0" step="1" inputMode="numeric" aria-invalid={!!formErrors.stock} />
