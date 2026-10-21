@@ -82,6 +82,7 @@ add('orders', 'POST', /^\/?$/, obj({
   delivery_slot: z.enum(['sang', 'chieu', '']).nullable().optional(), note,
   payment_method: z.enum(['cod', 'bank']).optional(), items: lines.min(1),
   voucher_count: integer(0, 20).optional(), rewards: z.array(line).max(LIMITS.linesPerOrder).optional(),
+  promo_gift: z.enum(['nep', 'lut']).optional(),
 }));
 add('guest-orders', 'POST', /^\/guest\/?$/, obj({
   receiver_name: name, phone: text(LIMITS.phone), address: text(LIMITS.address),
@@ -89,6 +90,7 @@ add('guest-orders', 'POST', /^\/guest\/?$/, obj({
   delivery_slot: z.enum(['sang', 'chieu', '']).nullable().optional(), note,
   payment_method: z.enum(['cod', 'bank']).optional(), items: lines.min(1),
   latitude: address.latitude, longitude: address.longitude, location_accuracy: address.location_accuracy,
+  promo_gift: z.enum(['nep', 'lut']).optional(),
 }));
 add('orders', 'GET', /^\/?$/);
 add('orders', 'GET', /^\/[^/]+\/?$/);
@@ -134,7 +136,7 @@ add('retail', 'POST', /^\/customers\/account\/?$/, obj({ phone: text(LIMITS.phon
 add('retail', 'PUT', /^\/customers\/[^/]+\/?$/, obj({
   full_name: name.optional(), note, segment: z.enum(CUSTOMER_SEGMENT_CODES).optional(),
 }));
-add('retail', 'POST', /^\/invoices\/?$/, obj({ phone, full_name: name.optional(), customer_address: optionalText(LIMITS.address), items: retailLines.optional(), rewards: retailLines.optional(), voucher_count: integer(0, 20).optional(), payment_method: z.enum(['cash', 'transfer']).optional(), note,
+add('retail', 'POST', /^\/invoices\/?$/, obj({ phone, full_name: name.optional(), customer_address: optionalText(LIMITS.address), items: retailLines.optional(), rewards: retailLines.optional(), voucher_count: integer(0, 20).optional(), promo_gift: z.enum(['nep', 'lut']).optional(), payment_method: z.enum(['cash', 'transfer']).optional(), note,
   discount_percent: decimal(0, RETAIL_DISCOUNT_MAX_PERCENT).or(z.literal('')).nullable().optional() }));
 add('retail', 'GET', /^\/invoices\/?$/, empty, obj({ ...page, q: text(60).optional(), from: day.optional(), to: day.optional() }));
 add('retail', 'GET', /^\/invoices\/[^/]+\/?$/);

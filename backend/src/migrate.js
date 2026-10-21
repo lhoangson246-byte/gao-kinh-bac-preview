@@ -753,6 +753,26 @@ for (const table of ['order_items', 'retail_invoice_items']) {
   }
 }
 
+// 21/10/2026: bao "Gạo Cỏ May ST25 - 25KG" bị nhập khối lượng 50kg, nên mua 1 bao được tính 50kg
+// (tặng 3kg nếp thay vì 1kg, và tính sai mốc 50kg giảm giá tại quầy). Chỉ sửa đúng trường hợp tên
+// ghi 25kg mà khối lượng đang là 50; chạy một lần.
+const fix25kgWeight = '2026-10-21-fix-25kg-bag-weight-50';
+if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(fix25kgWeight)) {
+  db.transaction(() => {
+    const rows = db.prepare(`
+      SELECT id, name FROM products
+      WHERE weight_kg = 50 AND (name LIKE '%25kg%' OR name LIKE '%25 kg%') AND name NOT LIKE '%50kg%'
+    `).all();
+    const fix = db.prepare('UPDATE products SET weight_kg = 25 WHERE id = ?');
+    for (const row of rows) {
+      fix.run(row.id);
+      console.log(`   · ${row.name}: khối lượng 50kg → 25kg`);
+    }
+    db.prepare('INSERT INTO app_migrations (name) VALUES (?)').run(fix25kgWeight);
+    console.log(`✅ Đã sửa khối lượng ${rows.length} bao 25kg bị nhập 50kg.`);
+  })();
+}
+
 // Quà đổi 1.000 điểm theo yêu cầu cửa hàng ngày 02/10/2026: 1kg gạo nếp, 1kg gạo lứt
 // hoặc 1kg mì chũ (cùng voucher 30.000đ). Kê vàng không còn nằm trong danh sách quà.
 // Chỉ chạy một lần; sau đó chủ cửa hàng tự bật/tắt ở form sản phẩm.

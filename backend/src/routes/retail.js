@@ -427,13 +427,13 @@ router.post('/invoices', (req, res, next) => {
           0, quantity, product.cost_price ?? 0, 1);
       }
       // Quà khuyến mãi theo đợt, tính từ hàng thật trong hoá đơn (bán quầy không trừ kho online).
-      const gift = promoGiftFor(lines);
+      const gift = promoGiftFor(lines, req.body?.promo_gift);
       if (gift) {
         db.prepare(`
           INSERT INTO retail_invoice_items
             (invoice_id, product_id, product_name, unit, price, quantity, cost_price, is_reward, promo)
           VALUES (?, ?, ?, ?, 0, ?, ?, 0, ?)
-        `).run(invoiceId, gift.product?.id ?? null, gift.product?.name || gift.promo.giftName,
+        `).run(invoiceId, gift.product?.id ?? null, gift.product?.name || gift.choice.name,
           gift.product?.unit || 'kg', gift.kg, gift.product?.cost_price ?? 0, gift.promo.code);
       }
       return invoiceId;

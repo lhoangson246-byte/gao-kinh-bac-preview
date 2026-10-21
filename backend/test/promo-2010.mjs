@@ -1,4 +1,4 @@
-// Khuyến mãi 20/10: 19–21/10, mỗi 15kg gạo tặng 1kg nếp cái hoa vàng, tối đa 3kg.
+// Khuyến mãi 20/10: 19–21/10, từ 15kg tặng 1kg, từ 30kg tặng 2kg, từ 50kg tặng 3kg; quà nếp hoặc lứt.
 // Cách chạy: node test/promo-2010.mjs (tự dựng máy chủ riêng, ghim ngày bằng PROMO_TODAY).
 import assert from 'node:assert/strict';
 import { fixture } from './fixture.mjs';
@@ -17,26 +17,27 @@ async function setup(app) {
   const sack10 = pick((p) => p.category === 'gao' && /10kg/.test(p.unit));
   const bag5 = pick((p) => p.category === 'gao' && /5kg/.test(p.unit));
   const nep = products.find((p) => /nếp cái hoa vàng/.test(p.name) && /1kg/.test(p.unit));
+  const lut = products.find((p) => /lứt/.test(p.name) && /1kg/.test(p.unit));
   const dry = products.find((p) => p.category === 'do-kho' && p.price > 0);
-  assert.ok(sack10 && bag5 && nep, 'có sản phẩm để thử');
-  const guest = (items) => app.call('/orders/guest', {
+  assert.ok(sack10 && bag5 && nep && lut, 'có sản phẩm để thử');
+  const guest = (items, extra = {}) => app.call('/orders/guest', {
     method: 'POST',
     body: { receiver_name: 'Chị Thử 20/10', phone: nextPhone(), address: 'Số 20 đường Thử Khuyến Mãi, phường Suối Hoa',
-      delivery_area: 'bac-ninh', items },
+      delivery_area: 'bac-ninh', items, ...extra },
   });
   const stockOf = async (id) => (await app.call(`/products/${id}`)).data.product.stock;
-  return { sack10, bag5, nep, dry, guest, stockOf };
+  return { sack10, bag5, nep, lut, dry, guest, stockOf };
 }
 
 const giftOf = (order) => order.items.find((i) => i.promo === '2010-nep');
 
 /* Trong đợt (20/10) */
 await withDay('2026-10-20', async (app) => {
-  const { sack10, bag5, nep, dry, guest, stockOf } = await setup(app);
+  const { sack10, bag5, nep, lut, dry, guest, stockOf } = await setup(app);
   const promo = (await app.call('/settings/storefront')).data.settings.promotion;
   assert.equal(promo?.code, '2010-nep', 'trang chủ thấy đợt khuyến mãi');
-  assert.equal(promo.min_kg, 15);
-  assert.equal(promo.max_gift_kg, 3);
+  assert.deepEqual(promo.tiers, [[15, 1], [30, 2], [50, 3]], 'bậc 15/30/50kg');
+  assert.deepEqual(promo.gifts.map((g) => g.key), ['nep', 'lut'], 'quà nếp hoặc lứt');
 
   const ten = await guest([{ product_id: sack10.id, quantity: 1 }]);
   assert.equal(ten.status, 201);
@@ -52,10 +53,30 @@ await withDay('2026-10-20', async (app) => {
   assert.equal(fifteen.data.order.subtotal, sack10.price + bag5.price, 'quà không tính tiền');
   assert.equal(await stockOf(nep.id), nepBefore - 1, 'quà trừ kho');
 
-  const fortyFive = await guest([{ product_id: sack10.id, quantity: 4 }, { product_id: bag5.id, quantity: 1 }]);
-  assert.equal(giftOf(fortyFive.data.order).quantity, 3, '45kg: 3kg');
+  const kgCases = [
+    [[[sack10, 2], [bag5, 1]], 1, '25kg: 1kg'],
+    [[[sack10, 3]], 2, '30kg: 2kg'],
+    [[[sack10, 4], [bag5, 1]], 2, '45kg: 2kg (chưa đủ 50kg)'],
+    [[[sack10, 5]], 3, '50kg: 3kg'],
+  ];
+  const created = {};
+  for (const [lines, kg, label] of kgCases) {
+    const res = await guest(lines.map(([p, q]) => ({ product_id: p.id, quantity: q })));
+    assert.equal(giftOf(res.data.order)?.quantity, kg, label);
+    created[label] = res.data.order;
+  }
+  const fortyFive = { data: { order: created['50kg: 3kg'] } };
   const sixty = await guest([{ product_id: sack10.id, quantity: 6 }]);
   assert.equal(giftOf(sixty.data.order).quantity, 3, '60kg: vẫn chỉ 3kg');
+
+  // Khách chọn quà gạo lứt: dòng quà là túi gạo lứt 1kg, trừ kho gạo lứt.
+  const lutBefore = await stockOf(lut.id);
+  const withLut = await guest([{ product_id: sack10.id, quantity: 3 }], { promo_gift: 'lut' });
+  assert.equal(giftOf(withLut.data.order).product_id, lut.id, 'chọn lứt: quà là gạo lứt');
+  assert.equal(giftOf(withLut.data.order).quantity, 2);
+  assert.equal(await stockOf(lut.id), lutBefore - 2, 'trừ kho gạo lứt');
+  const badChoice = await guest([{ product_id: sack10.id, quantity: 3 }], { promo_gift: 'kê' });
+  assert.equal(badChoice.status, 400, 'loại quà lạ bị từ chối');
 
   if (dry) {
     const withDry = await guest([{ product_id: sack10.id, quantity: 1 }, { product_id: dry.id, quantity: 10 }]);
@@ -68,7 +89,7 @@ await withDay('2026-10-20', async (app) => {
   const beforeCancel = await stockOf(nep.id);
   const cancel = await app.call(`/admin/orders/${fortyFive.data.order.id}/status`, { method: 'PATCH', token: admin, body: { status: 'cancelled' } });
   assert.equal(cancel.status, 200);
-  assert.equal(await stockOf(nep.id), beforeCancel + 3, 'huỷ đơn hoàn 3 túi quà');
+  assert.equal(await stockOf(nep.id), beforeCancel + 3, 'huỷ đơn 50kg hoàn 3 túi quà');
 
   // Giao xong: quà không sinh điểm (điểm chỉ theo hàng mua).
   for (const status of ['confirmed', 'shipping', 'completed']) {
@@ -78,13 +99,14 @@ await withDay('2026-10-20', async (app) => {
   const expected = Math.floor((sack10.price + bag5.price - fifteen.data.order.discount) / 1000);
   assert.equal(done.points_earned, expected, 'quà không cộng điểm');
 
-  // Tại quầy: 30kg tặng 2kg, ghi trên hoá đơn.
+  // Tại quầy: 30kg tặng 2kg, chọn gạo lứt, ghi trên hoá đơn.
   const invoice = await app.call('/retail/invoices', {
-    method: 'POST', token: admin, body: { items: [{ product_id: sack10.id, quantity: 3 }] },
+    method: 'POST', token: admin, body: { items: [{ product_id: sack10.id, quantity: 3 }], promo_gift: 'lut' },
   });
   assert.equal(invoice.status, 201);
   const posGift = invoice.data.invoice.items.find((i) => i.promo === '2010-nep');
   assert.equal(posGift?.quantity, 2, 'quầy: 30kg tặng 2kg');
+  assert.equal(posGift.product_id, lut.id, 'quầy: quà gạo lứt');
   assert.equal(posGift.price, 0);
   assert.equal(invoice.data.invoice.total, sack10.price * 3, 'quà không tính tiền ở quầy');
 });
@@ -105,4 +127,4 @@ await withDay('2026-10-18', async (app) => {
   assert.ok(!giftOf(order.data.order), 'trước đợt: chưa tặng');
 });
 
-console.log('Promo 20/10: 15kg -> 1kg, 45kg+ -> 3kg cap, dry goods excluded, stock and cancel, POS, date window all correct.');
+console.log('Promo 20/10: tiers 15/30/50kg -> 1/2/3kg (25kg -> 1, 45kg -> 2), nep or lut gift, dry goods excluded, stock and cancel, POS, date window all correct.');

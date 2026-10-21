@@ -935,13 +935,28 @@ Mã gắn đơn vào tài khoản là chuỗi ngẫu nhiên chỉ trình duyệt
 lưu mã băm, mã dùng một lần và hết hạn sau 1 ngày.
 
 
-## Khuyến mãi 20/10: mua gạo từ 15kg tặng 1kg nếp cái hoa vàng (16/10/2026)
+## Khuyến mãi 20/10: mua gạo từ 15kg tặng gạo nếp hoặc gạo lứt (16/10, sửa 21/10/2026)
 
 **Thời gian**: 19, 20 và 21/10/2026 (theo giờ Việt Nam, trọn 3 ngày).
-**Quy tắc**: cứ mỗi **15kg gạo** trong một đơn được tặng **1kg gạo nếp cái hoa vàng**, tối đa
-**3kg**. 15–29kg tặng 1kg, 30–44kg tặng 2kg, từ 45kg trở lên tặng 3kg. Chỉ tính **gạo**, không tính
-đồ khô (kê, mì chũ…), quà đổi điểm hay chính quà khuyến mãi. Áp dụng cho **đơn online** (có tài
-khoản và mua nhanh) và **hoá đơn tại quầy**.
+**Quy tắc (sửa ngày 21/10)**: theo bậc trên tổng kg **gạo** của một đơn:
+
+| Tổng kg gạo | Quà |
+|---|---|
+| dưới 15kg | không |
+| 15kg – dưới 30kg (kể cả 25kg) | 1kg |
+| 30kg – dưới 50kg | 2kg |
+| từ 50kg | 3kg (tối đa) |
+
+Quà là **gạo nếp cái hoa vàng hoặc gạo lứt**, khách chọn ở trang đặt hàng / đặt nhanh, nhân viên
+chọn ở quầy (mặc định nếp). Chỉ tính gạo, không tính đồ khô, quà đổi điểm hay chính quà. Áp dụng
+cho đơn online (có tài khoản và mua nhanh) và hoá đơn tại quầy.
+
+**Lỗi đã sửa ngày 21/10**: khách mua 1 bao "Gạo Cỏ May ST25 – 25KG" mà được ghi tặng 3kg. Nguyên
+nhân là sản phẩm này bị nhập **khối lượng 50kg** (đơn vị ghi "kg"), nên 1 bao bị tính là 50kg.
+Migration `2026-10-21-fix-25kg-bag-weight-50` sửa khối lượng của đúng sản phẩm có tên ghi 25kg mà
+đang nhập 50kg về 25kg (chạy một lần khi triển khai). Khối lượng sai cũng làm sai mốc 50kg giảm giá
+tại quầy, nay đã đúng. **Đơn đặt trước khi sửa vẫn giữ dòng quà cũ**, cửa hàng cần xem lại các đơn
+có bao 25kg này trong 19–21/10 (xem phần báo cáo).
 
 **Khách thấy gì**:
 - **Trang chủ**: băng rôn hồng "Khuyến mãi 20/10". Từ bây giờ đến 18/10 ghi "Từ 19/10 đến 21/10"
@@ -961,7 +976,7 @@ khoản và mua nhanh) và **hoá đơn tại quầy**.
   được ghi vào hoá đơn và bản in, giá 0₫. Bán tại quầy vẫn không trừ kho online như trước.
 - Quà không cộng điểm tích luỹ và không tính vào tiền hàng. Excel ghi dòng quà ở cột "Quà tặng".
 
-**Kỹ thuật**: cấu hình đợt nằm ở `backend/src/promotions.js` (ngày, 15kg, tối đa 3kg, tên quà).
+**Kỹ thuật**: cấu hình đợt nằm ở `backend/src/promotions.js` (ngày, các bậc `tiers`, các loại quà `gifts`).
 Lần sau có đợt tương tự, chỉ cần thêm một mục vào danh sách `PROMOTIONS`. Migration
 `schema:2026-10-16-v1` chỉ thêm cột `promo` vào `order_items` và `retail_invoice_items`. Kiểm thử:
 `npm --prefix backend run test:promo` (ghim ngày 18, 20 và 22/10). Biến `PROMO_TODAY` chỉ dùng cho

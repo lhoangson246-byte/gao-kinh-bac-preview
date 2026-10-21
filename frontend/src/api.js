@@ -369,9 +369,20 @@ export function riceKg(items) {
 }
 
 /** Số kg quà: mỗi min_kg được 1kg, tối đa max_gift_kg. */
+/** Số kg quà theo bậc [kg tối thiểu, kg quà] (15→1, 30→2, 50→3); giống máy chủ. */
 export function promoGiftKg(kg, promotion) {
   if (!promotion) return 0;
-  return Math.min(promotion.max_gift_kg, Math.floor((kg + 1e-9) / promotion.min_kg));
+  const tiers = promotion.tiers || [[promotion.min_kg, 1]];
+  let gift = 0;
+  for (const [minKg, giftKg] of tiers) if (kg + 1e-9 >= minKg) gift = giftKg;
+  return gift;
+}
+
+/** Bậc kế tiếp chưa đạt [kg tối thiểu, kg quà], hoặc null nếu đã ở bậc cao nhất. */
+export function promoNextTier(kg, promotion) {
+  if (!promotion) return null;
+  const tiers = promotion.tiers || [[promotion.min_kg, 1]];
+  return tiers.find(([minKg]) => kg + 1e-9 < minKg) || null;
 }
 
 /** Chọn khung `slot` lúc `date` thì giao hôm nay hay ngày mai. */

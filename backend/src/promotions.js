@@ -6,8 +6,9 @@ import { parseWeightKg } from './constants.js';
  * ngày bắt đầu và ngày kết thúc. Máy chủ tự tính quà khi tạo đơn online / hoá đơn quầy;
  * trình duyệt chỉ hiển thị trước.
  *
- * Đợt 20/10/2026: từ 19 đến 21/10, mỗi 15kg gạo trong một đơn được tặng 1kg gạo nếp cái
- * hoa vàng, tối đa 3kg (từ 45kg trở lên vẫn chỉ 3kg).
+ * Đợt 20/10/2026 (19–21/10), theo bậc trên tổng kg gạo của một đơn:
+ *   từ 15kg tặng 1kg · từ 30kg tặng 2kg · từ 50kg tặng 3kg (25kg vẫn là 1kg).
+ * Khách chọn quà là gạo nếp cái hoa vàng hoặc gạo lứt (mặc định nếp).
  */
 export const PROMOTIONS = [
   {
@@ -15,13 +16,17 @@ export const PROMOTIONS = [
     title: 'Khuyến mãi 20/10',
     start: '2026-10-19',
     end: '2026-10-21',
-    minKg: 15,
-    maxGiftKg: 3,
-    giftName: 'Gạo nếp cái hoa vàng',
-    // Sản phẩm dùng làm quà: túi 1kg có tên chứa chuỗi này.
-    giftMatch: 'nếp cái hoa vàng',
+    // [số kg gạo tối thiểu, số kg quà], tăng dần.
+    tiers: [[15, 1], [30, 2], [50, 3]],
+    // Các loại quà khách được chọn. match: tên túi 1kg dùng làm quà có chứa chuỗi này.
+    gifts: [
+      { key: 'nep', name: 'Gạo nếp cái hoa vàng', match: 'nếp cái hoa vàng' },
+      { key: 'lut', name: 'Gạo lứt', match: 'lứt' },
+    ],
   },
 ];
+
+export const PROMO_GIFT_KEYS = ['nep', 'lut'];
 
 const VN_SHIFT_MS = 7 * 60 * 60 * 1000;
 
@@ -56,7 +61,12 @@ export function publicPromotion() {
   if (!promo) return null;
   return {
     code: promo.code, title: promo.title, start: promo.start, end: promo.end,
-    min_kg: promo.minKg, max_gift_kg: promo.maxGiftKg, gift_name: promo.giftName,
+    tiers: promo.tiers,
+    gifts: promo.gifts.map(({ key, name }) => ({ key, name })),
+    // Giữ cho bản trang cũ còn trong bộ nhớ đệm của khách.
+    min_kg: promo.tiers[0][0],
+    max_gift_kg: promo.tiers[promo.tiers.length - 1][1],
+    gift_name: promo.gifts.map((g) => g.name).join(' hoặc '),
   };
 }
 
@@ -69,25 +79,29 @@ export function riceKgOf(lines) {
   }, 0);
 }
 
-/** Số kg quà: mỗi `minKg` được 1kg, tối đa `maxGiftKg`. */
+/** Số kg quà theo bậc: bậc cao nhất mà tổng kg gạo đạt tới. */
 export function giftKgFor(riceKg, promo) {
   if (!promo) return 0;
-  return Math.min(promo.maxGiftKg, Math.floor((riceKg + 1e-9) / promo.minKg));
+  let gift = 0;
+  for (const [minKg, kg] of promo.tiers) if (riceKg + 1e-9 >= minKg) gift = kg;
+  return gift;
 }
 
 /**
- * Quà khuyến mãi cho một đơn: { promo, kg, product } hoặc null nếu không được quà.
+ * Quà khuyến mãi cho một đơn: { promo, kg, choice, product } hoặc null nếu không được quà.
+ * `giftKey` là loại quà khách chọn ('nep' | 'lut'); sai hoặc bỏ trống thì dùng loại đầu tiên.
  * Gọi BÊN TRONG transaction của đơn (câu lệnh chuẩn bị tại chỗ, đúng yêu cầu của Turso).
  * product là túi 1kg dùng làm quà nếu còn bán; không có thì vẫn ghi quà theo tên để giao tay.
  */
-export function promoGiftFor(lines) {
+export function promoGiftFor(lines, giftKey) {
   const promo = activePromotion();
   const kg = giftKgFor(riceKgOf(lines), promo);
   if (!kg) return null;
+  const choice = promo.gifts.find((g) => g.key === giftKey) || promo.gifts[0];
   const product = db.prepare(`
     SELECT * FROM products
     WHERE is_active = 1 AND name LIKE ? AND (weight_kg = 1 OR unit LIKE '%1kg%' OR unit LIKE '%1 kg%')
     ORDER BY id LIMIT 1
-  `).get(`%${promo.giftMatch}%`) || null;
-  return { promo, kg, product };
+  `).get(`%${choice.match}%`) || null;
+  return { promo, kg, choice, product };
 }

@@ -5,7 +5,7 @@ import { useCart } from '../context/CartContext.jsx';
 import { useI18n } from '../i18n/index.jsx';
 import PasswordInput from '../components/PasswordInput.jsx';
 import DeliveryHours, { useNow } from '../components/DeliveryHours.jsx';
-import { PromoGiftRow, PromoProgress } from '../components/Promotion.jsx';
+import { PromoGiftChoice, PromoGiftRow, PromoProgress } from '../components/Promotion.jsx';
 import { passwordErrorKey } from '../password';
 import {
   api, formatVND, isPhone, mapLink, mentionsOtherProvince, normalizePhone, pointsForLines,
@@ -57,6 +57,7 @@ export default function QuickCheckout() {
   const [location, setLocation] = useState(null);
   const [locating, setLocating] = useState(false);
   const [showNote, setShowNote] = useState(false);
+  const [promoGift, setPromoGift] = useState('nep');   // quà khuyến mãi: nếp hoặc lứt
   const [errors, setErrors] = useState({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -145,6 +146,7 @@ export default function QuickCheckout() {
         payment_method: form.payment_method,
         note: form.note.trim() || undefined,
         items: orderable.map((item) => ({ product_id: item.id, quantity: item.quantity })),
+        promo_gift: promoGift,
         ...(location || {}),
       });
       writeSaved({ name: form.receiver_name.trim(), phone: normalizePhone(form.phone), address: form.address.trim() });
@@ -279,9 +281,10 @@ export default function QuickCheckout() {
             ))}
           </ul>
           <div className="quick-total-row"><span>{t('cart.shipping')}</span><b className="free-tag">{t('common.free')}</b></div>
-          <PromoGiftRow items={orderable} className="quick-total-row" />
+          <PromoGiftRow items={orderable} choice={promoGift} className="quick-total-row" />
           <div className="quick-total-row grand"><span>{t('quick.total')}</span><b>{formatVND(total)}</b></div>
           <PromoProgress items={orderable} compact />
+          <PromoGiftChoice items={orderable} value={promoGift} onChange={setPromoGift} />
           <p className="quick-promo">🎁 {t('quick.firstOrder', { amount: formatVND(FIRST_ORDER_DISCOUNT) })}</p>
           <ul className="quick-trust">
             <li>✓ {t('quick.trustCall')}</li>

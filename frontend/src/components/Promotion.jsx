@@ -1,7 +1,7 @@
 import { useI18n } from '../i18n/index.jsx';
 import { useStorefront } from './Footer.jsx';
 import { useNow } from './DeliveryHours.jsx';
-import { promoGiftKg, promoStatus, riceKg } from '../api';
+import { promoGiftKg, promoNextTier, promoStatus, riceKg } from '../api';
 
 const dayMonth = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 const formatKg = (kg) => (Number.isInteger(kg) ? String(kg) : kg.toFixed(1).replace('.', ','));
@@ -17,11 +17,20 @@ export function usePromotion() {
   return { promotion, status: promoStatus(promotion, now) };
 }
 
+/** Các loại quà khách được chọn (bản cũ chỉ có một tên quà). */
+export const promoGifts = (promotion) => promotion?.gifts?.length
+  ? promotion.gifts
+  : [{ key: 'nep', name: promotion?.gift_name || '' }];
+
 function usePromoText(promotion) {
   const { t } = useI18n();
   const key = `promo.title.${promotion.code}`;
   const title = t(key) === key ? promotion.title : t(key);
-  return { t, title };
+  const giftNames = promoGifts(promotion).map((g) => g.name).join(t('promo.or'));
+  const tiers = promotion.tiers || [[promotion.min_kg, 1]];
+  const joined = tiers.map(([kg, gift]) => t('promo.tier', { kg, gift })).join(' · ');
+  const tierText = joined.charAt(0).toUpperCase() + joined.slice(1);
+  return { t, title, giftNames, tiers, tierText };
 }
 
 /** Băng rôn trang chủ: báo trước và trong đợt, tự ẩn khi hết đợt. */
@@ -32,11 +41,8 @@ export function PromoBanner() {
 }
 
 function PromoBannerBody({ promotion, status }) {
-  const { t, title } = usePromoText(promotion);
-  const vars = {
-    min: promotion.min_kg, max: promotion.max_gift_kg, gift: promotion.gift_name,
-    maxKg: promotion.min_kg * promotion.max_gift_kg, start: dayMonth(promotion.start), end: dayMonth(promotion.end),
-  };
+  const { t, title, giftNames, tiers, tierText } = usePromoText(promotion);
+  const vars = { min: tiers[0][0], gifts: giftNames, tiers: tierText, start: dayMonth(promotion.start), end: dayMonth(promotion.end) };
   return (
     <aside className={`promo-banner ${status}`} aria-label={title}>
       <span className="promo-flower" aria-hidden="true">🌸</span>
@@ -54,7 +60,7 @@ function PromoBannerBody({ promotion, status }) {
 
 /**
  * Dòng nhắc ở giỏ hàng / trang đặt hàng trong đợt: đang được tặng bao nhiêu, mua thêm bao
- * nhiêu kg nữa thì được thêm. items: [{ category, weight_kg, unit, quantity }].
+ * nhiêu kg nữa thì lên bậc tiếp theo. items: [{ category, weight_kg, unit, quantity }].
  */
 export function PromoProgress({ items, compact = false }) {
   const { promotion, status } = usePromotion();
@@ -63,13 +69,15 @@ export function PromoProgress({ items, compact = false }) {
 }
 
 function PromoProgressBody({ promotion, items, compact }) {
-  const { t, title } = usePromoText(promotion);
+  const { t, title, giftNames } = usePromoText(promotion);
   const kg = riceKg(items);
   const gift = promoGiftKg(kg, promotion);
-  const max = promotion.max_gift_kg;
-  const need = Math.max(0, promotion.min_kg * (gift + 1) - kg);
-  const vars = { kg: formatKg(kg), need: formatKg(need), gift, next: gift + 1, name: promotion.gift_name, title };
-  const key = gift >= max ? 'promo.progress.max' : gift > 0 ? 'promo.progress.some' : 'promo.progress.none';
+  const next = promoNextTier(kg, promotion);
+  const vars = {
+    kg: formatKg(kg), gift, title, name: giftNames,
+    need: next ? formatKg(next[0] - kg) : 0, next: next ? next[1] : gift,
+  };
+  const key = !next ? 'promo.progress.max' : gift > 0 ? 'promo.progress.some' : 'promo.progress.none';
   return (
     <div className={`promo-progress${gift > 0 ? ' earned' : ''}${compact ? ' compact' : ''}`} role="status">
       <span aria-hidden="true">{gift > 0 ? '🎁' : '🌸'}</span>
@@ -81,20 +89,52 @@ function PromoProgressBody({ promotion, items, compact }) {
   );
 }
 
+/**
+ * Chọn loại quà (nếp cái hoa vàng / gạo lứt) khi đơn đã đủ kg. value là key quà; bỏ trống
+ * thì máy chủ dùng loại đầu tiên.
+ */
+export function PromoGiftChoice({ items, value, onChange }) {
+  const { promotion, status } = usePromotion();
+  if (!promotion || status !== 'active') return null;
+  const gifts = promoGifts(promotion);
+  const gift = promoGiftKg(riceKg(items), promotion);
+  if (!gift || gifts.length < 2) return null;
+  return <PromoGiftChoiceBody promotion={promotion} gifts={gifts} gift={gift} value={value || gifts[0].key} onChange={onChange} />;
+}
+
+function PromoGiftChoiceBody({ promotion, gifts, gift, value, onChange }) {
+  const { t, title } = usePromoText(promotion);
+  return (
+    <fieldset className="promo-choice">
+      <legend>{t('promo.choose', { gift, title })}</legend>
+      <div className="promo-choice-options">
+        {gifts.map((g) => (
+          <button key={g.key} type="button" className={value === g.key ? 'active' : ''}
+                  aria-pressed={value === g.key} onClick={() => onChange(g.key)}>
+            {g.name}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 /** Dòng quà trong phần tóm tắt đơn (0₫), khi giỏ hàng đã đủ kg. */
-export function PromoGiftRow({ items, className = 'summary-row' }) {
+export function PromoGiftRow({ items, choice, className = 'summary-row' }) {
   const { promotion, status } = usePromotion();
   if (!promotion || status !== 'active') return null;
   const gift = promoGiftKg(riceKg(items), promotion);
   if (!gift) return null;
-  return <PromoGiftRowBody promotion={promotion} gift={gift} className={className} />;
+  return <PromoGiftRowBody promotion={promotion} gift={gift} choice={choice} className={className} />;
 }
 
-function PromoGiftRowBody({ promotion, gift, className }) {
+function PromoGiftRowBody({ promotion, gift, choice, className }) {
   const { t, title } = usePromoText(promotion);
+  const gifts = promoGifts(promotion);
+  const chosen = gifts.find((g) => g.key === choice) || gifts[0];
   return (
     <div className={`${className} promo-gift-row`}>
-      <span><strong>{promotion.gift_name}</strong><small>{t('promo.giftLine', { kg: gift, title })}</small></span>
+      <span><strong>{chosen.name}</strong><small>{t('promo.giftLine', { kg: gift, title })}</small></span>
       <strong className="free-tag">0₫</strong>
     </div>
   );

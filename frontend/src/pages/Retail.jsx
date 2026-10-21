@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, formatDateTime, formatVND, isPhone, normalizePhone, pointsForLines, CUSTOMER_SEGMENTS, promoGiftKg, riceKg } from '../api';
-import { usePromotion } from '../components/Promotion.jsx';
+import { api, formatDateTime, formatVND, isPhone, normalizePhone, pointsForLines, CUSTOMER_SEGMENTS, promoGiftKg, promoNextTier, riceKg } from '../api';
+import { promoGifts, usePromotion } from '../components/Promotion.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import ReturnManager from '../components/ReturnManager.jsx';
 import OrderAlerts from '../components/OrderAlerts.jsx';
@@ -184,7 +184,8 @@ function SellTab({ products, policy, onDone, notify }) {
   const { promotion: promo, status: promoNow } = usePromotion();
   const promoKg = riceKg(lines.map((l) => ({ ...l.product, stock: undefined, quantity: l.quantity })));
   const promoGift = promoNow === 'active' ? promoGiftKg(promoKg, promo) : 0;
-  const promoNeed = promo ? Math.max(0, promo.min_kg * (promoGift + 1) - promoKg) : 0;
+  const promoNext = promoNextTier(promoKg, promo);
+  const [promoChoice, setPromoChoice] = useState('nep');   // quà: nếp hoặc lứt
   const earnPoints = pointsForLines(
     lines.map((l) => ({ price: l.product.price, quantity: l.quantity, points_per_unit: l.product.points_per_unit })),
     total,
@@ -265,6 +266,7 @@ function SellTab({ products, policy, onDone, notify }) {
         full_name: (customer?.full_name || guestName).trim() || undefined,
         customer_address: address.trim() || undefined,
         items: lines.map((l) => ({ product_id: l.product.id, quantity: l.quantity })),
+        promo_gift: promoChoice,
         rewards: giftLines.length
           ? giftLines.map((g) => ({ product_id: g.product.id, quantity: g.quantity }))
           : undefined,
@@ -474,15 +476,20 @@ function SellTab({ products, policy, onDone, notify }) {
             {promoGift > 0 && (
               <div className="pos-line gift promo">
                 <div className="pos-line-main">
-                  <strong>{promo.gift_name} <span className="gift-tag promo">Quà {promo.title.replace(/^Khuyến mãi\s*/i, '')}</span></strong>
-                  <small>{promoGift}kg tặng kèm · tự thêm khi lưu hoá đơn</small>
+                  <strong>Quà {promo.title.replace(/^Khuyến mãi\s*/i, '')}: {promoGift}kg <span className="gift-tag promo">tự thêm khi lưu</span></strong>
+                  <span className="promo-choice-options pos">
+                    {promoGifts(promo).map((g) => (
+                      <button key={g.key} type="button" className={promoChoice === g.key ? 'active' : ''}
+                              aria-pressed={promoChoice === g.key} onClick={() => setPromoChoice(g.key)}>{g.name}</button>
+                    ))}
+                  </span>
                 </div>
                 <strong className="pos-line-total free-tag">0₫</strong>
               </div>
             )}
-            {promoNow === 'active' && lines.length > 0 && promoGift < promo.max_gift_kg && (
+            {promoNow === 'active' && lines.length > 0 && promoNext && (
               <p className="pos-hint promo-hint">
-                {promo.title}: hoá đơn có {Math.round(promoKg * 10) / 10}kg gạo, thêm {Math.round(promoNeed * 10) / 10}kg để được tặng {promoGift + 1}kg {promo.gift_name}.
+                {promo.title}: hoá đơn có {Math.round(promoKg * 10) / 10}kg gạo, thêm {Math.round((promoNext[0] - promoKg) * 10) / 10}kg để được tặng {promoNext[1]}kg (nếp hoặc lứt).
               </p>
             )}
             {vouchers > 0 && (

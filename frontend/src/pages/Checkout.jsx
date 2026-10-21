@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
 import AddressBook from '../components/AddressBook.jsx';
 import DeliveryHours, { useNow } from '../components/DeliveryHours.jsx';
-import { PromoGiftRow, PromoProgress } from '../components/Promotion.jsx';
+import { PromoGiftChoice, PromoGiftRow, PromoProgress } from '../components/Promotion.jsx';
 import {
   api, formatNumber, formatVND, pointsForLines, DELIVERY_AREA_CODE, DELIVERY_SLOTS, deliveryPlan, slotDay,
 } from '../api';
@@ -22,6 +22,7 @@ export default function Checkout() {
 
   // Đổi điểm: mỗi 1.000 điểm = 1 voucher giảm 30.000đ hoặc 1 phần quà 1kg.
   const [vouchers, setVouchers] = useState(0);
+  const [promoGift, setPromoGift] = useState('nep');   // quà khuyến mãi: nếp hoặc lứt
   const [gifts, setGifts] = useState({});           // { productId: quantity }
   const points = firstOrder?.points ?? 0;
   const perReward = firstOrder?.pointsPerReward ?? 1000;
@@ -103,6 +104,7 @@ export default function Checkout() {
         ...form,
         address_id: selectedAddress.id,
         items: orderable.map((item) => ({ product_id: item.id, quantity: item.quantity })),
+        promo_gift: promoGift,
         voucher_count: vouchers > 0 ? vouchers : undefined,
         rewards: giftCount > 0
           ? Object.entries(gifts).map(([id, quantity]) => ({ product_id: Number(id), quantity }))
@@ -275,9 +277,10 @@ export default function Checkout() {
             </div>
           ))}
           <div className="summary-row"><span>{t('cart.shipping')}</span><strong className="free-tag">{t('common.free')}</strong></div>
-          <PromoGiftRow items={orderable} />
+          <PromoGiftRow items={orderable} choice={promoGift} />
           <div className="summary-row grand-total"><span>{t('cart.total')}</span><strong>{formatVND(payable)}</strong></div>
           <PromoProgress items={orderable} />
+          <PromoGiftChoice items={orderable} value={promoGift} onChange={setPromoGift} />
           <p className="pos-hint">{t('cart.points', { n: earnPoints })}</p>
           <p className="summary-disclaimer">
             {t('checkout.disclaimer')}

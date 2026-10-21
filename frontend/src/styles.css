@@ -1278,3 +1278,15 @@ label b { color: var(--danger); }
 .quick-total-row.promo-gift-row > span { display: flex; flex-direction: column; min-width: 0; }
 .quick-total-row.promo-gift-row small { font-size: .82rem; font-weight: 650; }
 .promo-banner + .catalog-controls { margin-top: 0; border-top: 1px solid var(--border); border-radius: 15px; }
+
+/* --- Chọn quà khuyến mãi: nếp hoặc lứt --- */
+.promo-choice { margin: 8px 0 10px; padding: 0; border: 0; }
+.promo-choice legend { margin-bottom: 6px; padding: 0; color: #a3214f; font-size: .84rem; font-weight: 800; }
+.promo-choice-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.promo-choice-options button { position: relative; min-height: 48px; padding: 8px 10px; border: 2px solid #f1b8c8; border-radius: 12px; background: #fff; color: #5a1029; font-size: .9rem; font-weight: 800; cursor: pointer; }
+.promo-choice-options button.active { border-color: #c2185b; background: #ffe3ec; box-shadow: inset 0 0 0 1px #c2185b; }
+.promo-choice-options button.active::after { content: "✓"; position: absolute; top: -8px; right: -6px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: #c2185b; color: #fff; font-size: .7rem; }
+.promo-choice-options button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.quick-page .promo-choice-options button { min-height: 56px; font-size: 1rem; }
+.promo-choice-options.pos { margin-top: 6px; }
+.promo-choice-options.pos button { min-height: 36px; font-size: .78rem; }

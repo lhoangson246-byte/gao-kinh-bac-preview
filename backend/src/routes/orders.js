@@ -72,7 +72,7 @@ function normalizeRewardLines(rewards) {
 function placeOrder({
   userId, guest = false, receiverName, customerPhone, deliveryAddress, customerNote,
   paymentMethod, deliverySlot, lat = null, lng = null, wanted,
-  wantedRewards = new Map(), vouchers = 0, pointsPhone = null, guestTokenHash = null,
+  wantedRewards = new Map(), vouchers = 0, pointsPhone = null, guestTokenHash = null, promoGift = null,
 }) {
   const rewardCount = vouchers + [...wantedRewards.values()].reduce((sum, q) => sum + q, 0);
   return db.transaction(() => {
@@ -172,7 +172,7 @@ function placeOrder({
     // Quà khuyến mãi theo đợt (ví dụ 20/10: mỗi 15kg gạo tặng 1kg nếp, tối đa 3kg). Máy chủ tự
     // tính từ hàng thật trong đơn. Còn túi quà trong kho thì trừ kho (huỷ đơn sẽ hoàn lại như
     // hàng thường); hết thì vẫn ghi quà theo tên để cửa hàng giao tay, không chặn đơn.
-    const gift = promoGiftFor(lines);
+    const gift = promoGiftFor(lines, promoGift);
     if (gift) {
       const insGift = db.prepare(
         `INSERT INTO order_items (order_id, product_id, product_name, unit, price, quantity, cost_price,
@@ -181,7 +181,7 @@ function placeOrder({
       );
       const stocked = gift.product && decStock.run(gift.kg, gift.product.id, gift.kg).changes;
       insGift.run(orderId, stocked ? gift.product.id : null,
-        gift.product?.name || gift.promo.giftName, gift.product?.unit || 'kg', gift.kg,
+        gift.product?.name || gift.choice.name, gift.product?.unit || 'kg', gift.kg,
         gift.product?.cost_price ?? 0, gift.promo.code);
     }
 
@@ -271,6 +271,7 @@ router.post('/guest', validateRoutes('guest-orders'), (req, res, next) => {
       lng: location?.longitude ?? null,
       wanted,
       guestTokenHash: createHash('sha256').update(token).digest('hex'),
+      promoGift: body.promo_gift,
     });
     res.status(201).json({ order: getOrderForUser(orderId, guestId), guest_token: token });
   } catch (err) {
@@ -344,6 +345,7 @@ router.post('/', requireAuth, (req, res, next) => {
       wantedRewards,
       vouchers,
       pointsPhone,
+      promoGift: req.body?.promo_gift,
     });
     res.status(201).json({ order: getOrderForUser(orderId, req.user.id) });
   } catch (err) {
