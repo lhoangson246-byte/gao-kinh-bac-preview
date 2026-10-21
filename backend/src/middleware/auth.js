@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import db from '../db.js';
 
-import { JWT_SECRET as SECRET, JWT_OPTIONS, sessionCookie } from '../security.js';
+import { JWT_SECRET as SECRET, JWT_OPTIONS, SESSION_TTL, sessionCookie } from '../security.js';
 
 /**
  * Ký token phiên. `authTime` (giây) là lúc đăng nhập thật sự; gia hạn giữ nguyên giá trị này để
@@ -19,7 +19,7 @@ export function requireAuth(req, res, next) {
   if (!token || token.length > 4096) return res.status(401).json({ message: 'Bạn cần đăng nhập.' });
 
   try {
-    const payload = jwt.verify(token, SECRET, { algorithms: ['HS256'], issuer: JWT_OPTIONS.issuer, audience: JWT_OPTIONS.audience, maxAge: '1h' });
+    const payload = jwt.verify(token, SECRET, { algorithms: ['HS256'], issuer: JWT_OPTIONS.issuer, audience: JWT_OPTIONS.audience, maxAge: SESSION_TTL });
     if (!Number.isSafeInteger(payload.id) || payload.id < 1 || !Number.isSafeInteger(payload.version) || !Number.isSafeInteger(payload.exp) || !Number.isSafeInteger(payload.iat)) throw new Error('Invalid claims');
     // Luôn đọc lại vai trò từ cơ sở dữ liệu, không tin vai trò ghi trong token.
     const user = db

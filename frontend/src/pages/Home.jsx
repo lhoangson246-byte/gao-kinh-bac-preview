@@ -15,16 +15,8 @@ const QUICK_FILTERS = [
   ['G9', 'filter.g9'], ['Cỏ May', 'filter.comay'],
 ];
 
-/**
- * Nhóm mặt hàng. Mã nhóm khớp CATALOG_GROUPS ở máy chủ; máy chủ tự lọc, trình
- * duyệt chỉ gửi mã nhóm đi.
- */
-const GROUPS = [
-  { code: '', key: 'group.all' },
-  { code: 'giam-gia', key: 'group.sale' },
-  { code: 'nha-hang', key: 'group.restaurant' },
-  { code: 'do-kho', key: 'group.dry' },
-];
+/** Bộ lọc tự tính ở máy chủ; các nhóm còn lại do cửa hàng tự tạo trong trang quản trị. */
+const SALE_GROUP = 'giam-gia';
 
 /**
  * Điểm khách được cộng cho mỗi túi/bao khi đơn giao xong: điểm riêng cửa hàng đặt cho loại
@@ -50,6 +42,7 @@ export default function Home() {
   const [q, setQ] = useState('');
   const [inStockOnly, setInStockOnly] = useState(false);
   const [group, setGroup] = useState('');
+  const [groups, setGroups] = useState([]);   // nhóm gạo cửa hàng tạo: [{ slug, name, count }]
   const [banners, setBanners] = useState([]);
   const [contactPhone, setContactPhone] = useState('');
   const [zaloPhone, setZaloPhone] = useState('');
@@ -108,7 +101,19 @@ export default function Home() {
 
   useEffect(() => () => window.clearTimeout(addedTimer.current), []);
 
-  const current = GROUPS.find((g) => g.code === group) || GROUPS[0];
+  // Nhóm gạo cửa hàng tự tạo (Gạo nhà hàng, Gạo Cỏ May…). Lỗi thì chỉ còn "Tất cả" và "Đang giảm giá".
+  useEffect(() => {
+    let cancelled = false;
+    api.productGroups()
+      .then(({ groups: list }) => { if (!cancelled) setGroups((list || []).filter((g) => g.count > 0)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const currentGroup = groups.find((g) => g.slug === group);
+  const heading = group === SALE_GROUP ? t('group.sale.heading') : currentGroup ? currentGroup.name : t('group.all.heading');
+  const emptyText = group === SALE_GROUP ? t('group.sale.empty') : currentGroup ? t('group.custom.empty') : t('group.all.empty');
+  const pickGroup = (slug) => { setGroup(slug); setQ(''); };
 
   const handleAdd = (product) => {
     if (!add(product, 1)) return;
@@ -161,6 +166,23 @@ export default function Home() {
         </aside>
       )}
 
+      {/* Nhóm gạo: hàng riêng, đặt trước ô tìm kiếm và các bộ lọc khác để khách thấy ngay. */}
+      <nav className="group-strip" aria-label={t('home.groupsAria')}>
+        <p className="group-strip-title">{t('home.groupsTitle')}</p>
+        <div className="group-chips">
+          <button type="button" className={group === '' ? 'active' : ''} aria-pressed={group === ''}
+                  onClick={() => pickGroup('')}>{t('group.all')}</button>
+          {groups.map((g) => (
+            <button key={g.slug} type="button" className={group === g.slug ? 'active' : ''}
+                    aria-pressed={group === g.slug} onClick={() => pickGroup(g.slug)}>
+              {g.name} <span>{g.count}</span>
+            </button>
+          ))}
+          <button type="button" className={`sale-chip${group === SALE_GROUP ? ' active' : ''}`}
+                  aria-pressed={group === SALE_GROUP} onClick={() => pickGroup(SALE_GROUP)}>{t('group.sale')}</button>
+        </div>
+      </nav>
+
       <section className="catalog-controls" aria-label={t('home.controls')}>
         <label className="search-box">
           <span aria-hidden="true">⌕</span>
@@ -175,18 +197,6 @@ export default function Home() {
           {q && <button type="button" onClick={() => setQ('')} aria-label={t('home.clearSearch')}>×</button>}
         </label>
         <div className="filter-rows">
-        <div className="quick-filters group-filters" role="group" aria-label={t('home.groupsAria')}>
-          {GROUPS.map((g) => (
-            <button
-              key={g.code || 'all'}
-              type="button"
-              className={`${group === g.code ? 'active' : ''}${g.code === 'giam-gia' ? ' sale-chip' : ''}`}
-              aria-pressed={group === g.code}
-              // Chọn nhóm mới thì bỏ loại gạo / từ khoá đang chọn, để không ra 0 sản phẩm.
-              onClick={() => { setGroup(g.code); setQ(''); }}
-            >{t(g.key)}</button>
-          ))}
-        </div>
         <div className="quick-filters" role="group" aria-label={t('home.typesAria')}>
           {QUICK_FILTERS.map(([value, label]) => (
             <button
@@ -210,7 +220,7 @@ export default function Home() {
 
       <section className="catalog-section" aria-busy={loading}>
         <div className="catalog-heading">
-          <h2>{t(`${current.key}.heading`)}</h2>
+          <h2>{heading}</h2>
           {!loading && !error && <span>{t('home.count', { n: products.length })}</span>}
         </div>
         <p className="points-info">★ {t('home.pointsInfo')}</p>
@@ -224,7 +234,7 @@ export default function Home() {
         {loading && <div className="loading-state" role="status"><span></span>{t('home.loading')}</div>}
         {!loading && !error && products.length === 0 && (
           <div className="empty compact">
-            <p>{q || inStockOnly ? t('home.noMatch') : t(`${current.key}.empty`)}</p>
+            <p>{q || inStockOnly ? t('home.noMatch') : emptyText}</p>
             <button className="link-button" onClick={() => { setQ(''); setInStockOnly(false); setGroup(''); }}>
               {t('home.seeAll')}
             </button>

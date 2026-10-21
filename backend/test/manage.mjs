@@ -739,17 +739,63 @@ const guestToken = (await call('/auth/register', {
 
   const ids = async (group) => (await call(`/products?group=${group}`)).data.products.map((p) => p.id);
   const saleIds = await ids('giam-gia');
-  const restaurantIds = await ids('nha-hang');
-  const dryIds = await ids('do-kho');
-
   check('Lọc "Đang giảm giá" có sản phẩm giảm giá', saleIds.includes(sale.data.product.id));
   check('Lọc "Đang giảm giá" không lẫn hàng giá thường', !saleIds.includes(bag.data.product.id) && !saleIds.includes(dry.data.product.id));
-  check('Lọc "Gạo nhà hàng" có gạo bao 25kg', restaurantIds.includes(bag.data.product.id));
-  check('Lọc "Gạo nhà hàng" không lẫn túi 5kg hay đồ khô', !restaurantIds.includes(sale.data.product.id) && !restaurantIds.includes(dry.data.product.id));
-  check('Lọc "Thực phẩm khô" chỉ có đồ khô', dryIds.includes(dry.data.product.id) && !dryIds.includes(bag.data.product.id));
 
+  /* Nhóm gạo do cửa hàng tạo; một sản phẩm thuộc được nhiều nhóm */
+  const g1 = (await call('/admin/groups', { method: 'POST', token: admin, body: { name: `Gạo thử nhóm ${suffix}` } })).data.group;
+  const g2 = (await call('/admin/groups', { method: 'POST', token: admin, body: { name: `Gạo đi lễ thử ${suffix}` } })).data.group;
+  check('Tạo nhóm gạo, tự sinh mã không dấu', /^gao-thu-nhom-\d+$/.test(g1?.slug || '') && /^gao-di-le-thu-\d+$/.test(g2?.slug || ''),
+    `${g1?.slug} | ${g2?.slug}`);
+  const dup = await call('/admin/groups', { method: 'POST', token: admin, body: { name: `Gạo thử nhóm ${suffix}` } });
+  check('Nhóm trùng tên bị từ chối (409)', dup.status === 409, `status=${dup.status}`);
+  const putBag = await call(`/admin/products/${bag.data.product.id}`, { method: 'PUT', token: admin, body: { group_ids: [g1.id, g2.id] } });
+  check('Một sản phẩm gắn được vào hai nhóm', putBag.status === 200
+    && JSON.stringify(putBag.data.product?.group_ids) === JSON.stringify([g1.id, g2.id]), JSON.stringify(putBag.data.product?.group_ids));
+  await call(`/admin/products/${dry.data.product.id}`, { method: 'PUT', token: admin, body: { group_ids: [g1.id] } });
+  const inG1 = await ids(g1.slug);
+  const inG2 = await ids(g2.slug);
+  check('Lọc theo nhóm 1 ra đúng 2 sản phẩm đã gắn', inG1.includes(bag.data.product.id) && inG1.includes(dry.data.product.id)
+    && !inG1.includes(sale.data.product.id), JSON.stringify(inG1));
+  check('Sản phẩm thuộc nhóm 2 cũng hiện trong nhóm 2', inG2.includes(bag.data.product.id) && !inG2.includes(dry.data.product.id));
+  const publicGroups = (await call('/products/groups')).data.groups || [];
+  check('Danh sách nhóm công khai có số sản phẩm', publicGroups.find((g) => g.slug === g1.slug)?.count === 2,
+    JSON.stringify(publicGroups.find((g) => g.slug === g1.slug)));
+  check('Danh sách nhóm công khai không lộ id nội bộ', publicGroups.every((g) => !('id' in g) && !('is_active' in g)));
+  const adminList = (await call('/admin/products', { token: admin })).data.products;
+  check('Danh sách quản trị có nhóm của từng sản phẩm',
+    JSON.stringify(adminList.find((p) => p.id === bag.data.product.id)?.group_ids) === JSON.stringify([g1.id, g2.id]));
+
+  // Đổi tên giữ nguyên mã; ẩn nhóm thì khách không thấy và lọc không ra.
+  const renamed = await call(`/admin/groups/${g1.id}`, { method: 'PUT', token: admin, body: { name: `Gạo thử đổi tên ${suffix}` } });
+  check('Đổi tên nhóm giữ nguyên mã (link cũ vẫn chạy)', renamed.data.group?.slug === g1.slug && /đổi tên/.test(renamed.data.group?.name));
+  await call(`/admin/groups/${g1.id}`, { method: 'PUT', token: admin, body: { is_active: false } });
+  check('Nhóm đang ẩn: khách không thấy và lọc không ra sản phẩm',
+    !(await call('/products/groups')).data.groups.some((g) => g.slug === g1.slug) && (await ids(g1.slug)).length === 0);
+  await call(`/admin/groups/${g1.id}`, { method: 'PUT', token: admin, body: { is_active: true } });
+
+  // Chọn sản phẩm ngay tại nhóm.
+  const pick = await call(`/admin/groups/${g2.id}`, { method: 'PUT', token: admin, body: { product_ids: [dry.data.product.id, sale.data.product.id] } });
+  check('Chọn lại sản phẩm của nhóm', JSON.stringify([...pick.data.group.product_ids].sort((a, b) => a - b))
+    === JSON.stringify([dry.data.product.id, sale.data.product.id].sort((a, b) => a - b)));
+
+  // Xếp thứ tự: g2 lên trước g1.
+  const all = (await call('/admin/groups', { token: admin })).data.groups.map((g) => g.id);
+  const groupOrder = [g2.id, g1.id, ...all.filter((id) => id !== g1.id && id !== g2.id)];
+  const reordered = (await call('/admin/groups/reorder', { method: 'POST', token: admin, body: { ids: groupOrder } })).data.groups.map((g) => g.id);
+  check('Xếp thứ tự nhóm', reordered[0] === g2.id && reordered[1] === g1.id);
+
+  // Phân quyền và dữ liệu lạ.
+  check('Chưa đăng nhập không quản lý được nhóm (401)', (await call('/admin/groups')).status === 401);
+  check('Khách thường không quản lý được nhóm (403)', (await call('/admin/groups', { method: 'POST', token: guestToken, body: { name: 'Nhóm lạ' } })).status === 403);
   const odd = await call('/products?group=constructor');
-  check('Nhóm lọc lạ bị từ chối (400)', odd.status === 400, `status=${odd.status}`);
+  check('Mã nhóm không có thì không ra sản phẩm nào', odd.status === 200 && odd.data.products.length === 0, `status=${odd.status}`);
+  check('Mã nhóm có ký tự lạ bị từ chối (400)', (await call(`/products?group=${encodeURIComponent("x' OR 1=1")}`)).status === 400);
+
+  // Xoá nhóm: sản phẩm vẫn còn.
+  for (const g of [g1, g2]) await call(`/admin/groups/${g.id}`, { method: 'DELETE', token: admin });
+  check('Xoá nhóm không xoá sản phẩm', (await call(`/products/${bag.data.product.id}`)).status === 200
+    && !(await call('/admin/groups', { token: admin })).data.groups.some((g) => g.id === g1.id));
 
   const publicList = JSON.stringify((await call('/products?group=giam-gia')).data);
   check('Danh mục công khai trả giá gốc để hiện nhãn giảm giá', publicList.includes('original_price'));

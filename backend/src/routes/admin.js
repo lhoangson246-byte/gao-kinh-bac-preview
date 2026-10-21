@@ -13,6 +13,9 @@ import { writeAdminAudit } from '../audit.js';
 import { listAdminOrders } from '../order-lists.js';
 import { buildOrdersWorkbook } from '../orders-export.js';
 import { MAX_BANNERS, MAX_BRANCHES, readStorefront } from './settings.js';
+import {
+  MAX_GROUPS, groupIdsByProduct, groupIdsOf, listGroups, setProductGroups, uniqueSlug,
+} from '../product-groups.js';
 
 const router = Router();
 
@@ -116,7 +119,124 @@ router.patch('/orders/:id/status', (req, res, next) => {
 
 /** GET /api/admin/products — Danh sách gồm cả loại đã ẩn */
 router.get('/products', (req, res) => {
-  res.json({ products: db.prepare('SELECT * FROM products ORDER BY id').all() });
+  const groups = groupIdsByProduct();
+  const products = db.prepare('SELECT * FROM products ORDER BY id').all()
+    .map((p) => ({ ...p, group_ids: groups.get(p.id) || [] }));
+  res.json({ products });
+});
+
+/* ------------------------------------------------------------------ *
+ * Nhóm gạo (bộ lọc trang chủ): tạo, đổi tên, ẩn/hiện, xếp thứ tự, xoá.
+ * ------------------------------------------------------------------ */
+const groupWithProducts = () => {
+  const members = new Map();
+  for (const row of db.prepare('SELECT group_id, product_id FROM product_group_items').all()) {
+    if (!members.has(row.group_id)) members.set(row.group_id, []);
+    members.get(row.group_id).push(row.product_id);
+  }
+  return listGroups().map((g) => ({ ...g, product_ids: members.get(g.id) || [] }));
+};
+
+/** GET /api/admin/groups — mọi nhóm (cả nhóm đang ẩn) kèm danh sách sản phẩm. */
+router.get('/groups', (req, res) => {
+  res.json({ groups: groupWithProducts() });
+});
+
+/** POST /api/admin/groups { name } — thêm nhóm mới, xếp cuối. */
+router.post('/groups', (req, res, next) => {
+  try {
+    const name = cleanText(req.body?.name, 60);
+    if (!name || name.length < 2) throw new HttpError(400, 'Nhập tên nhóm.', { name: 'Nhập tên nhóm (ít nhất 2 ký tự).' });
+    const id = db.transaction(() => {
+      if (db.prepare('SELECT COUNT(*) n FROM product_groups').get().n >= MAX_GROUPS) {
+        throw new HttpError(400, `Tối đa ${MAX_GROUPS} nhóm.`);
+      }
+      if (db.prepare('SELECT 1 FROM product_groups WHERE lower(name) = lower(?)').get(name)) {
+        throw new HttpError(409, 'Đã có nhóm trùng tên.', { name: 'Đã có nhóm trùng tên.' });
+      }
+      const order = db.prepare('SELECT COALESCE(MAX(sort_order), 0) + 1 n FROM product_groups').get().n;
+      return db.prepare('INSERT INTO product_groups (slug, name, sort_order) VALUES (?, ?, ?)')
+        .run(uniqueSlug(name), name, order).lastInsertRowid;
+    })();
+    const group = groupWithProducts().find((g) => g.id === Number(id));
+    writeAdminAudit(req, { action: 'create', entityType: 'product_group', entityId: group.id, after: group });
+    res.status(201).json({ group });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/admin/groups/reorder { ids: [...] } — xếp thứ tự nhóm trên bộ lọc. */
+router.post('/groups/reorder', (req, res, next) => {
+  try {
+    const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).map((v) => toInteger(v, { min: 1 }));
+    if (!ids.length || ids.some((v) => !v)) throw new HttpError(400, 'Danh sách nhóm không hợp lệ.');
+    db.transaction(() => {
+      const update = db.prepare('UPDATE product_groups SET sort_order = ? WHERE id = ?');
+      ids.forEach((id, index) => update.run(index + 1, id));
+    })();
+    writeAdminAudit(req, { action: 'reorder', entityType: 'product_group', entityId: null, after: { ids } });
+    res.json({ groups: groupWithProducts() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PUT /api/admin/groups/:id { name?, is_active?, product_ids? } — đổi tên, ẩn/hiện trên bộ lọc,
+ * hoặc đặt lại danh sách sản phẩm của nhóm. Mã nhóm giữ nguyên khi đổi tên để link cũ vẫn chạy.
+ */
+router.put('/groups/:id', (req, res, next) => {
+  try {
+    const id = toInteger(req.params.id, { min: 1 });
+    const before = id ? groupWithProducts().find((g) => g.id === id) : null;
+    if (!before) throw new HttpError(404, 'Không tìm thấy nhóm.');
+    const body = req.body || {};
+    db.transaction(() => {
+      if (body.name !== undefined) {
+        const name = cleanText(body.name, 60);
+        if (!name || name.length < 2) throw new HttpError(400, 'Nhập tên nhóm.', { name: 'Nhập tên nhóm (ít nhất 2 ký tự).' });
+        if (db.prepare('SELECT 1 FROM product_groups WHERE lower(name) = lower(?) AND id <> ?').get(name, id)) {
+          throw new HttpError(409, 'Đã có nhóm trùng tên.', { name: 'Đã có nhóm trùng tên.' });
+        }
+        db.prepare('UPDATE product_groups SET name = ? WHERE id = ?').run(name, id);
+      }
+      if (body.is_active !== undefined) {
+        db.prepare('UPDATE product_groups SET is_active = ? WHERE id = ?').run(body.is_active ? 1 : 0, id);
+      }
+      if (Array.isArray(body.product_ids)) {
+        const ids = [...new Set(body.product_ids.map((v) => toInteger(v, { min: 1 })).filter(Boolean))];
+        db.prepare('DELETE FROM product_group_items WHERE group_id = ?').run(id);
+        const insert = db.prepare(`
+          INSERT OR IGNORE INTO product_group_items (group_id, product_id)
+          SELECT ?, id FROM products WHERE id = ?
+        `);
+        for (const productId of ids) insert.run(id, productId);
+      }
+    })();
+    const group = groupWithProducts().find((g) => g.id === id);
+    writeAdminAudit(req, { action: 'update', entityType: 'product_group', entityId: id, before, after: group });
+    res.json({ group });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** DELETE /api/admin/groups/:id — xoá nhóm (sản phẩm vẫn giữ nguyên, chỉ bỏ khỏi nhóm). */
+router.delete('/groups/:id', (req, res, next) => {
+  try {
+    const id = toInteger(req.params.id, { min: 1 });
+    const before = id ? groupWithProducts().find((g) => g.id === id) : null;
+    if (!before) throw new HttpError(404, 'Không tìm thấy nhóm.');
+    db.transaction(() => {
+      db.prepare('DELETE FROM product_group_items WHERE group_id = ?').run(id);
+      db.prepare('DELETE FROM product_groups WHERE id = ?').run(id);
+    })();
+    writeAdminAudit(req, { action: 'delete', entityType: 'product_group', entityId: id, before, after: null });
+    res.json({ ok: true, message: `Đã xoá nhóm “${before.name}”. Các sản phẩm vẫn còn nguyên.` });
+  } catch (err) {
+    next(err);
+  }
 });
 
 /** Kiểm tra dữ liệu sản phẩm. partial = true khi sửa (cho phép bỏ trống trường không đổi). */
@@ -343,19 +463,24 @@ router.post('/products', (req, res, next) => {
   try {
     const data = readProductInput(req.body, { partial: false });
     assertSalePrice({ price: data.price, original_price: data.original_price ?? 0 });
-    const info = db
-      .prepare(
-        `INSERT INTO products (name, description, origin, price, cost_price, unit, weight_kg, stock,
-                               image_url, is_active, category, original_price, points_per_unit, is_reward)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        data.name, data.description ?? null, data.origin ?? null, data.price,
-        data.cost_price ?? 0, data.unit, data.weight_kg ?? 0, data.stock ?? 0,
-        data.image_url ?? null, data.is_active ?? 1, data.category ?? 'gao', data.original_price ?? 0,
-        data.points_per_unit ?? null, data.is_reward ?? 0,
-      );
-    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(info.lastInsertRowid);
+    const productId = db.transaction(() => {
+      const id = db
+        .prepare(
+          `INSERT INTO products (name, description, origin, price, cost_price, unit, weight_kg, stock,
+                                 image_url, is_active, category, original_price, points_per_unit, is_reward)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          data.name, data.description ?? null, data.origin ?? null, data.price,
+          data.cost_price ?? 0, data.unit, data.weight_kg ?? 0, data.stock ?? 0,
+          data.image_url ?? null, data.is_active ?? 1, data.category ?? 'gao', data.original_price ?? 0,
+          data.points_per_unit ?? null, data.is_reward ?? 0,
+        ).lastInsertRowid;
+      // Nhóm gạo (bộ lọc trang chủ): một sản phẩm thuộc được nhiều nhóm.
+      if (Array.isArray(req.body?.group_ids)) setProductGroups(id, req.body.group_ids);
+      return id;
+    })();
+    const product = { ...db.prepare('SELECT * FROM products WHERE id = ?').get(productId), group_ids: groupIdsOf(productId) };
     writeAdminAudit(req, {
       action: 'create', entityType: 'product', entityId: product.id, after: product,
     });
@@ -375,19 +500,18 @@ router.put('/products/:id', (req, res, next) => {
     if (!before) throw new HttpError(404, 'Không tìm thấy loại gạo.');
     const data = readProductInput(req.body, { partial: true });
     const fields = Object.keys(data);
-    if (!fields.length) throw new HttpError(400, 'Không có thông tin nào để cập nhật.');
+    const groupIds = Array.isArray(req.body?.group_ids) ? req.body.group_ids : null;
+    if (!fields.length && !groupIds) throw new HttpError(400, 'Không có thông tin nào để cập nhật.');
     assertSalePrice({ ...before, ...data });
 
-    const info = db
-      .prepare(
-        `UPDATE products SET ${fields.map((f) => `${f} = ?`).join(', ')} WHERE id = ?`
-      )
-      .run(...fields.map((f) => data[f]), productId);
-    if (!info.changes) {
-      const exists = db.prepare('SELECT id FROM products WHERE id = ?').get(productId);
-      if (!exists) throw new HttpError(404, 'Không tìm thấy loại gạo.');
-    }
-    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
+    db.transaction(() => {
+      if (fields.length) {
+        db.prepare(`UPDATE products SET ${fields.map((f) => `${f} = ?`).join(', ')} WHERE id = ?`)
+          .run(...fields.map((f) => data[f]), productId);
+      }
+      if (groupIds) setProductGroups(productId, groupIds);
+    })();
+    const product = { ...db.prepare('SELECT * FROM products WHERE id = ?').get(productId), group_ids: groupIdsOf(productId) };
     writeAdminAudit(req, {
       action: 'update', entityType: 'product', entityId: productId, before, after: product,
     });
@@ -437,6 +561,7 @@ router.delete('/products/:id/permanent', (req, res, next) => {
         (SELECT COUNT(*) FROM retail_invoice_items WHERE product_id = ?) AS n
     `).get(productId, productId).n;
 
+      db.prepare('DELETE FROM product_group_items WHERE product_id = ?').run(productId);
       const info = db.prepare('DELETE FROM products WHERE id = ?').run(productId);
       if (!info.changes) throw new HttpError(404, 'Không tìm thấy loại gạo.');
       return { before, sold };

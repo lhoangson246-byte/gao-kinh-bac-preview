@@ -42,10 +42,9 @@ export const RESTAURANT_MIN_KG = 25;
  * hàng không phải gắn tay: "giảm giá" khi giá gốc cao hơn giá bán, "nhà hàng"
  * khi là gạo đóng bao từ 25kg. Riêng "thực phẩm khô" dựa vào nhóm hàng.
  */
+// Bộ lọc tự tính (không lưu thành nhóm). Các nhóm còn lại do cửa hàng tự tạo: product_groups.
 export const CATALOG_GROUPS = {
   'giam-gia': 'original_price > price AND price > 0',
-  'nha-hang': `category = 'gao' AND weight_kg >= ${RESTAURANT_MIN_KG}`,
-  'do-kho': "category = 'do-kho'",
 };
 export const CATALOG_GROUP_CODES = Object.keys(CATALOG_GROUPS);
 

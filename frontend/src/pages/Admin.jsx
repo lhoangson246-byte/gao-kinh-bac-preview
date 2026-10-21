@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom';
 const ImagePicker = lazy(() => import('../components/ImagePicker.jsx'));
 const BannerSettings = lazy(() => import('../components/BannerSettings.jsx'));
+const GroupManager = lazy(() => import('../components/GroupManager.jsx'));
 import OrderAlerts from '../components/OrderAlerts.jsx';
 import { api, salePercent, PRODUCT_CATEGORIES, formatDateTime, formatVND, pointsForLines, mapLink, STATUS_LABEL, DELIVERY_SLOT_LABEL, deliveryDateLabel } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -34,6 +35,7 @@ const EMPTY = {
   stock: '', description: '', image_url: '',
   // Tích điểm: tắt điểm riêng = theo tiền (1.000đ = 1 điểm); bật = số điểm cố định mỗi túi/bao.
   points_custom: false, points_per_unit: '', is_reward: false,
+  group_ids: [],
 };
 const FILTERS = [
   ['all', 'Tất cả'], ['pending', 'Chờ xác nhận'], ['confirmed', 'Đã xác nhận'],
@@ -57,6 +59,7 @@ export default function Admin() {
   const productsLoaded = useRef(false);
   const [products, setProducts] = useState([]);
   const [form, setForm] = useState(EMPTY);
+  const [groups, setGroups] = useState([]);   // nhóm gạo (bộ lọc trang chủ)
   const [editingId, setEditingId] = useState(null);
   const [formErrors, setFormErrors] = useState({});
   const [showForm, setShowForm] = useState(false);
@@ -75,7 +78,10 @@ export default function Admin() {
     try {
       const [statsResult, ordersResult, productsResult] = await Promise.all([
         api.adminStats(), api.adminOrders(filter, { offset }),
-        refreshProducts || !productsLoaded.current ? api.adminProducts() : Promise.resolve(null),
+        refreshProducts || !productsLoaded.current
+          ? Promise.all([api.adminProducts(), api.adminGroups()])
+            .then(([productList, groupList]) => ({ ...productList, groups: groupList.groups }))
+          : Promise.resolve(null),
       ]);
       if (id !== requestId.current) return;
       if (!ordersResult.orders.length && offset > 0) {
@@ -88,6 +94,7 @@ export default function Admin() {
       setOrderTotal(ordersResult.total);
       if (productsResult) {
         setProducts(productsResult.products);
+        setGroups(productsResult.groups || []);
         productsLoaded.current = true;
       }
     } catch (err) {
@@ -226,6 +233,7 @@ export default function Admin() {
       points_custom: product.points_per_unit != null,
       points_per_unit: product.points_per_unit ?? '',
       is_reward: !!product.is_reward,
+      group_ids: product.group_ids || [],
     });
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -467,6 +475,8 @@ export default function Admin() {
                 </section>
               ) : (
                 <section>
+                  <GroupManager groups={groups} products={products} notify={notify}
+                                onChanged={() => reload({ refreshProducts: true })} />
                   <BannerSettings notify={notify} />
                   {showForm && (
                     <div className="product-form-wrap">
@@ -520,6 +530,25 @@ export default function Admin() {
                             {formErrors.stock && <small className="err">{formErrors.stock}</small>}
                           </label>
                         </div>
+                        {groups.length > 0 && (
+                          <fieldset className="points-settings group-settings">
+                            <legend>Thuộc nhóm gạo (chọn được nhiều nhóm)</legend>
+                            <div className="group-checks">
+                              {groups.map((g) => (
+                                <label key={g.id} className="checkbox-label">
+                                  <input type="checkbox" checked={form.group_ids.includes(g.id)}
+                                         onChange={(e) => setForm((current) => ({
+                                           ...current,
+                                           group_ids: e.target.checked
+                                             ? [...current.group_ids, g.id]
+                                             : current.group_ids.filter((x) => x !== g.id),
+                                         }))} />
+                                  {g.name}{g.is_active ? '' : <small className="muted"> (đang ẩn)</small>}
+                                </label>
+                              ))}
+                            </div>
+                          </fieldset>
+                        )}
                         <fieldset className="points-settings">
                           <legend>Tích điểm cho loại này</legend>
                           <div className="points-toggle" role="group" aria-label="Cách cộng điểm">
@@ -601,8 +630,11 @@ export default function Admin() {
                               <span className="margin-tag"> · lãi {formatVND(product.price - product.cost_price)}</span>
                             )}
                           </p>
-                          {(salePercent(product) > 0 || product.category === 'do-kho' || product.points_per_unit != null || !!product.is_reward) && (
+                          {(salePercent(product) > 0 || product.category === 'do-kho' || product.points_per_unit != null || !!product.is_reward || product.group_ids?.length > 0) && (
                             <p className="product-tags">
+                              {groups.filter((g) => product.group_ids?.includes(g.id)).map((g) => (
+                                <span key={g.id} className="admin-group-tag">{g.name}</span>
+                              ))}
                               {product.points_per_unit != null && (
                                 <span className="admin-points-tag">
                                   {product.points_per_unit > 0 ? `★ ${product.points_per_unit} điểm/${product.unit}` : 'Không cộng điểm'}

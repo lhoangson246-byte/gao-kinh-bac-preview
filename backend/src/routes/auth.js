@@ -7,7 +7,7 @@ import { signToken, requireAuth } from '../middleware/auth.js';
 import { LIMITS } from '../constants.js';
 import { HttpError, cleanText, isEmail, isPhone, normalizePhone } from '../validate.js';
 import { writeLoginHistory } from '../audit.js';
-import { deliverSession, COOKIE_NAME, COOKIE_OPTIONS, SESSION_MAX_SECONDS } from '../security.js';
+import { deliverSession, COOKIE_NAME, COOKIE_OPTIONS } from '../security.js';
 
 const router = Router();
 router.use(validateRoutes('auth'));
@@ -134,16 +134,13 @@ router.post('/login', async (req, res, next) => {
 });
 
 /**
- * POST /api/auth/refresh — gia hạn phiên cho trang đang mở (khoảng 15 phút/lần).
- * Cấp token mới 1 giờ, giữ nguyên lúc đăng nhập; quá 16 giờ kể từ khi đăng nhập thì từ chối.
+ * POST /api/auth/refresh — gia hạn phiên thêm 30 ngày mỗi lần mở ứng dụng. Không giới hạn tổng
+ * thời gian: người dùng chỉ bị đăng xuất khi tự bấm Đăng xuất, hoặc 30 ngày liền không mở.
  * Khoá tài khoản, đổi mật khẩu hay đăng xuất (session_version) vẫn làm token cũ mất hiệu lực ngay.
  */
-router.post('/refresh', requireAuth, (req, res) => {
-  if (Math.floor(Date.now() / 1000) - req.authTime > SESSION_MAX_SECONDS) {
-    return res.status(401).json({ message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.' });
-  }
-  return deliverSession(req, res, req.user, signToken(req.user, req.authTime));
-});
+router.post('/refresh', requireAuth, (req, res) => (
+  deliverSession(req, res, req.user, signToken(req.user, req.authTime))
+));
 
 /** GET /api/auth/me — Thông tin tài khoản */
 router.get('/me', requireAuth, (req, res) => res.json({ user: req.user }));

@@ -122,6 +122,13 @@ export const api = {
   adminSetOrderStatus: (id, status) =>
     request(`/admin/orders/${id}/status`, { method: 'PATCH', body: { status }, auth: true }),
   adminProducts: () => request('/admin/products', { auth: true }),
+  /** Nhóm gạo trên bộ lọc trang chủ (công khai). */
+  productGroups: () => request('/products/groups'),
+  adminGroups: () => request('/admin/groups', { auth: true }),
+  adminCreateGroup: (name) => request('/admin/groups', { method: 'POST', body: { name }, auth: true }),
+  adminUpdateGroup: (id, payload) => request(`/admin/groups/${id}`, { method: 'PUT', body: payload, auth: true }),
+  adminReorderGroups: (ids) => request('/admin/groups/reorder', { method: 'POST', body: { ids }, auth: true }),
+  adminDeleteGroup: (id) => request(`/admin/groups/${id}`, { method: 'DELETE', auth: true }),
   adminCreateProduct: (payload) => request('/admin/products', { method: 'POST', body: payload, auth: true }),
   adminUpdateProduct: (id, payload) =>
     request(`/admin/products/${id}`, { method: 'PUT', body: payload, auth: true }),

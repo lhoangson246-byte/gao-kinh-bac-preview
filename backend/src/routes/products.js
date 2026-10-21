@@ -3,6 +3,7 @@ import { Router } from 'express';
 import db from '../db.js';
 import { LIMITS, CATALOG_GROUPS } from '../constants.js';
 import { HttpError, cleanText, toInteger } from '../validate.js';
+import { listGroups } from '../product-groups.js';
 
 const router = Router();
 router.use(validateRoutes('products'));
@@ -15,7 +16,8 @@ const escapeLike = (text) => text.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 
 /**
  * GET /api/products — Danh sách sản phẩm đang bán.
- * ?q= tìm theo tên, ?in_stock=1 chỉ hàng còn, ?group= giam-gia | nha-hang | do-kho.
+ * ?q= tìm theo tên, ?in_stock=1 chỉ hàng còn, ?group= giam-gia (tự tính) hoặc mã nhóm gạo
+ * cửa hàng tự tạo (nha-hang, co-may, …). Mã nhóm không có hoặc đang ẩn thì không ra sản phẩm nào.
  */
 router.get('/', (req, res) => {
   const keyword = cleanText(req.query.q, LIMITS.name) || '';
@@ -24,7 +26,13 @@ router.get('/', (req, res) => {
   // Điều kiện lấy từ danh sách cố định trong constants.js, không ghép chữ khách gửi.
   // Object.hasOwn để "constructor" hay "__proto__" không lọt qua như một nhóm.
   const group = String(req.query.group || '');
-  const groupClause = Object.hasOwn(CATALOG_GROUPS, group) ? `AND ${CATALOG_GROUPS[group]}` : '';
+  const builtIn = Object.hasOwn(CATALOG_GROUPS, group);
+  const groupClause = builtIn ? `AND ${CATALOG_GROUPS[group]}`
+    : group ? `AND id IN (SELECT gi.product_id FROM product_group_items gi
+                          JOIN product_groups g ON g.id = gi.group_id
+                          WHERE g.slug = ? AND g.is_active = 1)`
+    : '';
+  const groupParams = group && !builtIn ? [group] : [];
 
   const rows = db
     .prepare(
@@ -38,11 +46,19 @@ router.get('/', (req, res) => {
        -- Còn hàng lên trước, rồi trong đó hàng đang giảm giá lên đầu tiên.
        ORDER BY stock > 0 DESC, (original_price > price AND price > 0) DESC, id`
     )
-    .all(pattern, pattern, pattern);
+    .all(...groupParams, pattern, pattern, pattern);
 
   // Chỉ danh mục công khai: đơn hàng vẫn tự đọc lại giá và tồn kho trong transaction.
   res.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=300');
   res.json({ products: rows });
+});
+
+/** GET /api/products/groups — các nhóm gạo đang hiện trên bộ lọc, theo thứ tự cửa hàng xếp. */
+router.get('/groups', (req, res) => {
+  const groups = listGroups({ publicOnly: true })
+    .map(({ slug, name, product_count: count }) => ({ slug, name, count }));
+  res.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=300');
+  res.json({ groups });
 });
 
 /** GET /api/products/:id — Chi tiết */

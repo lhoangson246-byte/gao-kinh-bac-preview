@@ -753,6 +753,54 @@ for (const table of ['order_items', 'retail_invoice_items']) {
   }
 }
 
+// Nhóm gạo do cửa hàng tự tạo (21/10/2026): một sản phẩm thuộc được nhiều nhóm.
+db.exec(`
+CREATE TABLE IF NOT EXISTS product_groups (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug       TEXT NOT NULL UNIQUE,
+  name       TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  is_active  INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS product_group_items (
+  group_id   INTEGER NOT NULL REFERENCES product_groups(id) ON DELETE CASCADE,
+  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  PRIMARY KEY (group_id, product_id)
+);
+CREATE INDEX IF NOT EXISTS idx_product_group_items_product ON product_group_items(product_id);
+`);
+
+// Tạo sẵn các nhóm cửa hàng nêu ví dụ và gắn sản phẩm theo tên / quy cách. Chạy một lần, chỉ khi
+// chưa có nhóm nào; sau đó cửa hàng tự sửa trong trang quản trị. Hai nhóm cũ "nha-hang" và "do-kho"
+// giữ đúng mã để đường dẫn bộ lọc cũ vẫn dùng được.
+const seedGroups = '2026-10-21-seed-product-groups';
+if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(seedGroups)) {
+  db.transaction(() => {
+    if (!db.prepare('SELECT 1 FROM product_groups LIMIT 1').get()) {
+      const plan = [
+        ['nha-hang', 'Gạo nhà hàng', "category = 'gao' AND (weight_kg >= 25 OR name LIKE '%nhà hàng%')"],
+        ['tui-5kg', 'Gạo túi bóng 5kg', "category = 'gao' AND weight_kg = 5"],
+        ['co-may', 'Gạo Cỏ May', "name LIKE '%cỏ may%'"],
+        ['thom-thai', 'Gạo thơm Thái', "category = 'gao' AND name LIKE '%thái%'"],
+        ['di-le', 'Gạo đi lễ', "category = 'gao' AND (name LIKE '%lứt%' OR name LIKE '%nếp%' OR weight_kg = 2)"],
+        ['dinh-duong', 'Gạo dinh dưỡng', "name LIKE '%kê%' OR name LIKE '%đường huyết%'"],
+        ['do-kho', 'Thực phẩm khô', "category = 'do-kho'"],
+      ];
+      const insertGroup = db.prepare('INSERT INTO product_groups (slug, name, sort_order) VALUES (?, ?, ?)');
+      plan.forEach(([slug, name, rule], index) => {
+        const groupId = insertGroup.run(slug, name, index + 1).lastInsertRowid;
+        // Điều kiện là chuỗi cố định trong mã nguồn, không ghép dữ liệu người dùng.
+        const added = db.prepare(`INSERT INTO product_group_items (group_id, product_id) SELECT ?, id FROM products WHERE ${rule}`)
+          .run(groupId).changes;
+        console.log(`   · Nhóm "${name}": ${added} sản phẩm`);
+      });
+      console.log('✅ Đã tạo các nhóm gạo mặc định.');
+    }
+    db.prepare('INSERT INTO app_migrations (name) VALUES (?)').run(seedGroups);
+  })();
+}
+
 // 21/10/2026: bao "Gạo Cỏ May ST25 - 25KG" bị nhập khối lượng 50kg, nên mua 1 bao được tính 50kg
 // (tặng 3kg nếp thay vì 1kg, và tính sai mốc 50kg giảm giá tại quầy). Chỉ sửa đúng trường hợp tên
 // ghi 25kg mà khối lượng đang là 50; chạy một lần.

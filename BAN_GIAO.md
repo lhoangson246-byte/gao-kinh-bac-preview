@@ -935,6 +935,58 @@ Mã gắn đơn vào tài khoản là chuỗi ngẫu nhiên chỉ trình duyệt
 lưu mã băm, mã dùng một lần và hết hạn sau 1 ngày.
 
 
+## Duy trì đăng nhập và nhóm gạo tự tạo (21/10/2026)
+
+### Duy trì đăng nhập cho tới khi bấm Đăng xuất
+
+Trước đây một lần đăng nhập chỉ dùng tối đa 16 giờ. Giờ đăng nhập được **giữ cho tới khi tự bấm
+Đăng xuất**, kể cả khi đóng app/trình duyệt rồi mở lại:
+- Mỗi phiên sống **30 ngày** và được gia hạn thêm 30 ngày **mỗi lần mở ứng dụng** (trang để mở
+  lâu thì gia hạn 6 giờ một lần). Chỉ khi **30 ngày liền không mở** mới phải đăng nhập lại.
+- **Bấm Đăng xuất** thì phiên mất hiệu lực ngay **trên mọi máy** của tài khoản đó. Đổi mật khẩu hoặc
+  bị khoá tài khoản cũng vậy.
+- Cookie phiên vẫn là HttpOnly, Secure, SameSite=Lax như trước, chỉ đổi thời hạn.
+
+Đánh đổi về an toàn: máy đang đăng nhập admin mà bị người khác dùng thì họ vào được trang quản
+trị. Trên máy dùng chung, nên bấm Đăng xuất khi xong việc. Mất máy thì đăng nhập ở máy khác rồi
+đổi mật khẩu admin để khoá mọi phiên cũ.
+
+### Nhóm gạo do cửa hàng tự tạo (bộ lọc trang chủ)
+
+Trang chủ có hàng **"Chọn nhóm gạo"** nằm **trước** ô tìm kiếm và các bộ lọc khác, chip to kèm
+số sản phẩm: Tất cả mặt hàng · các nhóm cửa hàng tạo · Đang giảm giá. **Một sản phẩm thuộc được
+nhiều nhóm**, ví dụ "Gạo Cỏ May bao 25kg" vừa ở *Gạo nhà hàng* vừa ở *Gạo Cỏ May*.
+
+Lần triển khai này tự tạo 7 nhóm và gắn sản phẩm theo tên/quy cách. **Cửa hàng nên xem lại**:
+
+| Nhóm | Gắn tự động theo | Sản phẩm trên trang thật lúc triển khai |
+|---|---|---|
+| Gạo nhà hàng | bao từ 25kg, hoặc tên có "nhà hàng" | Gạo Quê 25kg, Gạo Cỏ May 25kg, Gạo Lài Miên 25kg, Cỏ May ST25 25KG, ST25 Cỏ May 50kg, Gạo nếp cho nhà hàng |
+| Gạo túi bóng 5kg | gạo túi 5kg | 8 loại túi 5kg |
+| Gạo Cỏ May | tên có "Cỏ May" | 8 loại |
+| Gạo thơm Thái | tên có "Thái" | Thái thơm đỏ, Thơm Thái Vàng, Thái Hồng, Thái, Thái cơm dẻo, Thơm Thái |
+| Gạo đi lễ | gạo lứt, gạo nếp, gạo túi 2kg | Gạo lứt Cỏ May 2kg, Gạo lứt 1kg, 2 loại nếp, Gạo ST 2kg |
+| Gạo dinh dưỡng | tên có "kê" hoặc "đường huyết" | Kê vàng (chưa có gạo đường huyết thấp) |
+| Thực phẩm khô | nhóm hàng "Thực phẩm khô" | Kê vàng, Mì Chũ |
+
+**Quản trị → Sản phẩm → khung "Nhóm gạo (bộ lọc trang chủ)"** (đầu tab):
+- **+ Thêm nhóm**; **↑ ↓** xếp thứ tự hiện trên trang chủ; **Đổi tên** (đường dẫn bộ lọc giữ nguyên);
+  **Ẩn/Hiện** khỏi trang chủ; **Xoá** (sản phẩm vẫn còn, chỉ bỏ khỏi nhóm).
+- **Chọn sản phẩm**: tick các sản phẩm thuộc nhóm rồi Lưu.
+- Hoặc trong **form Sửa sản phẩm**, mục "Thuộc nhóm gạo" tick các nhóm của sản phẩm đó.
+- Nhóm chưa có sản phẩm đang bán thì khách không thấy.
+- Tên nhóm là dữ liệu cửa hàng nên hiện nguyên tiếng Việt ở cả ba ngôn ngữ (giống tên sản phẩm).
+
+**Khác với trước**: "Gạo nhà hàng · bao 25kg" và "Thực phẩm khô" trước đây tự tính. Giờ là nhóm thường:
+sản phẩm mới thêm phải tự tick nhóm trong form. Chỉ "Đang giảm giá" vẫn tự tính theo giá gốc.
+Ô "Nhóm hàng" (Gạo / Thực phẩm khô) trong form sản phẩm vẫn giữ, vì khuyến mãi theo kg chỉ tính gạo.
+
+**Kỹ thuật**: bảng `product_groups` (slug, name, sort_order, is_active) và bảng nối
+`product_group_items`; migration `schema:2026-10-21-v2` chỉ thêm bảng và gắn nhóm lần đầu.
+API: `GET /api/products/groups`, `GET /api/products?group=<mã>`, quản trị
+`/api/admin/groups` (GET, POST, PUT /:id, POST /reorder, DELETE /:id), `group_ids` khi tạo/sửa sản phẩm.
+
+
 ## Khuyến mãi 20/10: mua gạo từ 15kg tặng gạo nếp hoặc gạo lứt (16/10, sửa 21/10/2026)
 
 **Thời gian**: 19, 20 và 21/10/2026 (theo giờ Việt Nam, trọn 3 ngày).

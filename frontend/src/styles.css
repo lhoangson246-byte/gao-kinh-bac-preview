@@ -1290,3 +1290,41 @@ label b { color: var(--danger); }
 .quick-page .promo-choice-options button { min-height: 56px; font-size: 1rem; }
 .promo-choice-options.pos { margin-top: 6px; }
 .promo-choice-options.pos button { min-height: 36px; font-size: .78rem; }
+
+/* --- Nhóm gạo: hàng bộ lọc nổi bật ở trang chủ --- */
+.group-strip { margin: 14px 0 12px; }
+.group-strip-title { margin: 0 0 8px; color: var(--green-950); font-size: .9rem; font-weight: 800; }
+.group-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.group-chips button { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 14px; border: 1.5px solid #c9d9cd; border-radius: 99px; background: var(--white); color: var(--green-950); font-size: .86rem; font-weight: 800; cursor: pointer; }
+.group-chips button span { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 99px; background: var(--green-100); color: var(--green-800); font-size: .7rem; }
+.group-chips button.active { border-color: var(--green-900); background: var(--green-900); color: #fff; }
+.group-chips button.active span { background: rgba(255, 255, 255, .2); color: #fff; }
+.group-chips button.sale-chip { border-color: #e7b6ae; color: var(--danger); }
+.group-chips button.sale-chip.active { border-color: var(--danger); background: var(--danger); color: #fff; }
+.group-chips button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.group-strip + .catalog-controls { margin-top: 0; border-top: 1px solid var(--border); border-radius: 15px; }
+@media (max-width: 560px) {
+  .group-chips { gap: 6px; }
+  .group-chips button { min-height: 40px; padding: 6px 11px; font-size: .8rem; }
+}
+
+/* --- Quản lý nhóm gạo trong trang quản trị --- */
+.group-manager { margin-bottom: 22px; }
+.group-list { display: grid; gap: 8px; margin: 0 0 12px; padding: 0; list-style: none; }
+.group-list > li { padding: 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--white); }
+.group-list > li.hidden-group { background: var(--cream); opacity: .8; }
+.group-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.group-name { display: flex; flex-direction: column; flex: 1; min-width: 160px; }
+.group-name small { color: var(--muted); font-size: .74rem; }
+.group-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.group-actions .btn, .group-rename .btn { min-height: 36px; padding: 5px 11px; font-size: .78rem; }
+.group-rename { display: flex; flex: 1; gap: 6px; min-width: 220px; }
+.group-rename .input { min-height: 38px; }
+.group-pick { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.group-pick-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 4px 14px; max-height: 320px; margin: 8px 0; overflow-y: auto; }
+.group-pick-list small, .group-checks small { color: var(--muted); font-weight: 450; }
+.group-add { display: flex; gap: 8px; }
+.group-add .input { flex: 1; }
+.group-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px 12px; }
+.admin-group-tag { padding: 2px 8px; border-radius: 99px; background: var(--green-100); color: var(--green-800); font-size: .68rem; font-weight: 750; }
+.group-manager .banner-settings-head .btn { flex: 0 0 auto; white-space: nowrap; }

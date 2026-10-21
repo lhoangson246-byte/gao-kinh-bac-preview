@@ -46,6 +46,7 @@ const product = {
   original_price: integer(0, LIMITS.price).or(z.literal('')).nullable().optional(),
   points_per_unit: integer(0, 10_000).or(z.literal('')).nullable().optional(),
   is_reward: flag.optional(),
+  group_ids: z.array(id).max(30).optional(),
 };
 const day = text(10).regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => {
   const d = new Date(`${v}T00:00:00Z`);
@@ -68,8 +69,10 @@ add('auth', 'POST', /^\/refresh\/?$/);
 add('auth', 'PUT', /^\/password\/?$/, obj({ current_password: loginPassword, password: newPassword }));
 add('products', 'GET', /^\/?$/, empty, obj({
   q: text(LIMITS.name).optional(), in_stock: z.enum(['0', '1']).optional(),
-  group: z.enum(CATALOG_GROUP_CODES).optional(),
+  // Bộ lọc tự tính (giam-gia) hoặc mã nhóm cửa hàng tạo (chữ thường, số, gạch nối).
+  group: text(40).regex(/^[a-z0-9-]+$/).optional(),
 }));
+add('products', 'GET', /^\/groups\/?$/);
 add('products', 'GET', /^\/[^/]+\/?$/);
 add('addresses', 'GET', /^\/?$/);
 add('addresses', 'POST', /^\/?$/, obj(address));
@@ -109,6 +112,13 @@ add('admin', 'GET', /^\/orders\/?$/, empty, obj({ ...page, status: z.enum(ORDER_
 add('admin', 'PATCH', /^\/orders\/[^/]+\/status\/?$/, obj({ status: z.enum(ORDER_STATUSES) }));
 add('admin', 'GET', /^\/(products|stats)\/?$/);
 add('admin', 'GET', /^\/orders\/latest\/?$/);
+add('admin', 'GET', /^\/groups\/?$/);
+add('admin', 'POST', /^\/groups\/?$/, obj({ name: text(60) }));
+add('admin', 'POST', /^\/groups\/reorder\/?$/, obj({ ids: z.array(id).min(1).max(30) }));
+add('admin', 'PUT', /^\/groups\/[^/]+\/?$/, obj({
+  name: text(60).optional(), is_active: flag.optional(), product_ids: z.array(id).max(500).optional(),
+}));
+add('admin', 'DELETE', /^\/groups\/[^/]+\/?$/);
 const bannerUrl = text(LIMITS.imageUrl).refine((v) => !v || cleanImageUrl(v) !== null);
 add('admin', 'PUT', /^\/settings\/storefront\/?$/, obj({
   banner_images: z.array(bannerUrl).max(6).optional(),

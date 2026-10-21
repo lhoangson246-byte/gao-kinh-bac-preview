@@ -32,20 +32,21 @@ export function AuthProvider({ children }) {
   }, []);
 
   /*
-   * Giữ phiên khi trang còn mở: gia hạn mỗi 15 phút, và ngay khi quay lại tab / máy thức dậy /
-   * có mạng lại nếu đã quá 10 phút từ lần gia hạn trước. Mỗi token chỉ sống 1 giờ.
+   * Duy trì đăng nhập cho tới khi bấm Đăng xuất: mỗi lần mở ứng dụng thì gia hạn phiên thêm 30
+   * ngày, trang để mở lâu thì gia hạn 6 giờ/lần, quay lại tab / máy thức dậy / có mạng lại thì
+   * gia hạn nếu đã quá 1 giờ từ lần trước.
    */
   useEffect(() => {
     if (!user) return undefined;
-    lastRefresh.current = Date.now();
     const refresh = () => {
       lastRefresh.current = Date.now();
       api.refreshSession().catch(() => { /* 401 đã được xử lý qua sự kiện hết phiên */ });
     };
     const refreshIfStale = () => {
-      if (!document.hidden && Date.now() - lastRefresh.current > 10 * 60_000) refresh();
+      if (!document.hidden && Date.now() - lastRefresh.current > 60 * 60_000) refresh();
     };
-    const timer = window.setInterval(refresh, 15 * 60_000);
+    refresh();
+    const timer = window.setInterval(refresh, 6 * 60 * 60_000);
     document.addEventListener('visibilitychange', refreshIfStale);
     window.addEventListener('focus', refreshIfStale);
     window.addEventListener('online', refreshIfStale);

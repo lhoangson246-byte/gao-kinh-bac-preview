@@ -7,13 +7,15 @@ if (configuredSecret && (Buffer.byteLength(configuredSecret) < 32 || /gao_nha_mi
 }
 if (production && !configuredSecret) throw new Error('JWT_SECRET is required in production.');
 export const JWT_SECRET = configuredSecret || randomBytes(48).toString('hex');
-export const JWT_OPTIONS = { algorithm: 'HS256', issuer: 'gao-shop', audience: 'gao-shop-api', expiresIn: '1h' };
 /**
- * Mỗi token chỉ sống 1 giờ, nhưng trang đang mở tự gia hạn (POST /api/auth/refresh) nên không bị
- * đăng xuất giữa chừng. Gia hạn được tối đa 16 giờ kể từ lúc đăng nhập (đủ một ngày bán hàng),
- * sau đó phải đăng nhập lại.
+ * Duy trì đăng nhập cho tới khi người dùng tự bấm Đăng xuất (theo yêu cầu cửa hàng 21/10/2026).
+ * Mỗi phiên sống 30 ngày và được gia hạn mỗi lần mở ứng dụng (POST /api/auth/refresh), nên chỉ
+ * bị đăng xuất nếu 30 ngày liền không mở. Đăng xuất, đổi mật khẩu hay khoá tài khoản vẫn làm mọi
+ * phiên mất hiệu lực ngay (session_version).
  */
-export const SESSION_MAX_SECONDS = 16 * 60 * 60;
+export const SESSION_TTL = '30d';
+export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+export const JWT_OPTIONS = { algorithm: 'HS256', issuer: 'gao-shop', audience: 'gao-shop-api', expiresIn: SESSION_TTL };
 export const COOKIE_NAME = production ? '__Host-gao_session' : 'gao_session';
 export const COOKIE_OPTIONS = {
   httpOnly: true, secure: production, path: '/',
@@ -30,7 +32,7 @@ export function sessionCookie(req) {
 
 export function deliverSession(req, res, user, token, status = 200) {
   if (req.get('x-session-mode') === 'cookie') {
-    res.cookie(COOKIE_NAME, token, { ...COOKIE_OPTIONS, maxAge: 60 * 60 * 1000 });
+    res.cookie(COOKIE_NAME, token, { ...COOKIE_OPTIONS, maxAge: SESSION_TTL_MS });
     return res.status(status).json({ user });
   }
   return res.status(status).json({ user, token });
