@@ -16,6 +16,8 @@ const Orders = lazy(() => import('./pages/Orders.jsx'));
 const Profile = lazy(() => import('./pages/Profile.jsx'));
 const Admin = lazy(() => import('./pages/Admin.jsx'));
 const Retail = lazy(() => import('./pages/Retail.jsx'));
+const TrackOrder = lazy(() => import('./pages/TrackOrder.jsx'));
+const About = lazy(() => import('./pages/About.jsx'));
 import NotFound from './pages/NotFound.jsx';
 
 // Khoá dịch cho tiêu đề tab của từng trang khách; trang quản trị giữ tiếng Việt.
@@ -28,6 +30,9 @@ const PAGE_TITLES = {
   '/tai-khoan': 'title.account',
   '/dang-nhap': 'title.login',
   '/dang-ky': 'title.register',
+  '/tra-cuu-don': 'nav.track',
+  '/ve-chung-toi': 'nav.about',
+  '/ve-chung-toi/danh-gia': 'about.tabReviews',
 };
 const ADMIN_TITLES = {
   '/quan-tri': 'Quản trị cửa hàng',
@@ -97,6 +102,9 @@ export default function App() {
           <Route path="/dang-ky" element={<Register />} />
           <Route path="/gio-hang" element={<Cart />} />
           <Route path="/dat-nhanh" element={<QuickCheckout />} />
+          <Route path="/tra-cuu-don" element={<TrackOrder />} />
+          <Route path="/ve-chung-toi" element={<About />} />
+          <Route path="/ve-chung-toi/danh-gia" element={<About />} />
           <Route
             path="/dat-hang"
             element={<ProtectedRoute><Checkout /></ProtectedRoute>}

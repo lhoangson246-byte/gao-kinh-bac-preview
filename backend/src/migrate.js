@@ -860,5 +860,42 @@ CREATE TABLE IF NOT EXISTS admin_push_subscriptions (
 CREATE INDEX IF NOT EXISTS idx_admin_push_subscriptions_user ON admin_push_subscriptions(user_id);
 `);
 
+// 24/10/2026: giờ của từng bước xử lý đơn, để khách tra cứu tiến độ giao bằng SĐT + mã đơn.
+{
+  const columns = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
+  for (const column of ['confirmed_at', 'shipping_at', 'completed_at', 'cancelled_at']) {
+    if (!columns.includes(column)) {
+      db.exec(`ALTER TABLE orders ADD COLUMN ${column} TEXT`);
+      console.log(`✅ Đã thêm cột ${column} vào bảng orders.`);
+    }
+  }
+}
+
+// Trang "Về chúng tôi": giấy tờ (an toàn thực phẩm, công bố sản phẩm…) và đánh giá dịch vụ giao
+// hàng cửa hàng gom từ nhóm Zalo. Cả hai do quản trị viên nhập; khách chỉ xem.
+db.exec(`
+CREATE TABLE IF NOT EXISTS about_documents (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  title       TEXT NOT NULL,
+  category    TEXT NOT NULL DEFAULT 'khac' CHECK (category IN ('attp', 'cong-bo', 'khac')),
+  image_url   TEXT NOT NULL,
+  note        TEXT,
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  is_visible  INTEGER NOT NULL DEFAULT 1 CHECK (is_visible IN (0, 1)),
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS service_reviews (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_name TEXT,
+  content       TEXT NOT NULL,
+  score         INTEGER CHECK (score IS NULL OR (score BETWEEN 1 AND 6)),
+  review_date   TEXT,
+  is_visible    INTEGER NOT NULL DEFAULT 1 CHECK (is_visible IN (0, 1)),
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`);
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

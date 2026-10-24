@@ -10,6 +10,7 @@ const RevenueReport = lazy(() => import('../components/RevenueReport.jsx'));
 const CustomerManager = lazy(() => import('../components/CustomerManager.jsx'));
 const StockReceive = lazy(() => import('../components/StockReceive.jsx'));
 const ActivityLog = lazy(() => import('../components/ActivityLog.jsx'));
+const AboutManager = lazy(() => import('../components/AboutManager.jsx'));
 import ProductImage from '../components/ProductImage.jsx';
 import OrdersExportButton from '../components/OrdersExportButton.jsx';
 import PageLoadBoundary from '../components/PageLoadBoundary.jsx';
@@ -363,6 +364,9 @@ export default function Admin() {
           <button className={tab === 'activity' ? 'active' : ''} onClick={() => setTab('activity')}>
             <span aria-hidden="true">⌁</span><span>Nhật ký<small>Thay đổi và đăng nhập</small></span>
           </button>
+          <button className={tab === 'about' ? 'active' : ''} onClick={() => setTab('about')}>
+            <span aria-hidden="true">✦</span><span>Về chúng tôi<small>Giấy tờ và đánh giá</small></span>
+          </button>
           <Link to="/quan-tri/ban-hang" className="admin-sidebar-link">
             <span aria-hidden="true">◧</span>
             <span>Bán hàng tại quầy<small>Hoá đơn và tích điểm</small></span>
@@ -375,7 +379,7 @@ export default function Admin() {
             <PageLoadBoundary key={tab}>
             <Suspense fallback={<div className="loading-state" role="status"><span></span>Đang mở chức năng…</div>}>
             <>
-              {!['revenue', 'customers', 'activity'].includes(tab) && (
+              {!['revenue', 'customers', 'activity', 'about'].includes(tab) && (
               <div className="admin-page-heading">
                 <div>
                   <p className="eyebrow dark"><span></span>{tab === 'orders' ? 'Công việc hôm nay' : 'Quản lý gian hàng'}</p>
@@ -390,7 +394,16 @@ export default function Admin() {
               </div>
               )}
 
-              {!['revenue', 'customers', 'activity'].includes(tab) && stats && (
+              {tab === 'about' && (
+              <div className="admin-page-heading">
+                <div>
+                  <p className="eyebrow dark"><span></span>Trang giới thiệu</p>
+                  <h1>Về chúng tôi</h1>
+                  <p>Giấy tờ an toàn thực phẩm, công bố sản phẩm và đánh giá giao hàng của khách.</p>
+                </div>
+              </div>
+              )}
+              {!['revenue', 'customers', 'activity', 'about'].includes(tab) && stats && (
                 <section className="stats" aria-label="Thống kê cửa hàng">
                   <div className="stat urgent"><span>Đơn cần xác nhận</span><strong>{pendingCount}</strong><small>Nên xử lý trước</small></div>
                   <div className="stat"><span>Tổng đơn hàng</span><strong>{stats.orders}</strong><small>Tất cả thời gian</small></div>
@@ -399,7 +412,7 @@ export default function Admin() {
                 </section>
               )}
 
-              {!['revenue', 'customers', 'activity'].includes(tab) && stats?.missingPrice > 0 && (
+              {!['revenue', 'customers', 'activity', 'about'].includes(tab) && stats?.missingPrice > 0 && (
                 <div className="alert warning" role="status">
                   <strong>{stats.missingPrice} loại gạo chưa có giá bán.</strong>{' '}
                   Khách nhìn thấy sản phẩm nhưng chưa đặt mua được.{' '}
@@ -418,6 +431,7 @@ export default function Admin() {
               {msg && <div className="toast success" role="status"><span>✓</span>{msg}</div>}
 
               {tab === 'activity' ? <ActivityLog />
+                : tab === 'about' ? <AboutManager />
                 : tab === 'revenue' ? <RevenueReport />
                 : tab === 'customers' ? <CustomerManager />
                 : tab === 'orders' ? (

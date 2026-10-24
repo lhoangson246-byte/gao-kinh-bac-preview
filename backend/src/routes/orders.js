@@ -14,6 +14,7 @@ import { promoGiftFor } from '../promotions.js';
 import { attachItems } from '../order-lists.js';
 import { loyaltyProfile, refundPoints, spendPoints } from '../loyalty.js';
 import { notifyNewOrder, siteOrigin } from '../push.js';
+import { trackOrder } from '../order-tracking.js';
 
 const router = Router();
 
@@ -282,6 +283,20 @@ router.post('/guest', validateRoutes('guest-orders'), async (req, res, next) => 
   }
 });
 
+/**
+ * POST /api/orders/track — khách tra cứu tiến độ đơn, không cần đăng nhập.
+ *  body: { phone, code }. Dùng POST để số điện thoại không nằm trong URL / nhật ký truy cập.
+ */
+router.post('/track', validateRoutes('guest-orders'), (req, res, next) => {
+  try {
+    const order = trackOrder(req.body.phone, req.body.code);
+    if (!order) throw new HttpError(404, 'Không tìm thấy đơn. Vui lòng kiểm tra lại số điện thoại và mã đơn.');
+    res.json({ order });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Mọi tuyến bên dưới cần đăng nhập.
 router.use(requireAuth);
 router.use(validateRoutes('orders'));
@@ -407,7 +422,7 @@ router.patch('/:id/cancel', requireAuth, (req, res, next) => {
       if (!order) throw new HttpError(404, 'Không tìm thấy đơn hàng.');
 
       const changed = db
-        .prepare("UPDATE orders SET status = 'cancelled' WHERE id = ? AND status = 'pending'")
+        .prepare("UPDATE orders SET status = 'cancelled', cancelled_at = datetime('now') WHERE id = ? AND status = 'pending'")
         .run(order.id).changes;
       if (!changed) {
         throw new HttpError(400, 'Chỉ có thể tự huỷ đơn đang chờ xác nhận. Vui lòng liên hệ cửa hàng.');

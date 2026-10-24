@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
+import DeliveryPromise from '../components/DeliveryPromise.jsx';
 import { api, formatDateTime, formatNumber, formatVND, DELIVERY_SLOTS, deliveryDateLabel } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 
@@ -67,6 +68,9 @@ export default function Orders() {
             <p>{t('orders.successBody')}</p>
           </div>
         </div>
+      )}
+      {justOrdered && orders.find((o) => o.code === newCode) && (
+        <DeliveryPromise order={orders.find((o) => o.code === newCode)} />
       )}
       <div className="page-heading">
         <div><p className="eyebrow dark"><span></span>{t('orders.eyebrow')}</p><h1>{t('orders.title')}</h1></div>

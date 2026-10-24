@@ -21,6 +21,7 @@
     "test:session": "node test/session-refresh.mjs",
     "test:promo": "node test/promo-2010.mjs",
     "test:push": "node test/push.mjs",
+    "test:about": "node test/about-track.mjs",
     "check:live": "node test/live-security.mjs"
   },
   "dependencies": {

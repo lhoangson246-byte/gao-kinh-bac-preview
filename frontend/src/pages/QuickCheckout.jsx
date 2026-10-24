@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
+import DeliveryPromise from '../components/DeliveryPromise.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useCart } from '../context/CartContext.jsx';
 import { useI18n } from '../i18n/index.jsx';
@@ -350,6 +351,7 @@ function QuickSuccess({ order, token }) {
         <h1>{t('quick.successTitle')}</h1>
         <p className="quick-code">{t('orders.yourCode')} <b>{order.code}</b></p>
         <p>{t('quick.successCall', { phone: formatPhone(order.phone) })}</p>
+        <DeliveryPromise order={order} />
         <div className="quick-total-row grand"><span>{t('quick.total')}</span><b>{formatVND(order.total)}</b></div>
         {order.discount > 0 && <p className="quick-promo">🎁 {t('orders.discounted', { amount: formatVND(order.discount) })}</p>}
         {order.items.filter((item) => item.promo).map((item) => (

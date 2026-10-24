@@ -1249,6 +1249,43 @@ Tạo cặp khoá VAPID một lần: `cd backend && npx web-push generate-vapid-
 Trên iPhone (iOS 16.4 trở lên): phải "Thêm vào MH chính" từ Safari rồi mở app từ biểu tượng đó mới
 bật được thông báo.
 
+## Hẹn giờ giao, tra cứu đơn, trang "Về chúng tôi" (24/10/2026)
+
+### Sau khi khách đặt hàng
+
+Màn hình "Đặt hàng thành công" (mua nhanh) và "Đơn của tôi" ngay sau khi đặt có **hình anh shipper
+chèo thuyền rồng** (`frontend/public/shipper.webp`, cắt từ ảnh cửa hàng gửi) và lời hẹn giờ giao:
+- Đặt trong giờ làm việc, còn ít nhất 1 tiếng rưỡi trước giờ nghỉ (11h30 / 18h00) và khách không
+  chọn buổi khác: **"Gạo của bạn sẽ được giao đến trong vòng 1 tiếng – 1 tiếng rưỡi."**
+- Còn lại hẹn buổi kế tiếp kèm ngày: đặt 10h15 – 13h30 → chiều nay; đặt sau 16h30 hoặc buổi tối →
+  sáng mai; khách chọn buổi thì theo buổi khách chọn.
+- Câu "giao hàng trong ngày" cũ được bỏ vì không đúng với đơn đặt buổi tối.
+
+### Tra cứu đơn (`/tra-cuu-don`)
+
+- Khách nhập **số điện thoại + mã đơn** (ví dụ DH000236). Phải đúng cả hai, để người biết số điện
+  thoại không dò được đơn của người khác. Nhận cả `+84…`, `dh 000236`, hoặc chỉ gõ số.
+- Nút **📦 Theo dõi đơn hàng** ở màn hình đặt thành công mở trang này và tra luôn, không cần gõ.
+- Hiện 4 bước kèm giờ: Đã nhận đơn → Cửa hàng đã xác nhận → Đang giao hàng → Đã giao xong (hoặc
+  Đã huỷ). Giờ mỗi bước ghi lúc chị Linh bấm ở trang quản trị (cột mới `confirmed_at`, `shipping_at`,
+  `completed_at`, `cancelled_at`; đơn cũ chưa có giờ các bước đã qua). Trang tự cập nhật mỗi phút.
+- Không trả địa chỉ hay số điện thoại. `POST /api/orders/track` (không cần đăng nhập), giới hạn
+  30 lần / 15 phút mỗi địa chỉ IP.
+- Menu: khách chưa đăng nhập thấy "Tra cứu đơn" (máy tính) và tab "Đơn hàng" mở trang này (điện thoại).
+
+### Về chúng tôi (`/ve-chung-toi`, trang con `/ve-chung-toi/danh-gia`)
+
+- Thêm vào menu máy tính và thanh dưới điện thoại (tab "Giới thiệu").
+- **Giới thiệu & giấy tờ**: lời giới thiệu, ảnh giấy tờ (an toàn thực phẩm, công bố sản phẩm, giấy tờ
+  khác; bấm để xem lớn), nút gọi / Zalo của cửa hàng.
+- **Khách đánh giá**: ý kiến khách viết tự do, điểm **từ 1 đến 6** (có thể không chấm), điểm trung bình.
+- Chị Linh nhập ở **Quản trị → Về chúng tôi**: sửa lời giới thiệu; thêm / sửa / ẩn / sắp xếp / xoá
+  giấy tờ (chụp ảnh tải lên); chép ý kiến từ nhóm Zalo vào đánh giá (tên khách, ngày, điểm, nội dung).
+  Mọi thay đổi ghi nhật ký. Chưa nhập gì thì trang khách báo "đang cập nhật", không có dữ liệu mẫu.
+- Giấy tờ hiện nhận **ảnh** (JPG/PNG/WebP, tự thu nhỏ). Chưa nhận tệp PDF.
+- Dữ liệu: bảng `about_documents`, `service_reviews`; lời giới thiệu ở `app_settings.about_intro`.
+- Kiểm thử: `npm --prefix backend run test:about`.
+
 ## Đổi ngôn ngữ: Tiếng Việt · English · 中文 (26/09/2026)
 
 Nút **VI · EN · 中** nằm ở mép phải thanh trên cùng, hiện cả trên điện thoại. Mặc định là

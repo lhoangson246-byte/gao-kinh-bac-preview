@@ -121,6 +121,20 @@ export const api = {
   }),
   pushUnsubscribe: (endpoint) => request('/push/unsubscribe', { method: 'DELETE', auth: true, body: { endpoint } }),
   pushTest: (endpoint) => request('/push/test', { method: 'POST', auth: true, body: { endpoint } }),
+  // Khách tra cứu đơn bằng SĐT + mã đơn (không cần đăng nhập).
+  trackOrder: (phone, code) => request('/orders/track', { method: 'POST', body: { phone, code } }),
+  // Trang "Về chúng tôi".
+  about: () => request('/about'),
+  aboutReviews: () => request('/about/reviews'),
+  adminAbout: () => request('/admin/about', { auth: true }),
+  adminAboutIntro: (intro) => request('/admin/about/intro', { method: 'PUT', auth: true, body: { intro } }),
+  adminAboutCreateDocument: (doc) => request('/admin/about/documents', { method: 'POST', auth: true, body: doc }),
+  adminAboutUpdateDocument: (id, doc) => request(`/admin/about/documents/${id}`, { method: 'PUT', auth: true, body: doc }),
+  adminAboutDeleteDocument: (id) => request(`/admin/about/documents/${id}`, { method: 'DELETE', auth: true }),
+  adminAboutReorderDocuments: (ids) => request('/admin/about/documents/reorder', { method: 'POST', auth: true, body: { ids } }),
+  adminAboutCreateReview: (review) => request('/admin/about/reviews', { method: 'POST', auth: true, body: review }),
+  adminAboutUpdateReview: (id, review) => request(`/admin/about/reviews/${id}`, { method: 'PUT', auth: true, body: review }),
+  adminAboutDeleteReview: (id) => request(`/admin/about/reviews/${id}`, { method: 'DELETE', auth: true }),
   adminOrders: (status, { limit = 30, offset = 0 } = {}) => {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (status && status !== 'all') params.set('status', status);
@@ -418,6 +432,29 @@ export function deliveryDateLabel(createdAt, slot) {
   if (slotDay(slot, placed) === 'tomorrow') vn.setUTCDate(vn.getUTCDate() + 1);
   return `${String(vn.getUTCDate()).padStart(2, '0')}/${String(vn.getUTCMonth() + 1).padStart(2, '0')}`;
 }
+/** Giờ đặt của đơn (chuỗi từ máy chủ, giờ UTC) → Date. */
+export function parseServerTime(value) {
+  if (!value) return null;
+  const date = new Date(String(value).replace(' ', 'T') + (/[zZ+]/.test(String(value)) ? '' : 'Z'));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * Lời hẹn giao cho đơn vừa đặt (24/10/2026). Đặt trong giờ làm, còn ít nhất 1 tiếng rưỡi trước giờ
+ * nghỉ (và khách không chọn buổi khác) thì giao trong 1 – 1 tiếng rưỡi: { fast: true }. Còn lại hẹn
+ * buổi kế tiếp: { fast: false, slot, date } — đặt trưa → chiều nay, đặt muộn chiều/tối → sáng mai.
+ */
+export function deliveryEta(createdAt, chosenSlot = null) {
+  const placed = parseServerTime(createdAt) || shopNow();
+  const m = vietnamMinutes(placed);
+  const current = m >= SHOP_HOURS.open && m < SHOP_HOURS.lunchStart ? 'sang'
+    : m >= SHOP_HOURS.lunchEnd && m < SHOP_HOURS.close ? 'chieu' : null;
+  const sessionEnd = current === 'sang' ? SHOP_HOURS.lunchStart : SHOP_HOURS.close;
+  if (current && m + 90 <= sessionEnd && (!chosenSlot || chosenSlot === current)) return { fast: true };
+  const slot = chosenSlot || (m < SHOP_HOURS.open ? 'sang' : m < SHOP_HOURS.lunchEnd ? 'chieu' : 'sang');
+  return { fast: false, slot, date: deliveryDateLabel(placed.toISOString(), slot) };
+}
+
 export const DELIVERY_SLOT_LABEL = Object.fromEntries(
   DELIVERY_SLOTS.map(([code, name, time]) => [code, `${name} (${time})`])
 );

@@ -29,7 +29,8 @@ export default function Navbar() {
               <NavLink to="/gio-hang">
                 {t('nav.cart')} {count > 0 && <span className="badge">{count}</span>}
               </NavLink>
-              {user && <NavLink to="/don-hang">{t('nav.orders')}</NavLink>}
+              {user ? <NavLink to="/don-hang">{t('nav.orders')}</NavLink> : <NavLink to="/tra-cuu-don">{t('nav.track')}</NavLink>}
+              <NavLink to="/ve-chung-toi">{t('nav.about')}</NavLink>
             </nav>
 
             <div className="nav-auth">
@@ -63,7 +64,9 @@ export default function Navbar() {
       {!quickCheckout && <nav className="mobile-nav" aria-label={t('nav.app')}>
         <NavLink to="/" end><span aria-hidden="true">⌂</span><small>{t('nav.tabStore')}</small></NavLink>
         <NavLink to="/gio-hang"><span aria-hidden="true">⌑</span><small>{t('nav.tabCart')}</small>{count > 0 && <b>{count}</b>}</NavLink>
-        <NavLink to="/don-hang"><span aria-hidden="true">▤</span><small>{t('nav.tabOrders')}</small></NavLink>
+        {/* Chưa đăng nhập thì "Đơn hàng" mở trang tra cứu bằng SĐT + mã đơn. */}
+        <NavLink to={user ? '/don-hang' : '/tra-cuu-don'}><span aria-hidden="true">▤</span><small>{t('nav.tabOrders')}</small></NavLink>
+        <NavLink to="/ve-chung-toi"><span aria-hidden="true">✦</span><small>{t('nav.tabAbout')}</small></NavLink>
         {isAdmin ? (
           <NavLink to="/quan-tri"><span aria-hidden="true">⚙</span><small>{t('nav.tabAdmin')}</small></NavLink>
         ) : (

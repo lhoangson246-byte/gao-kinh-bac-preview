@@ -104,6 +104,7 @@ add('guest-orders', 'POST', /^\/guest\/?$/, obj({
   latitude: address.latitude, longitude: address.longitude, location_accuracy: address.location_accuracy,
   promo_gift: z.enum(['nep', 'lut']).optional(),
 }));
+add('guest-orders', 'POST', /^\/track\/?$/, obj({ phone: text(LIMITS.phone), code: text(20) }));
 add('orders', 'GET', /^\/?$/);
 add('orders', 'GET', /^\/[^/]+\/?$/);
 add('orders', 'PATCH', /^\/[^/]+\/cancel\/?$/);
@@ -179,6 +180,26 @@ add('push', 'POST', /^\/subscribe\/?$/, obj({
 }));
 add('push', 'DELETE', /^\/unsubscribe\/?$/, obj({ endpoint: pushEndpoint }));
 add('push', 'POST', /^\/test\/?$/, obj({ endpoint: pushEndpoint.nullable().optional() }));
+
+// Trang "Về chúng tôi" (quản trị). Kiểm tra kỹ hơn (độ dài, ảnh, ngày) ở routes/about-admin.js.
+const aboutDoc = {
+  title: text(120).optional(), category: z.enum(['attp', 'cong-bo', 'khac']).optional(),
+  image_url: optionalText(LIMITS.imageUrl), note: optionalText(300), is_visible: flag.optional(),
+};
+const aboutReview = {
+  customer_name: optionalText(80), content: z.string().max(2000).optional(),
+  score: integer(1, 6).or(z.literal('')).nullable().optional(), review_date: z.string().max(10).nullable().optional(),
+  is_visible: flag.optional(),
+};
+add('about-admin', 'GET', /^\/?$/);
+add('about-admin', 'PUT', /^\/intro\/?$/, obj({ intro: z.string().max(3000) }));
+add('about-admin', 'POST', /^\/documents\/?$/, obj(aboutDoc));
+add('about-admin', 'POST', /^\/documents\/reorder\/?$/, obj({ ids: z.array(id).max(200) }));
+add('about-admin', 'PUT', /^\/documents\/[^/]+\/?$/, obj(aboutDoc));
+add('about-admin', 'DELETE', /^\/documents\/[^/]+\/?$/);
+add('about-admin', 'POST', /^\/reviews\/?$/, obj(aboutReview));
+add('about-admin', 'PUT', /^\/reviews\/[^/]+\/?$/, obj(aboutReview));
+add('about-admin', 'DELETE', /^\/reviews\/[^/]+\/?$/);
 
 export function validateRoutes(group) {
   return (req, res, next) => {

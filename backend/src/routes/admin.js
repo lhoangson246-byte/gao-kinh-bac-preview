@@ -10,6 +10,7 @@ import {
 } from '../constants.js';
 import { HttpError, cleanImageUrl, cleanText, normalizePhone, toInteger } from '../validate.js';
 import { writeAdminAudit } from '../audit.js';
+import { STATUS_STAMP } from '../order-tracking.js';
 import { listAdminOrders } from '../order-lists.js';
 import { buildOrdersWorkbook } from '../orders-export.js';
 import { MAX_BANNERS, MAX_BRANCHES, readStorefront } from './settings.js';
@@ -72,8 +73,10 @@ router.patch('/orders/:id/status', (req, res, next) => {
 
       // Chỉ đổi khi trạng thái vẫn đúng như lúc đọc — hai request cùng huỷ
       // một đơn thì chỉ một request hoàn kho.
+      // Ghi lại giờ của từng bước để khách tra cứu tiến độ giao (tên cột lấy từ danh sách cố định).
+      const stampColumn = STATUS_STAMP[status];
       const changed = db
-        .prepare('UPDATE orders SET status = ? WHERE id = ? AND status = ?')
+        .prepare(`UPDATE orders SET status = ?${stampColumn ? `, ${stampColumn} = datetime('now')` : ''} WHERE id = ? AND status = ?`)
         .run(status, current.id, current.status).changes;
       if (!changed) {
         throw new HttpError(409, 'Đơn hàng vừa được cập nhật ở nơi khác. Vui lòng tải lại trang.');
