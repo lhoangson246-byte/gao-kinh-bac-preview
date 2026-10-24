@@ -1384,3 +1384,20 @@ label b { color: var(--danger); }
 .login-guest-body { color: var(--ink); font-size: 1rem; line-height: 1.5; }
 .login-guest .btn { white-space: normal; text-align: center; }
 .login-guest-perk { padding-top: 10px; border-top: 1px dashed #b9d4c1; color: var(--gold-dark); font-size: .92rem; font-weight: 650; line-height: 1.45; }
+
+/* --- Banner trang chủ: "Giao hàng tại thành phố Bắc Ninh" là chữ to nhất --- */
+.store-toolbar h1.hero-delivery { max-width: 15ch; font-size: clamp(2.1rem, 5vw, 3.7rem); line-height: 1.08; }
+.hero-delivery span { color: var(--gold); }
+.hero-audiences { display: flex; flex-wrap: wrap; gap: 8px 10px; margin: 16px 0 0; padding: 0; list-style: none; }
+.hero-audiences li { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border: 1px solid rgba(255,255,255,.22); border-radius: 99px; background: rgba(255,255,255,.1); color: white; font-size: clamp(.92rem, 1.6vw, 1.08rem); font-weight: 750; }
+.store-toolbar .toolbar-note { margin-top: 12px; font-size: .86rem; }
+@media (max-width: 560px) {
+  /* Điện thoại: banner cao hơn một chút, bỏ hình trang trí để chữ giao hàng đủ chỗ. */
+  .hero-track { height: 290px; }
+  .hero-intro .store-toolbar { align-items: flex-start; padding: 22px 18px 52px; }
+  .hero-intro .toolbar-art { display: none; }
+  .store-toolbar h1.hero-delivery { max-width: none; font-size: 1.85rem; }
+  .hero-audiences { flex-direction: column; align-items: flex-start; gap: 7px; margin-top: 12px; }
+  .hero-audiences li { padding: 6px 12px; font-size: .92rem; }
+  .store-toolbar .toolbar-note { margin-top: 10px; max-width: none; font-size: .8rem; }
+}

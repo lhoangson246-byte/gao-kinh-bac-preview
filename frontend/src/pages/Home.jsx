@@ -128,8 +128,12 @@ export default function Home() {
                   onImageError={(url) => setBanners((list) => list.filter((item) => item !== url))}>
         <header className="store-toolbar">
           <div className="store-toolbar-copy">
-            <p className="delivery-chip"><span aria-hidden="true">⌖</span> {t('home.deliveryIn')} <strong>Bắc Ninh</strong></p>
-            <h1>{t('home.title')}</h1>
+            {/* Điều khách cần biết đầu tiên: có giao tới chỗ mình không, và gạo cho ai. */}
+            <h1 className="hero-delivery">{t('home.deliveryIn')} <span>{t('home.deliveryCity')}</span></h1>
+            <ul className="hero-audiences">
+              <li><span aria-hidden="true">🏠</span> {t('home.forFamily')}</li>
+              <li><span aria-hidden="true">🏭</span> {t('home.forKitchens')}</li>
+            </ul>
             <p className="toolbar-note">{t('home.note')}</p>
           </div>
           <div className="toolbar-art" aria-hidden="true"><span>🌾</span></div>
