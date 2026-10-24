@@ -15,6 +15,7 @@ import addressRoutes from './routes/addresses.js';
 import adminRoutes from './routes/admin.js';
 import retailRoutes from './routes/retail.js';
 import customerRoutes from './routes/customers.js';
+import pushRoutes from './routes/push.js';
 import { HttpError } from './validate.js';
 import imageRoutes from './routes/images.js';
 import { trustedProxy, originAllowed, protectBrowserRequests } from './security.js';
@@ -85,6 +86,8 @@ const guestPhoneLimiter = rateLimit({
   },
 });
 app.post('/api/orders/guest', guestOrderLimiter, guestPhoneLimiter);
+// Nút "Gửi thông báo thử nghiệm": đủ để thử vài lần, không đủ để spam máy chủ push.
+app.post('/api/push/test', rateLimit({ ...limiterOptions, windowMs: 10 * 60 * 1000, limit: 10 }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
@@ -93,6 +96,7 @@ app.use('/api/addresses', addressRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin/customers', customerRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/push', pushRoutes);
 app.use('/api/retail', retailRoutes);
 
 // Render preview deploys run the React app and API together. Keeping this

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 const ImagePicker = lazy(() => import('../components/ImagePicker.jsx'));
 const BannerSettings = lazy(() => import('../components/BannerSettings.jsx'));
 const GroupManager = lazy(() => import('../components/GroupManager.jsx'));
@@ -56,6 +56,8 @@ export default function Admin() {
   const [orderTotal, setOrderTotal] = useState(0);
   const [counts, setCounts] = useState({});
   const requestId = useRef(0);
+  const loadedRequest = useRef(0);   // lượt tải gần nhất đã hiện lên màn hình
+  const [reloadTick, setReloadTick] = useState(0);
   const productsLoaded = useRef(false);
   const [products, setProducts] = useState([]);
   const [form, setForm] = useState(EMPTY);
@@ -70,6 +72,9 @@ export default function Admin() {
   const [msg, setMsg] = useState('');
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusOrder = useRef(null);                 // { id, action } — mở từ thông báo đẩy
+  const [highlightId, setHighlightId] = useState(null);
 
   const reload = useCallback(async ({ refreshProducts = true } = {}) => {
     const id = ++requestId.current;
@@ -88,6 +93,7 @@ export default function Admin() {
         setOffset(Math.max(0, offset - 30));
         return;
       }
+      loadedRequest.current = id;
       setStats(statsResult.stats);
       setOrders(ordersResult.orders);
       setCounts(ordersResult.counts);
@@ -107,7 +113,42 @@ export default function Admin() {
   useEffect(() => {
     reload({ refreshProducts: false });
     return () => { requestId.current++; };
-  }, [reload]);
+  }, [reload, reloadTick]);
+
+  /*
+   * Bấm thông báo đơn mới → /quan-tri?orderId=123[&action=confirm|call]: mở tab Đơn hàng ở mục
+   * "Tất cả" (đơn mới nhất nằm đầu), cuộn tới đơn đó và đặt sẵn con trỏ vào nút Xác nhận / số gọi.
+   */
+  useEffect(() => {
+    const id = Number(searchParams.get('orderId'));
+    if (!Number.isSafeInteger(id) || id < 1) return;
+    // Chờ đúng lượt tải mới (chứa đơn vừa đặt) xong mới cuộn và đặt con trỏ: cleanup của lượt
+    // tải trước tăng requestId thêm 1, rồi lượt tải mới tăng thêm 1 nữa.
+    focusOrder.current = { id, action: searchParams.get('action'), request: requestId.current + 2 };
+    setSearchParams({}, { replace: true });
+    setTab('orders');
+    setFilter('all');
+    setOffset(0);
+    setReloadTick((tick) => tick + 1);
+  }, [searchParams]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const target = focusOrder.current;
+    if (!target || loading || tab !== 'orders' || loadedRequest.current < target.request) return;
+    focusOrder.current = null;
+    const card = document.getElementById(`admin-order-${target.id}`);
+    if (!card) { notify('Không thấy đơn này ở trang đầu — có thể đã có nhiều đơn mới hơn.'); return; }
+    card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const focusTarget = target.action === 'call' ? card.querySelector('.phone-link') : card.querySelector('footer .btn-primary');
+    focusTarget?.focus({ preventScroll: true });
+    setHighlightId(target.id);
+  }, [orders, loading, tab]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!highlightId) return undefined;
+    const timer = window.setTimeout(() => setHighlightId(null), 8000);
+    return () => window.clearTimeout(timer);
+  }, [highlightId]);
 
   const visibleOrders = orders;
 
@@ -396,7 +437,7 @@ export default function Admin() {
                       {visibleOrders.map((order) => {
                         const next = NEXT_STEP[order.status];
                         return (
-                          <article key={order.id} className="admin-order-card">
+                          <article key={order.id} id={`admin-order-${order.id}`} className={`admin-order-card${highlightId === order.id ? ' highlight' : ''}`}>
                             <header>
                               <div><span className="order-number">Đơn {order.code || `#${order.id}`}</span><span className={`status ${order.status}`}>{STATUS_LABEL[order.status]}</span>{!!order.is_guest && <span className="guest-tag" title="Khách đặt không cần đăng nhập">Mua nhanh</span>}</div>
                               <time>{formatDateTime(order.created_at)}</time>

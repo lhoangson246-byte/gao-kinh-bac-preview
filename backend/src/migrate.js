@@ -842,5 +842,23 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(rewardsOct202
   })();
 }
 
+// Thông báo đẩy (Web Push) cho chủ cửa hàng, 24/10/2026: mỗi dòng là một trình duyệt/điện thoại đã
+// bật "thông báo khi tắt màn hình". Lưu độc lập với phiên đăng nhập: hết phiên hay đăng xuất thì
+// máy vẫn nhận báo đơn; chỉ ngừng khi bấm Tắt trên máy đó, khi dịch vụ push báo máy đã huỷ
+// (404/410), hoặc khi tài khoản không còn là quản trị / bị khoá (lọc lúc gửi).
+db.exec(`
+CREATE TABLE IF NOT EXISTS admin_push_subscriptions (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint   TEXT NOT NULL UNIQUE,
+  p256dh     TEXT NOT NULL,
+  auth       TEXT NOT NULL,
+  user_agent TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_admin_push_subscriptions_user ON admin_push_subscriptions(user_id);
+`);
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

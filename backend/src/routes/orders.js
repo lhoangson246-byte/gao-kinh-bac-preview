@@ -13,6 +13,7 @@ import { readLocation } from './addresses.js';
 import { promoGiftFor } from '../promotions.js';
 import { attachItems } from '../order-lists.js';
 import { loyaltyProfile, refundPoints, spendPoints } from '../loyalty.js';
+import { notifyNewOrder, siteOrigin } from '../push.js';
 
 const router = Router();
 
@@ -247,7 +248,7 @@ function readDelivery(body, errors) {
  *  điểm vào số điện thoại trên đơn. Trả về mã bí mật dùng một lần để gắn đơn vào tài khoản
  *  nếu khách tạo tài khoản ngay sau đó.
  */
-router.post('/guest', validateRoutes('guest-orders'), (req, res, next) => {
+router.post('/guest', validateRoutes('guest-orders'), async (req, res, next) => {
   try {
     const body = req.body || {};
     const errors = {};
@@ -273,6 +274,8 @@ router.post('/guest', validateRoutes('guest-orders'), (req, res, next) => {
       guestTokenHash: createHash('sha256').update(token).digest('hex'),
       promoGift: body.promo_gift,
     });
+    // Đơn đã lưu xong; báo chủ cửa hàng (Web Push + Telegram) rồi mới trả lời khách.
+    await notifyNewOrder(orderId, { origin: siteOrigin(req) });
     res.status(201).json({ order: getOrderForUser(orderId, guestId), guest_token: token });
   } catch (err) {
     next(err);
@@ -291,7 +294,7 @@ router.use(validateRoutes('orders'));
  *  đăng nhập. Điểm bị trừ ngay khi đặt và được hoàn lại nếu đơn bị huỷ.
  *  Khi có address_id, thông tin nhận hàng được đọc từ sổ địa chỉ của chính người dùng.
  */
-router.post('/', requireAuth, (req, res, next) => {
+router.post('/', requireAuth, async (req, res, next) => {
   try {
     const { address_id, delivery_slot, note, items, voucher_count, rewards } = req.body || {};
     const errors = {};
@@ -347,6 +350,7 @@ router.post('/', requireAuth, (req, res, next) => {
       pointsPhone,
       promoGift: req.body?.promo_gift,
     });
+    await notifyNewOrder(orderId, { origin: siteOrigin(req) });
     res.status(201).json({ order: getOrderForUser(orderId, req.user.id) });
   } catch (err) {
     next(err);

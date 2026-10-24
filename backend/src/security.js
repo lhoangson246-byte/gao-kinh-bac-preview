@@ -8,13 +8,13 @@ if (configuredSecret && (Buffer.byteLength(configuredSecret) < 32 || /gao_nha_mi
 if (production && !configuredSecret) throw new Error('JWT_SECRET is required in production.');
 export const JWT_SECRET = configuredSecret || randomBytes(48).toString('hex');
 /**
- * Duy trì đăng nhập cho tới khi người dùng tự bấm Đăng xuất (theo yêu cầu cửa hàng 21/10/2026).
- * Mỗi phiên sống 30 ngày và được gia hạn mỗi lần mở ứng dụng (POST /api/auth/refresh), nên chỉ
- * bị đăng xuất nếu 30 ngày liền không mở. Đăng xuất, đổi mật khẩu hay khoá tài khoản vẫn làm mọi
+ * Duy trì đăng nhập cho tới khi người dùng tự bấm Đăng xuất (yêu cầu cửa hàng 21/10 và 24/10/2026).
+ * Mỗi phiên sống 90 ngày và được gia hạn mỗi lần mở ứng dụng (POST /api/auth/refresh), nên chỉ
+ * bị đăng xuất nếu 90 ngày liền không mở. Đăng xuất, đổi mật khẩu hay khoá tài khoản vẫn làm mọi
  * phiên mất hiệu lực ngay (session_version).
  */
-export const SESSION_TTL = '30d';
-export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+export const SESSION_TTL = '90d';
+export const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 export const JWT_OPTIONS = { algorithm: 'HS256', issuer: 'gao-shop', audience: 'gao-shop-api', expiresIn: SESSION_TTL };
 export const COOKIE_NAME = production ? '__Host-gao_session' : 'gao_session';
 export const COOKIE_OPTIONS = {

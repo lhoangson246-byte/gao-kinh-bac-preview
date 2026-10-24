@@ -95,6 +95,8 @@ export const vi = {
   // Dùng chung
   'common.loading': 'Đang tải…',
   'common.retry': 'Thử lại',
+  'common.reconnecting': 'Đang chờ kết nối mạng…',
+  'common.reconnectingBody': 'Bạn vẫn đang đăng nhập. Ứng dụng sẽ tự vào lại ngay khi có mạng.',
   'common.pageLoadError': 'Chưa tải được trang. Vui lòng kiểm tra kết nối rồi thử lại.',
   'common.optional': 'Không bắt buộc',
   'common.free': 'Miễn phí',
@@ -517,6 +519,8 @@ export const en = {
 
   'common.loading': 'Loading…',
   'common.retry': 'Try again',
+  'common.reconnecting': 'Waiting for the network…',
+  'common.reconnectingBody': 'You are still signed in. The app will continue as soon as you are back online.',
   'common.pageLoadError': 'Could not load this page. Please check your connection and try again.',
   'common.optional': 'Optional',
   'common.free': 'Free',
@@ -931,6 +935,8 @@ export const zh = {
 
   'common.loading': '加载中…',
   'common.retry': '重试',
+  'common.reconnecting': '正在等待网络连接…',
+  'common.reconnectingBody': '您仍处于登录状态，网络恢复后应用会自动继续。',
   'common.pageLoadError': '无法加载页面。请检查网络连接后重试。',
   'common.optional': '选填',
   'common.free': '免费',

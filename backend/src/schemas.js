@@ -157,6 +157,20 @@ add('retail', 'POST', /^\/returns\/?$/, obj({
   items: z.array(obj({ invoice_item_id: id, quantity: integer(1, 500) })).min(1).max(60),
 }));
 
+// Thông báo đẩy: endpoint và khoá do trình duyệt cấp; máy chủ còn kiểm tra kỹ hơn ở routes/push.js.
+const pushEndpoint = text(1024).regex(/^https?:\/\//);
+const base64Url = (min, max) => z.string().min(min).max(max).regex(/^[A-Za-z0-9_-]+={0,2}$/);
+add('push', 'GET', /^\/config\/?$/);
+add('push', 'POST', /^\/subscribe\/?$/, obj({
+  endpoint: pushEndpoint,
+  keys: obj({ p256dh: base64Url(80, 100), auth: base64Url(16, 32) }),
+  old_endpoint: pushEndpoint.nullable().optional(),
+  // PushSubscription.toJSON() có thêm expirationTime; nhận và bỏ qua.
+  expirationTime: z.number().nullable().optional(),
+}));
+add('push', 'DELETE', /^\/unsubscribe\/?$/, obj({ endpoint: pushEndpoint }));
+add('push', 'POST', /^\/test\/?$/, obj({ endpoint: pushEndpoint.nullable().optional() }));
+
 export function validateRoutes(group) {
   return (req, res, next) => {
     const method = req.method === 'HEAD' ? 'GET' : req.method;

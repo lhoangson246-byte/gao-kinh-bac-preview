@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, formatVND } from '../api';
+import PushSettings from './PushSettings.jsx';
 
 const POLL_MS = 20_000;
 const SOUND_KEY = 'gao_order_sound';
@@ -61,6 +62,24 @@ export async function playChime() {
   return ctx.state === 'running';
 }
 
+/**
+ * Tab đang ẩn mà máy CHƯA bật thông báo đẩy: hiện thông báo của máy từ trang. Đã bật đẩy thì máy
+ * chủ tự gửi (cùng tag order-<id>), không hiện trùng. Android không cho dùng new Notification()
+ * từ trang nên đi qua service worker.
+ */
+async function showLocalNotice(order) {
+  try {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration('/') : null;
+    if (reg && await reg.pushManager?.getSubscription()) return;
+    const title = `🌾 Đơn mới ${order.code || ''}`;
+    const options = { body: `${order.receiver_name} · ${formatVND(order.total)}`, icon: '/icon-192.png', badge: '/badge-96.png',
+      tag: `order-${order.id}`, data: { url: `/quan-tri?orderId=${order.id}` } };
+    if (reg) await reg.showNotification(title, options);
+    else new Notification(title, options).onclick = () => window.focus();
+  } catch { /* thông báo phụ, lỗi không ảnh hưởng chuông */ }
+}
+
 const readSoundPref = () => {
   try { return localStorage.getItem(SOUND_KEY) !== '0'; } catch { return true; }
 };
@@ -114,14 +133,7 @@ export default function OrderAlerts({ onNewOrder, onView }) {
       if (!document.title.startsWith('🔔')) baseTitle.current = document.title;
       document.title = `🔔 ${count > 1 ? `${count} đơn mới` : 'Đơn mới'} · ${baseTitle.current}`;
       if (soundRef.current) playChime().then((ok) => setLocked(!ok));
-      if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-        const note = new Notification(`Đơn mới ${latest.code || ''}`, {
-          body: `${latest.receiver_name} · ${formatVND(latest.total)}`,
-          icon: '/icon-192.png',
-          tag: 'gao-new-order',
-        });
-        note.onclick = () => { window.focus(); note.close(); };
-      }
+      if (document.hidden) showLocalNotice(latest);
       onNewOrderRef.current?.();
     } catch {
       // Hết phiên thì AuthProvider đưa về trang đăng nhập; mất mạng thì báo để chủ cửa hàng biết
@@ -129,6 +141,14 @@ export default function OrderAlerts({ onNewOrder, onView }) {
       setOffline(true);
     }
   }, []);
+
+  // Máy chủ vừa đẩy thông báo đơn mới tới máy này (service worker báo lại): hỏi ngay, khỏi chờ 20 giây.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return undefined;
+    const onMessage = (event) => { if (event.data?.type === 'gao:push' && event.data.kind === 'order') check(); };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [check]);
 
   useEffect(() => {
     check();
@@ -163,6 +183,7 @@ export default function OrderAlerts({ onNewOrder, onView }) {
 
   return (
     <>
+      <PushSettings />
       <button type="button" className={`btn btn-secondary order-sound${soundOn && !locked && !offline ? ' on' : ''}${soundOn && locked ? ' locked' : ''}${offline ? ' offline' : ''}`}
               onClick={toggleSound} aria-pressed={soundOn && !locked} title="Kêu “xịch xing” khi có đơn online mới">
         <span aria-hidden="true">{soundOn && !locked ? '🔔' : '🔕'}</span> {label}

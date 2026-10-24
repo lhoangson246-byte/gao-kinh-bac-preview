@@ -114,6 +114,13 @@ export const api = {
   adminStats: () => request('/admin/stats', { auth: true }),
   /** Đơn mới nhất + số đơn chờ, để báo chuông khi có đơn. */
   adminLatestOrder: () => request('/admin/orders/latest', { auth: true }),
+  // Thông báo đẩy báo đơn mới khi máy quản trị tắt màn hình (Web Push).
+  pushConfig: () => request('/push/config', { auth: true }),
+  pushSubscribe: (subscription, oldEndpoint) => request('/push/subscribe', {
+    method: 'POST', auth: true, body: { ...subscription, ...(oldEndpoint ? { old_endpoint: oldEndpoint } : {}) },
+  }),
+  pushUnsubscribe: (endpoint) => request('/push/unsubscribe', { method: 'DELETE', auth: true, body: { endpoint } }),
+  pushTest: (endpoint) => request('/push/test', { method: 'POST', auth: true, body: { endpoint } }),
   adminOrders: (status, { limit = 30, offset = 0 } = {}) => {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (status && status !== 'all') params.set('status', status);

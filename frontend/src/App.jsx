@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
@@ -36,8 +36,21 @@ const ADMIN_TITLES = {
 
 export default function App() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { t } = useI18n();
   const isAdminArea = location.pathname.startsWith('/quan-tri');
+
+  // Bấm vào thông báo đơn mới khi app đang mở: service worker nhờ app chuyển tới đúng đơn.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return undefined;
+    const onMessage = (event) => {
+      const url = event.data?.type === 'gao:open' ? event.data.url : null;
+      if (typeof url === 'string' && /^\/(?!\/)/.test(url)) navigate(url);
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    navigator.serviceWorker.startMessages?.();
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [navigate]);
 
   // Cuộn lên đầu khi chuyển trang — giống trải nghiệm ứng dụng.
   useEffect(() => { window.scrollTo(0, 0); }, [location.pathname]);

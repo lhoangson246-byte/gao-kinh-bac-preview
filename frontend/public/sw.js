@@ -1,7 +1,7 @@
 // Service worker cho PWA "Gạo Kinh Bắc".
 // Nguyên tắc: KHÔNG bao giờ lưu đệm dữ liệu API — giá, tồn kho và đơn hàng
 // phải luôn lấy mới từ máy chủ.
-const CACHE_NAME = 'gao-kinh-bac-v5';
+const CACHE_NAME = 'gao-kinh-bac-v6';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -86,4 +86,81 @@ self.addEventListener('fetch', (event) => {
       cachedPromise.then(cached => cached || network)
     );
   }
+});
+
+/* ------------------------------------------------------------------ *
+ * Thông báo đẩy báo đơn mới (Web Push, VAPID). Máy chủ gửi qua dịch vụ
+ * push của trình duyệt, nên vẫn báo khi điện thoại tắt màn hình hoặc đã
+ * đóng app. Nội dung do backend/src/push.js soạn.
+ * ------------------------------------------------------------------ */
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : '' };
+  }
+  const isOrder = data.kind === 'order';
+  const tag = data.tag || (data.orderId ? `order-${data.orderId}` : 'gao-kinh-bac');
+  const options = {
+    body: data.body || 'Có thông báo mới từ cửa hàng.',
+    icon: '/icon-192.png',
+    badge: '/badge-96.png',
+    tag,
+    renotify: true,
+    // Đơn mới (và tin thử) nằm lại trên màn hình cho tới khi chủ cửa hàng bấm vào hoặc gạt đi.
+    requireInteraction: isOrder || data.kind === 'test',
+    vibrate: [300, 100, 300, 100, 400, 100, 400],
+    timestamp: Date.now(),
+    data: { url: data.url || '/quan-tri', phone: data.phone || null, gpsUrl: data.gpsUrl || null, orderId: data.orderId || null },
+    actions: isOrder ? [
+      { action: 'confirm', title: '✅ Xem & Xác nhận đơn' },
+      { action: 'call', title: '📞 Mở chi tiết' },
+    ] : [],
+  };
+  event.waitUntil(Promise.all([
+    self.registration.showNotification(data.title || '🌾 Gạo Kinh Bắc', options),
+    // App đang mở thì kêu chuông "xịch xing" ngay, không chờ lượt hỏi 20 giây.
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((list) => list.forEach((client) => client.postMessage({ type: 'gao:push', kind: data.kind || null, orderId: data.orderId || null }))),
+  ]));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const data = event.notification.data || {};
+  const target = new URL(data.url || '/quan-tri', self.location.origin);
+  // Chỉ mở trang của chính cửa hàng.
+  if (target.origin !== self.location.origin) return;
+  if (event.action === 'confirm' || event.action === 'call') target.searchParams.set('action', event.action);
+  const path = target.pathname + target.search;
+
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const client = windows.find((c) => new URL(c.url).pathname.startsWith('/quan-tri')) || windows[0];
+    if (client) {
+      // App đang mở (kể cả chạy nền): đưa lên trước và chuyển tới đơn, không tải lại trang.
+      await client.focus().catch(() => {});
+      client.postMessage({ type: 'gao:open', url: path });
+      return;
+    }
+    await self.clients.openWindow(target.href);
+  })());
+});
+
+// Trình duyệt tự làm mới đăng ký push (hiếm): báo máy chủ địa chỉ mới để không lỡ đơn.
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil((async () => {
+    const old = event.oldSubscription;
+    const key = old?.options?.applicationServerKey || event.newSubscription?.options?.applicationServerKey;
+    const sub = event.newSubscription
+      || (key ? await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }) : null);
+    if (!sub) return;
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'X-Session-Mode': 'cookie', 'X-CSRF-Protection': '1' },
+      body: JSON.stringify({ ...sub.toJSON(), old_endpoint: old?.endpoint || null }),
+    });
+  })().catch(() => {}));
 });

@@ -941,8 +941,9 @@ lưu mã băm, mã dùng một lần và hết hạn sau 1 ngày.
 
 Trước đây một lần đăng nhập chỉ dùng tối đa 16 giờ. Giờ đăng nhập được **giữ cho tới khi tự bấm
 Đăng xuất**, kể cả khi đóng app/trình duyệt rồi mở lại:
-- Mỗi phiên sống **30 ngày** và được gia hạn thêm 30 ngày **mỗi lần mở ứng dụng** (trang để mở
-  lâu thì gia hạn 6 giờ một lần). Chỉ khi **30 ngày liền không mở** mới phải đăng nhập lại.
+- Mỗi phiên sống **90 ngày** (từ 24/10/2026, trước đó 30 ngày) và được gia hạn thêm 90 ngày **mỗi
+  lần mở ứng dụng** (trang để mở lâu thì gia hạn 6 giờ một lần). Chỉ khi **90 ngày liền không mở**
+  mới phải đăng nhập lại.
 - **Bấm Đăng xuất** thì phiên mất hiệu lực ngay **trên mọi máy** của tài khoản đó. Đổi mật khẩu hoặc
   bị khoá tài khoản cũng vậy.
 - Cookie phiên vẫn là HttpOnly, Secure, SameSite=Lax như trước, chỉ đổi thời hạn.
@@ -1154,6 +1155,99 @@ Vẫn là bảng `app_settings`, không đổi cấu trúc cơ sở dữ liệu.
 để bản ứng dụng cũ còn trong bộ nhớ đệm của khách không bị lỗi. `PUT /api/admin/settings/storefront`
 chỉ đổi những trường được gửi lên, mỗi đường dẫn ảnh được kiểm tra như ảnh sản phẩm (một ảnh
 sai thì cả lần lưu bị từ chối), và mỗi lần đổi đều ghi nhật ký.
+
+## Báo đơn khi điện thoại tắt màn hình — Web Push + Telegram (24/10/2026)
+
+### Vấn đề cũ
+
+Chuông "xịch xing" chỉ kêu khi trang quản trị **đang mở trên màn hình**: trang hỏi máy chủ 20 giây
+một lần, nên khoá máy hoặc đóng app là không biết có đơn. Ngoài ra, mở app lúc điện thoại vừa mở
+khoá (Wi-Fi/4G chưa kịp nối) thì lần kiểm tra đăng nhập đầu tiên thất bại vì mạng, và app coi đó
+là "chưa đăng nhập" nên đẩy về `/dang-nhap`. Đây là lý do admin trên Android hay "bị đăng xuất".
+
+### Đã sửa
+
+- **Không bị đẩy về trang đăng nhập vì mạng chập chờn.** Chỉ khi máy chủ trả lời rõ ràng 401/403
+  mới coi là hết phiên. Mất mạng hoặc máy chủ chưa phản hồi thì hiện màn hình "Đang chờ kết nối
+  mạng… Bạn vẫn đang đăng nhập", tự thử lại (1, 2, 4… tối đa 30 giây, và ngay khi có mạng / quay
+  lại app), có nút Thử lại.
+- **Phiên 90 ngày, tự gia hạn.** Cookie `__Host-gao_session`: HttpOnly, Secure (production),
+  SameSite=Lax, Max-Age 90 ngày. Mở app, quay lại app, máy có mạng lại thì gia hạn âm thầm
+  (`POST /api/auth/refresh`) nếu đã quá 15 phút từ lần trước; gia hạn lỗi vì mạng thì im lặng thử
+  lại lần sau.
+- **Thông báo đẩy (Web Push, chuẩn VAPID).** Nút **📲 Bật báo khi tắt màn hình** (trên điện thoại:
+  **📲 Bật báo đơn**) cạnh chuông ở trang quản trị và trang bán tại quầy:
+  - Chưa bật: nút "🔔 Bật thông báo khi tắt màn hình" → máy hỏi quyền → đăng ký với dịch vụ push của
+    trình duyệt (Google FCM trên Android) → lưu ở máy chủ.
+  - Đã bật: "✅ Đã kết nối thông báo đẩy trên thiết bị này", nút "🔔 Gửi thông báo thử nghiệm" và
+    "Tắt trên máy này".
+  - Mở app mà máy đã cho phép thì **tự đăng ký lại**, không cần bấm.
+- **Mỗi đơn mới** (đặt nhanh không tài khoản `/dat-nhanh` và đặt có tài khoản `/gio-hang`) gửi
+  thông báo tới mọi máy quản trị đã bật:
+  - Tiêu đề `🌾 ĐƠN HÀNG MỚI #DH000123 - 250.000đ`; nội dung `Khách: Tên (SĐT)` và
+    `Giờ giao: Sáng: 07h00 – 11h30 | Đ/c: …`.
+  - Rung `300-100-300-100-400-100-400`, nằm lại trên màn hình tới khi bấm (requireInteraction), kêu
+    lại nếu cùng đơn (renotify), icon logo và badge bông lúa trắng `badge-96.png`.
+  - Hai nút: **✅ Xem & Xác nhận đơn** (mở đơn, con trỏ ở nút Xác nhận đơn) và **📞 Mở chi tiết**
+    (mở đơn, con trỏ ở số điện thoại để bấm gọi). Bấm vào thông báo: app đang mở thì đưa lên trước
+    và chuyển tới đơn, chưa mở thì mở `/quan-tri?orderId=…`; đơn được làm nổi viền vàng.
+  - App đang mở thì chuông trong trang kêu **ngay** (service worker báo lại), không chờ 20 giây.
+- **Telegram dự phòng (không bắt buộc).** Có `TELEGRAM_BOT_TOKEN` và `TELEGRAM_CHAT_ID` thì mỗi đơn
+  mới còn gửi một tin vào nhóm Telegram: mã đơn, tên, số gọi được (+84…), địa chỉ, link Google Maps
+  từ vị trí khách ghim, giờ giao, thanh toán, danh sách hàng, tổng tiền, link mở đơn. Chuyển khoản chỉ
+  ghi "cửa hàng gửi thông tin sau khi xác nhận", không có số tài khoản.
+
+### Cách hoạt động (kỹ thuật)
+
+- Bảng mới `admin_push_subscriptions` (endpoint duy nhất, p256dh, auth, user_agent, user_id,
+  created_at, updated_at). **Không gắn với phiên đăng nhập**: hết phiên hay đăng xuất thì máy vẫn
+  nhận báo đơn. Máy chủ chỉ gửi cho tài khoản **còn là quản trị và chưa bị khoá**; tối đa 20 máy mỗi
+  tài khoản.
+- API (chỉ quản trị, kiểm tra ở máy chủ): `GET /api/push/config` (khoá công khai, Telegram đã bật
+  chưa), `POST /api/push/subscribe` (lưu/cập nhật theo endpoint), `DELETE /api/push/unsubscribe`,
+  `POST /api/push/test` (giới hạn 10 lần/10 phút).
+- Chỉ nhận endpoint của dịch vụ push thật (FCM `*.googleapis.com`, Mozilla, Windows, Apple), qua
+  HTTPS cổng mặc định, để địa chỉ lạ không biến máy chủ thành công cụ gọi vào mạng nội bộ (SSRF).
+  Khoá trình duyệt được kiểm tra đúng chuẩn P-256.
+- Gửi bằng thư viện `web-push` (mã hoá aes128gcm, ký VAPID), header `TTL: 86400` và
+  `Urgency: high`, mỗi lần gửi tự cắt sau 5 giây. Dịch vụ push trả 404/410 (máy đã gỡ app / tắt) thì
+  xoá máy đó khỏi danh sách.
+- Gửi báo chạy **sau khi đơn đã lưu xong** (transaction đã commit) và được **chờ xong trước khi trả
+  lời khách** (`Promise.allSettled`), vì Vercel có thể dừng hàm ngay sau khi trả lời. Gửi báo lỗi
+  không bao giờ làm hỏng việc đặt hàng.
+- Service worker `public/sw.js` (bản cache v6): sự kiện `push`, `notificationclick`,
+  `pushsubscriptionchange`.
+- Kiểm thử: `npm --prefix backend run test:push` (dựng dịch vụ push và Telegram giả, giải mã đúng gói
+  tin trình duyệt nhận để kiểm tra nội dung), `test:session` (90 ngày, cookie, gia hạn).
+
+### Biến môi trường cần đặt trên Vercel
+
+| Biến | Bắt buộc | Ghi chú |
+|---|---|---|
+| `VAPID_PUBLIC_KEY` | có | Khoá công khai. API tự gửi cho trình duyệt, không cần biến `VITE_`/`NEXT_PUBLIC_`. |
+| `VAPID_PRIVATE_KEY` | có | **Bí mật.** Chỉ đặt trên Vercel, không đưa vào Git. |
+| `VAPID_SUBJECT` | có | `mailto:admin@gaokinhbac.vn` |
+| `TELEGRAM_BOT_TOKEN` | không | Token từ @BotFather. |
+| `TELEGRAM_CHAT_ID` | không | Chat id của nhóm/người nhận (nhóm thường là số âm). |
+| `PUBLIC_SITE_URL` | không | Tên miền cho link "Mở đơn" trong Telegram; để trống thì dùng tên miền Vercel. |
+
+Tạo cặp khoá VAPID một lần: `cd backend && npx web-push generate-vapid-keys`. **Không đổi khoá khi
+đã chạy thật**: đổi khoá thì mọi máy phải mở lại app một lần (app tự đăng ký lại với khoá mới).
+Đặt biến xong phải **Redeploy** để có hiệu lực.
+
+### Hướng dẫn cho chủ cửa hàng (Android)
+
+1. **Cài app**: mở trang bằng **Chrome** → menu ⋮ → **Cài đặt ứng dụng / Thêm vào màn hình chính**.
+   Từ đó luôn mở Gạo Kinh Bắc bằng biểu tượng ngoài màn hình.
+2. **Đăng nhập admin → bật thông báo**: vào Quản trị → bấm **📲 Bật báo đơn** → **🔔 Bật thông báo
+   khi tắt màn hình** → **Cho phép**. Thấy "✅ Đã kết nối…" thì bấm **🔔 Gửi thông báo thử nghiệm**,
+   tắt màn hình và chờ vài giây: máy phải rung và hiện thông báo.
+3. **Tắt tối ưu pin**: Cài đặt → Ứng dụng → **Gạo Kinh Bắc** (và **Chrome**) → **Pin** → **Không hạn
+   chế**. Trong Thông báo của app, bật **Hiện trên màn hình khoá** và **Âm thanh**. Máy Xiaomi/Oppo/
+   Vivo: bật thêm **Tự khởi chạy**.
+
+Trên iPhone (iOS 16.4 trở lên): phải "Thêm vào MH chính" từ Safari rồi mở app từ biểu tượng đó mới
+bật được thông báo.
 
 ## Đổi ngôn ngữ: Tiếng Việt · English · 中文 (26/09/2026)
 

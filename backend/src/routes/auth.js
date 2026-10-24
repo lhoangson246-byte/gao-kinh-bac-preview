@@ -134,8 +134,8 @@ router.post('/login', async (req, res, next) => {
 });
 
 /**
- * POST /api/auth/refresh — gia hạn phiên thêm 30 ngày mỗi lần mở ứng dụng. Không giới hạn tổng
- * thời gian: người dùng chỉ bị đăng xuất khi tự bấm Đăng xuất, hoặc 30 ngày liền không mở.
+ * POST /api/auth/refresh — gia hạn phiên thêm 90 ngày mỗi lần mở ứng dụng. Không giới hạn tổng
+ * thời gian: người dùng chỉ bị đăng xuất khi tự bấm Đăng xuất, hoặc 90 ngày liền không mở.
  * Khoá tài khoản, đổi mật khẩu hay đăng xuất (session_version) vẫn làm token cũ mất hiệu lực ngay.
  */
 router.post('/refresh', requireAuth, (req, res) => (
