@@ -1,4 +1,4 @@
-import { validateRoutes } from '../schemas.js';
+import { adminPassword, validateRoutes } from '../schemas.js';
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { createHash } from 'node:crypto';
@@ -153,6 +153,9 @@ router.post('/logout', requireAuth, (req, res) => {
 
 router.put('/password', requireAuth, async (req, res, next) => {
   try {
+    if (req.user.role === 'admin' && !adminPassword.safeParse(req.body.password).success) {
+      throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', { password: 'Mật khẩu quản trị tối thiểu 12 ký tự.' });
+    }
     const row = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.id);
     if (!await bcrypt.compare(req.body.current_password, row.password_hash)) {
       throw new HttpError(401, 'Mật khẩu hiện tại không đúng.');

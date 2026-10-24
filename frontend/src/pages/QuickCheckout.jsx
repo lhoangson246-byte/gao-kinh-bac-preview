@@ -369,7 +369,7 @@ function QuickSuccess({ order, token }) {
         <label className="quick-field">
           <span>{t('quick.accountPassword')}</span>
           <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)}
-                         autoComplete="new-password" minLength={12} aria-invalid={!!error} />
+                         autoComplete="new-password" minLength={8} aria-invalid={!!error} />
           {error
             ? <small className="err" role="alert">{error}</small>
             : <small className="field-help">{t('error.passwordShort')}</small>}

@@ -376,7 +376,8 @@ export const vi = {
   'error.phoneRequired': 'Nhập số điện thoại để đăng nhập.',
   'error.phoneInvalid': 'Số điện thoại không hợp lệ (10 số, ví dụ 0912345678).',
   'error.confirmMismatch': 'Mật khẩu nhập lại không khớp.',
-  'error.passwordShort': 'Mật khẩu tối thiểu 12 ký tự.',
+  'error.passwordShort': 'Mật khẩu tối thiểu 8 ký tự.',
+  'error.passwordCommon': 'Mật khẩu quá dễ đoán. Vui lòng chọn mật khẩu khác.',
   'error.passwordLong': 'Mật khẩu tối đa 72 byte UTF-8.',
 
   'password.show': 'Hiện',
@@ -802,7 +803,8 @@ export const en = {
   'error.phoneRequired': 'Enter a phone number to log in with.',
   'error.phoneInvalid': 'Invalid phone number (10 digits, e.g. 0912345678).',
   'error.confirmMismatch': 'The passwords do not match.',
-  'error.passwordShort': 'Password must be at least 12 characters.',
+  'error.passwordShort': 'Password must be at least 8 characters.',
+  'error.passwordCommon': 'This password is too easy to guess. Please choose another one.',
   'error.passwordLong': 'Password can be at most 72 bytes.',
 
   'password.show': 'Show',
@@ -1225,7 +1227,8 @@ export const zh = {
   'error.phoneRequired': '请输入用于登录的手机号。',
   'error.phoneInvalid': '手机号无效（10位数字，例如 0912345678）。',
   'error.confirmMismatch': '两次输入的密码不一致。',
-  'error.passwordShort': '密码至少需要 12 个字符。',
+  'error.passwordShort': '密码至少需要 8 个字符。',
+  'error.passwordCommon': '密码太容易被猜到，请换一个。',
   'error.passwordLong': '密码最多 72 个字节。',
 
   'password.show': '显示',

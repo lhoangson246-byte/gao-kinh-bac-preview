@@ -86,7 +86,7 @@ export default function AccountSignup({ phone, defaultName = '', onCreated }) {
       <label>Mật khẩu <b>*</b>
         <div className="pos-phone-row">
           <input className="input" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
-                 placeholder="Tối thiểu 12 ký tự" autoComplete="new-password"
+                 placeholder="Tối thiểu 8 ký tự" autoComplete="new-password"
                  aria-invalid={!!fieldErrors.password} />
           <button type="button" className="btn btn-secondary" onClick={suggest}>Gợi ý</button>
           <button type="button" className="btn btn-secondary" onClick={() => setShowPassword(!showPassword)}>{showPassword ? 'Ẩn' : 'Hiện'}</button>

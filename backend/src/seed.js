@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import db from './db.js';
 import { parseWeightKg } from './constants.js';
 import { isEmail } from './validate.js';
-import { newPassword } from './schemas.js';
+import { adminPassword } from './schemas.js';
 
 // Tài khoản quản trị đầu tiên. Có thể đặt qua biến môi trường khi cài đặt thật:
 //   ADMIN_EMAIL=... ADMIN_PASSWORD=... npm run seed
@@ -15,7 +15,7 @@ if (ADMIN_EMAIL) {
   if (existing && existing.role !== 'admin') throw new Error('ADMIN_EMAIL belongs to a customer; choose a different administrator address.');
 }
 if (!existingAdmin || ADMIN_EMAIL || ADMIN_PASSWORD) {
-  if (!isEmail(ADMIN_EMAIL) || !newPassword.safeParse(ADMIN_PASSWORD).success
+  if (!isEmail(ADMIN_EMAIL) || !adminPassword.safeParse(ADMIN_PASSWORD).success
       || /^(admin123|dat_mat_khau|change.?me)/i.test(ADMIN_PASSWORD)) {
     throw new Error('Set ADMIN_EMAIL and a strong ADMIN_PASSWORD (12+ characters, at most 72 UTF-8 bytes) before seeding.');
   }

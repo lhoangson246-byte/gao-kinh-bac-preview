@@ -80,6 +80,18 @@ try {
   token = (await call('/auth/login', { method: 'POST', body: { identifier: credentials.email, password: newPassword } })).data.token;
   const change = await call('/auth/password', { method: 'PUT', token, body: { current_password: newPassword, password: 'Third-passphrase-789!' } });
   check('Self-service password change rotates sessions', change.status === 200 && (await call('/auth/me', { token })).status === 401 && (await call('/auth/me', { token: change.data.token })).status === 200);
+  // 24/10/2026: khách tối thiểu 8 ký tự (12 ký tự khó nhớ); mật khẩu ai cũng đoán được bị chặn.
+  const eight = await call(`/admin/customers/${customer.data.user.id}/reset-password`, { method: 'POST', token: admin, body: { password: 'gao2024!' } });
+  check('Customer password of 8 characters accepted', eight.status === 200);
+  check('Customer can log in with the 8-character password',
+    (await call('/auth/login', { method: 'POST', body: { identifier: credentials.email, password: 'gao2024!' } })).status === 200);
+  const seven = await call('/auth/register', { method: 'POST', body: { full_name: 'Bảy ký tự', phone: '0911000007', password: 'gao2024' } });
+  check('7-character password rejected with a clear message', seven.status === 400 && /8 ký tự/.test(seven.data.errors?.password || ''));
+  const common = await call('/auth/register', { method: 'POST', body: { full_name: 'Dễ đoán', phone: '0911000008', password: '12345678' } });
+  check('Very common 8-character password rejected', common.status === 400 && /dễ đoán/.test(common.data.errors?.password || ''));
+  const adminShort = await call('/auth/password', { method: 'PUT', token: admin, body: { current_password: app.env.ADMIN_PASSWORD, password: 'gao2024!' } });
+  check('Admin password still needs 12 characters', adminShort.status === 400 && /12 ký tự/.test(adminShort.data.errors?.password || ''));
+  check('Admin session untouched after rejected change', (await call('/auth/me', { token: admin })).status === 200);
   for (const password of ['short', 'a'.repeat(73), '密'.repeat(25)]) {
     check(`Weak/over-72-byte password rejected (${Buffer.byteLength(password)} bytes)`, (await call(`/admin/customers/${customer.data.user.id}/reset-password`, { method: 'POST', token: admin, body: { password } })).status === 400);
   }

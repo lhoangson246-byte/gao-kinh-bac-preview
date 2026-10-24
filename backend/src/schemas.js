@@ -19,8 +19,17 @@ const decimal = (min, max) => z.union([
   z.string().regex(/^\d+(?:[.,]\d+)?$/).transform((v) => Number(v.replace(',', '.'))).pipe(z.number().min(min).max(max)),
 ]);
 const flag = z.union([z.boolean(), z.literal(0), z.literal(1)]);
-export const newPassword = z.string().min(12, 'Mật khẩu tối thiểu 12 ký tự.')
-  .refine((v) => Buffer.byteLength(v, 'utf8') <= 72, 'Mật khẩu tối đa 72 byte UTF-8.');
+// Mật khẩu khách: tối thiểu 8 ký tự (24/10/2026 — 12 ký tự khách khó nhớ). Chặn vài mật khẩu
+// ai cũng đoán được. Đăng nhập vẫn có giới hạn số lần thử theo IP và theo tài khoản.
+export const COMMON_PASSWORDS = new Set([
+  '12345678', '123456789', '1234567890', '87654321', '11111111', '00000000', '88888888', '66666666',
+  'abcd1234', '12345678a', 'a12345678', 'password', 'password1', 'qwerty123', 'matkhau123', 'iloveyou',
+]);
+export const newPassword = z.string().min(8, 'Mật khẩu tối thiểu 8 ký tự.')
+  .refine((v) => Buffer.byteLength(v, 'utf8') <= 72, 'Mật khẩu tối đa 72 byte UTF-8.')
+  .refine((v) => !COMMON_PASSWORDS.has(v.toLowerCase()), 'Mật khẩu quá dễ đoán. Vui lòng chọn mật khẩu khác.');
+// Tài khoản quản trị sửa được giá, kho và đơn hàng nên vẫn cần tối thiểu 12 ký tự.
+export const adminPassword = newPassword.refine((v) => v.length >= 12, 'Mật khẩu quản trị tối thiểu 12 ký tự.');
 const loginPassword = z.string().min(1).refine((v) => Buffer.byteLength(v, 'utf8') <= 72);
 const name = text(LIMITS.name);
 const phone = optionalText(LIMITS.phone);

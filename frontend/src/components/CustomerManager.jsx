@@ -388,7 +388,7 @@ function ResetPasswordBox({ customer, onClose, onDone }) {
       <label>Mật khẩu mới
         <div className="pos-phone-row">
           <input className="input" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
-                 minLength={12} placeholder="Tối thiểu 12 ký tự" autoComplete="new-password"
+                 minLength={8} placeholder="Tối thiểu 8 ký tự" autoComplete="new-password"
                  aria-invalid={!!error} />
           <button type="button" className="btn btn-secondary" onClick={suggest}>Gợi ý</button>
           <button type="button" className="btn btn-secondary" onClick={() => setShowPassword(!showPassword)}>{showPassword ? 'Ẩn' : 'Hiện'}</button>

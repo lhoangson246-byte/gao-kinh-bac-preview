@@ -76,7 +76,7 @@ export default function Register() {
         <div className="row">
           <label>{t('register.password')} <b>*</b>
             <PasswordInput name="password" value={form.password}
-                           onChange={onChange} required minLength={12} autoComplete="new-password"
+                           onChange={onChange} required minLength={8} autoComplete="new-password"
                            aria-invalid={!!fieldErrors.password} />
             {fieldErrors.password && <small className="err">{fieldErrors.password}</small>}
           </label>
