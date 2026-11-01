@@ -71,6 +71,7 @@ export default function Admin() {
   const [dateFrom, setDateFrom] = useState(canManageOrders ? '' : vietnamDate());
   const [dateTo, setDateTo] = useState(canManageOrders ? '' : vietnamDate());
   const [showCreate, setShowCreate] = useState(false);
+  const [debtSummary, setDebtSummary] = useState(null);   // cảnh báo công nợ quá hạn
   // Người xử lý đơn mở ra là đơn chờ xác nhận; người chỉ xem (kế toán) thấy mọi đơn.
   const [filter, setFilter] = useState(canManageOrders ? 'pending' : 'all');
   const [stats, setStats] = useState(null);
@@ -138,6 +139,10 @@ export default function Admin() {
       if (id === requestId.current) setLoading(false);
     }
   }, [filter, offset, canOrders, canProducts, view, dateFrom, dateTo]);
+
+  useEffect(() => {
+    if (can('debt.view')) api.debts().then((d) => setDebtSummary(d.summary)).catch(() => {});
+  }, []);   // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (canManageOrders || can('orders.create')) api.adminShippers().then((d) => setShippers(d.shippers)).catch(() => {});
@@ -396,6 +401,7 @@ export default function Admin() {
 
   if (!firstTab) {
     if (can('delivery')) return <Navigate to="/quan-tri/giao-hang" replace />;
+    if (can('debt.view')) return <Navigate to="/quan-tri/cong-no" replace />;
     if (can('retail.sell')) return <Navigate to="/quan-tri/ban-hang" replace />;
   }
 
@@ -555,6 +561,9 @@ export default function Admin() {
                           📥 Xuất Excel{filter !== 'all' ? ` (${FILTERS.find(([v]) => v === filter)?.[1].toLowerCase()})` : ''}
                         </OrdersExportButton>
                       )}
+                      {can('revenue.view') && (
+                        <Link to="/quan-tri/dong-ngay" className="btn btn-secondary">🧾 Đóng ngày</Link>
+                      )}
                       {can('orders.create') && (
                         <button type="button" className="btn btn-primary" onClick={() => setShowCreate(true)}>+ Tạo đơn</button>
                       )}
@@ -569,7 +578,18 @@ export default function Admin() {
                       const count = counts[value] || 0;
                       return <button key={value} className={filter === value ? 'active' : ''} onClick={() => { setFilter(value); setOffset(0); }}>{label} <span>{count}</span></button>;
                     })}
+                    {can('debt.view') && (
+                      <Link to="/quan-tri/cong-no" className={`debt-link${debtSummary?.overdue_count ? ' overdue' : ''}`}>
+                        📒 Theo dõi công nợ{debtSummary?.overdue_count ? <span>{debtSummary.overdue_count} quá hạn</span> : null}
+                      </Link>
+                    )}
                   </div>
+                  {debtSummary?.overdue_count > 0 && (
+                    <div className="alert warning" role="status">
+                      ⚠️ Có <strong>{debtSummary.overdue_count} khoản công nợ quá hạn</strong> ({formatVND(debtSummary.overdue)}) cần đòi tiền.{' '}
+                      <Link to="/quan-tri/cong-no">Xem công nợ</Link>
+                    </div>
+                  )}
 
                   {visibleOrders.length === 0 ? (
                     <div className="admin-empty"><span>✓</span><h2>Không có đơn nào ở mục này</h2><p>{dateFrom ? 'Không có đơn trong ngày đã chọn.' : 'Bạn đã xử lý xong phần việc hiện tại.'}</p></div>
@@ -582,7 +602,7 @@ export default function Admin() {
                         return (
                           <article key={order.id} id={`admin-order-${order.id}`} className={`admin-order-card${highlightId === order.id ? ' highlight' : ''}`}>
                             <header>
-                              <div><span className="order-number">Đơn {order.code || `#${order.id}`}</span><span className={`status ${order.status}`}>{STATUS_LABEL[order.status]}</span>{order.source === 'staff' ? <span className="guest-tag staff">Nhân viên tạo</span> : !!order.is_guest && <span className="guest-tag" title="Khách đặt không cần đăng nhập">Mua nhanh</span>}{order.fulfillment === 'pickup' && <span className="guest-tag pickup">Lấy tại cửa hàng</span>}</div>
+                              <div><span className="order-number">Đơn {order.code || `#${order.id}`}</span><span className={`status ${order.status}`}>{STATUS_LABEL[order.status]}</span>{order.source === 'staff' ? <span className="guest-tag staff">Nhân viên tạo</span> : !!order.is_guest && <span className="guest-tag" title="Khách đặt không cần đăng nhập">Mua nhanh</span>}{order.fulfillment === 'pickup' && <span className="guest-tag pickup">Lấy tại cửa hàng</span>}{order.payment_status === 'debt' && <span className="guest-tag debt">Công nợ</span>}</div>
                               <time>{formatDateTime(order.created_at)}</time>
                             </header>
                             <div className="admin-order-grid">
@@ -651,6 +671,9 @@ export default function Admin() {
                                       {shippers.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
                                     </select>
                                   </label>
+                                )}
+                                {order.delivery_photo && (
+                                  <a className="shipper-tag photo" href={order.delivery_photo} target="_blank" rel="noopener noreferrer">📷 Ảnh giao hàng</a>
                                 )}
                                 {(!canManageOrders || ['completed', 'cancelled'].includes(order.status)) && order.shipper_name && (
                                   <span className="shipper-tag">🛵 {order.shipper_name}</span>

@@ -243,7 +243,20 @@ add('staff', 'PATCH', /^\/[^/]+\/lock\/?$/, obj({ is_locked: flag }));
 add('staff', 'POST', /^\/[^/]+\/reset-password\/?$/, obj({ password: newPassword }));
 // Nhân viên giao hàng: chỉ hai bước của chính mình.
 add('delivery', 'GET', /^\/orders\/?$/);
-add('delivery', 'PATCH', /^\/orders\/[^/]+\/status\/?$/, obj({ status: z.enum(['shipping', 'completed']) }));
+add('delivery', 'PATCH', /^\/orders\/[^/]+\/status\/?$/, obj({ status: z.enum(['shipping', 'completed']), photo: z.string().max(40).optional() }));
+add('delivery', 'POST', /^\/orders\/[^/]+\/debt\/?$/, obj({
+  delivered_photo: z.string().max(40), invoice_photo: z.string().max(40), company: optionalText(160), comment: optionalText(1000),
+}));
+// Công nợ và đóng ngày.
+const debtComment = obj({ comment: optionalText(1000) });
+add('debts', 'GET', /^\/?$/, empty, obj({ scope: z.enum(['open', 'settled']).optional() }));
+add('debts', 'POST', /^\/[^/]+\/(approve|reject|resubmit|comments)\/?$/, debtComment, obj({ scope: z.enum(['open', 'settled']).optional() }));
+add('debts', 'POST', /^\/[^/]+\/paid\/?$/, obj({ method: z.enum(['cash', 'transfer']), comment: optionalText(1000) }), obj({ scope: z.enum(['open', 'settled']).optional() }));
+add('debts', 'PUT', /^\/accounts\/[^/]+\/?$/, obj({
+  term_days: integer(1, 365).optional(), contact_name: optionalText(120), company: optionalText(160), note: optionalText(300),
+}), obj({ scope: z.enum(['open', 'settled']).optional() }));
+add('closing', 'GET', /^\/?$/, empty, obj({ day: z.string().max(10).optional() }));
+add('closing', 'POST', /^\/?$/, obj({ day: z.string().max(10), counts: z.record(z.string().max(7), z.union([z.number(), z.string().max(7)])).optional(), note: optionalText(1000) }));
 
 export function validateRoutes(group) {
   return (req, res, next) => {

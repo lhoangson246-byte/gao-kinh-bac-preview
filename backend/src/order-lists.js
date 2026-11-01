@@ -25,7 +25,11 @@ export function listAdminOrders({ status, from = null, to = null, limit = 30, of
     FROM orders o JOIN users u ON u.id = o.user_id LEFT JOIN users s ON s.id = o.shipper_id
     WHERE o.id IN (${page}) ORDER BY o.id DESC`).all(...args);
   // Mã băm bí mật của đơn mua nhanh không cần lộ ra, kể cả với quản trị.
-  for (const row of rows) delete row.guest_token_hash;
+  for (const row of rows) {
+    delete row.guest_token_hash;
+    // Ảnh chứng từ chỉ xem được khi đăng nhập (GET /api/proofs/:id).
+    if (row.delivery_photo) row.delivery_photo = `/api/proofs/${row.delivery_photo}`;
+  }
   const items = db.prepare(`SELECT * FROM order_items WHERE order_id IN (${page})
     ORDER BY order_id, id`).all(...args);
   const counts = Object.fromEntries(ORDER_STATUSES.map(s => [s, 0]));

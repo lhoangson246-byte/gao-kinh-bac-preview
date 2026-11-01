@@ -66,7 +66,9 @@ try {
 
   /* Hoàn thành rồi xuất Excel đơn đã hoàn thành */
   await call(`/delivery/orders/${o1.id}/status`, { method: 'PATCH', token: shipper, body: { status: 'shipping' } });
-  await call(`/delivery/orders/${o1.id}/status`, { method: 'PATCH', token: shipper, body: { status: 'completed' } });
+  const proof = await (await fetch(`${app.base}/api/proofs`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', Authorization: `Bearer ${shipper}` },
+    body: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('anh-giao-don-tay'.padEnd(40, 'x'))]) })).json();
+  await call(`/delivery/orders/${o1.id}/status`, { method: 'PATCH', token: shipper, body: { status: 'completed', photo: proof.id } });
   const exported = await fetch(`${app.base}/api/admin/export/orders?period=range&from=${vnToday}&to=${vnToday}&status=completed`, { headers: { Authorization: `Bearer ${accountant}` } });
   check('Kế toán xuất Excel đơn đã hoàn thành theo ngày', exported.status === 200
     && /spreadsheetml/.test(exported.headers.get('content-type') || '') && /completed/.test(exported.headers.get('content-disposition') || ''));

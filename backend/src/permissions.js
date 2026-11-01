@@ -15,12 +15,16 @@ export const PERMISSIONS = {
   'customers.manage': 'Quản lý tài khoản khách hàng',
   'retail.sell': 'Bán hàng tại quầy',
   delivery: 'Giao hàng: xem và cập nhật đơn được phân công',
+  'debt.view': 'Xem trang theo dõi công nợ',
+  'debt.accounting': 'Kế toán: duyệt đơn nợ, xác nhận đã thu tiền, đặt hạn công nợ',
+  'debt.final': 'Duyệt cuối đơn nợ và tất toán (mẹ)',
 };
 export const PERMISSION_CODES = Object.keys(PERMISSIONS);
 
 /** Mẫu quyền để chủ cửa hàng chọn nhanh khi tạo tài khoản; vẫn tick thêm / bỏ được. */
 export const PRESETS = {
-  'ke-toan': { title: 'Kế toán', permissions: ['orders.view', 'orders.export', 'revenue.view'] },
+  'ke-toan': { title: 'Kế toán', permissions: ['orders.view', 'orders.export', 'revenue.view', 'debt.view', 'debt.accounting'] },
+  'duyet-cuoi': { title: 'Duyệt cuối (mẹ)', permissions: ['orders.view', 'revenue.view', 'debt.view', 'debt.final'] },
   'giao-hang': { title: 'Nhân viên giao hàng', permissions: ['delivery'] },
   'ban-hang': { title: 'Nhân viên bán hàng', permissions: ['orders.view', 'orders.manage', 'orders.create', 'retail.sell'] },
 };

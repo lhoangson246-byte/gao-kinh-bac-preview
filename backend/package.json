@@ -25,6 +25,7 @@
     "test:codes": "node test/discount-codes.mjs",
     "test:staff": "node test/staff.mjs",
     "test:manual": "node test/manual-orders.mjs",
+    "test:debts": "node test/debts.mjs",
     "check:live": "node test/live-security.mjs"
   },
   "dependencies": {

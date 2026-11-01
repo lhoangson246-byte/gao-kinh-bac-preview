@@ -42,7 +42,7 @@ async function openImage(file) {
  * Ảnh chụp bằng điện thoại thường 4–8MB; sau bước này chỉ còn khoảng 150–300KB
  * nên tải nhanh và không làm phình cơ sở dữ liệu của cửa hàng.
  */
-async function shrink(file, maxEdge = MAX_EDGE) {
+export async function shrink(file, maxEdge = MAX_EDGE) {
   const source = await openImage(file);
   try {
     const scale = Math.min(1, maxEdge / Math.max(source.width, source.height));

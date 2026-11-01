@@ -34,7 +34,7 @@ try {
   const accLogin = await login(accPhone, 'ketoan2026');
   const accountant = accLogin.data.token;
   check('Kế toán đăng nhập bằng số điện thoại, thấy đúng quyền', accLogin.status === 200 && accLogin.data.user.role === 'staff'
-    && JSON.stringify(accLogin.data.user.permissions) === JSON.stringify(['orders.view', 'orders.export', 'revenue.view']), JSON.stringify(accLogin.data.user));
+    && JSON.stringify(accLogin.data.user.permissions) === JSON.stringify(catalog.presets['ke-toan'].permissions), JSON.stringify(accLogin.data.user));
   const shipper = (await login(shipPhone, 'giaohang26')).data.token;
   const sales = (await login(salePhone, 'banhang26')).data.token;
   const me = (await call('/auth/me', { token: shipper })).data.user;
@@ -90,7 +90,10 @@ try {
     && !JSON.stringify(mine).includes('cost_price'), JSON.stringify(mine).slice(0, 200));
   check('Giao hàng không huỷ được đơn (400)', await status(shipper, `/delivery/orders/${order.id}/status`, { method: 'PATCH', body: { status: 'cancelled' } }) === 400);
   check('Giao hàng: bắt đầu giao', await status(shipper, `/delivery/orders/${order.id}/status`, { method: 'PATCH', body: { status: 'shipping' } }) === 200);
-  const done = await call(`/delivery/orders/${order.id}/status`, { method: 'PATCH', token: shipper, body: { status: 'completed' } });
+  // Giao xong phải kèm ảnh (12/11/2026).
+  const proof = await (await fetch(`${app.base}/api/proofs`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', Authorization: `Bearer ${shipper}` },
+    body: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('anh-giao-hang-thu'.padEnd(40, 'x'))]) })).json();
+  const done = await call(`/delivery/orders/${order.id}/status`, { method: 'PATCH', token: shipper, body: { status: 'completed', photo: proof.id } });
   check('Giao hàng: đã giao xong', done.status === 200 && done.data.order.status === 'completed' && !!done.data.order.completed_at);
   const tracked = (await call('/orders/track', { method: 'POST', body: { phone: guestPhone, code: order.code } })).data.order;
   check('Khách tra cứu thấy "đã giao xong" kèm giờ', tracked.status === 'completed' && !!tracked.shipping_at && !!tracked.completed_at);

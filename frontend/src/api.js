@@ -42,10 +42,10 @@ async function request(path, { method = 'GET', body, auth = false, signal } = {}
  * Tải ảnh sản phẩm lên. Gửi thẳng nội dung tệp (không phải JSON) nên không
  * dùng chung hàm request() ở trên.
  */
-async function uploadImage(blob) {
+async function uploadImage(blob, path = '/admin/images') {
   let res;
   try {
-    res = await fetch(`${BASE}/api/admin/images`, {
+    res = await fetch(`${BASE}/api${path}`, {
       method: 'POST',
       // Cùng cách xác thực bằng cookie phiên như request() ở trên.
       headers: {
@@ -119,7 +119,16 @@ export const api = {
   adminCreateOrder: (body) => request('/admin/orders', { method: 'POST', auth: true, body }),
   adminAssignShipper: (orderId, shipperId) => request(`/admin/orders/${orderId}/shipper`, { method: 'PATCH', auth: true, body: { shipper_id: shipperId } }),
   deliveryOrders: () => request('/delivery/orders', { auth: true }),
-  deliverySetStatus: (orderId, status) => request(`/delivery/orders/${orderId}/status`, { method: 'PATCH', auth: true, body: { status } }),
+  deliverySetStatus: (orderId, status, photo) => request(`/delivery/orders/${orderId}/status`, { method: 'PATCH', auth: true, body: { status, ...(photo ? { photo } : {}) } }),
+  deliveryDebt: (orderId, body) => request(`/delivery/orders/${orderId}/debt`, { method: 'POST', auth: true, body }),
+  // Ảnh chứng từ (giao hàng, hoá đơn nợ): riêng tư, chỉ người trong cửa hàng xem được.
+  uploadProof: (blob) => uploadImage(blob, '/proofs'),
+  // Công nợ và đóng ngày.
+  debts: (scope = 'open') => request(`/debts?scope=${scope}`, { auth: true }),
+  debtAction: (id, action, body = {}, scope = 'open') => request(`/debts/${id}/${action}?scope=${scope}`, { method: 'POST', auth: true, body }),
+  debtAccount: (id, body, scope = 'open') => request(`/debts/accounts/${id}?scope=${scope}`, { method: 'PUT', auth: true, body }),
+  closing: (day) => request(`/admin/closing${day ? `?day=${day}` : ''}`, { auth: true }),
+  saveClosing: (body) => request('/admin/closing', { method: 'POST', auth: true, body }),
   adminCreateDiscountCode: (body) => request('/admin/discount-codes', { method: 'POST', auth: true, body }),
   adminUpdateDiscountCode: (id, body) => request(`/admin/discount-codes/${id}`, { method: 'PUT', auth: true, body }),
   myOrders: () => request('/orders', { auth: true }),

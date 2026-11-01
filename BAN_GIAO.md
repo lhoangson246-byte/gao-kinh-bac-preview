@@ -1249,6 +1249,46 @@ Tạo cặp khoá VAPID một lần: `cd backend && npx web-push generate-vapid-
 Trên iPhone (iOS 16.4 trở lên): phải "Thêm vào MH chính" từ Safari rồi mở app từ biểu tượng đó mới
 bật được thông báo.
 
+## Ảnh giao hàng, công nợ duyệt nhiều cấp, đóng ngày (12/11/2026)
+
+### Giao xong phải chụp ảnh
+
+Trên trang giao hàng, đơn đang giao có nút **📷 Chụp ảnh gạo đã giao** (mở thẳng camera). Chưa có ảnh thì
+nút **✅ Hoàn thành đơn** bị khoá. Ảnh lưu kèm đơn; trang quản trị có link **📷 Ảnh giao hàng** trên thẻ đơn.
+Ảnh chứng từ lưu riêng (bảng `proof_photos`), chỉ người trong cửa hàng có quyền mới xem được.
+
+### Công nợ
+
+Quy trình (mỗi bước ghi tên người, giờ; bước nào cũng bình luận được):
+1. Nhân viên giao bấm **📝 Khách nợ (công nợ)** → chụp **gạo đã giao tới nơi** + **hoá đơn nợ**, ghi tên công
+   ty, ghi chú → **Gửi kế toán duyệt**. Đơn chuyển "đã giao" và đánh dấu **Công nợ** (không tính vào tiền mặt).
+2. **Kế toán duyệt** (hoặc trả lại kèm lý do).
+3. **Mẹ duyệt cho nợ** → khoản nợ "Đang nợ".
+4. Đòi được tiền: **kế toán ký đã thu tiền** (tiền mặt / chuyển khoản).
+5. **Mẹ duyệt tất toán** → khoản nợ chuyển sang mục "Đã tất toán". Mẹ chưa đồng ý thì quay lại "Đang nợ".
+Khoản bị trả lại: kế toán bấm **Gửi duyệt lại** sau khi xử lý.
+
+Trang **📒 Theo dõi công nợ** (`/quan-tri/cong-no`, link ở tab Đơn hàng ngay sau nút "Đã huỷ"):
+- Gom theo khách (tên — công ty, SĐT), mỗi khách một sơ đồ các đơn nợ đang tồn đọng: ngày giao, số tiền,
+  hạn trả, 5 bước duyệt, ảnh (bấm để xem lớn), dòng thời gian bình luận; cuối khối là **tổng công nợ**.
+- **Hạn công nợ** đặt riêng từng khách (mặc định 15 ngày, kế toán / chị Linh sửa). Hạn trả = ngày giao + số
+  ngày. Quá hạn thì trang hiện **cảnh báo đỏ** (và tab Đơn hàng hiện "N khoản công nợ quá hạn").
+- Ai thấy gì: kế toán và mẹ (và chị Linh) xem; nút duyệt chỉ hiện cho đúng người.
+
+Quyền mới: **Xem công nợ**, **Kế toán duyệt công nợ** (thêm vào mẫu Kế toán), **Duyệt cuối (mẹ)** — mẫu mới
+"Duyệt cuối (mẹ)": xem đơn, xem doanh thu, xem và duyệt cuối công nợ.
+Dữ liệu: `debt_accounts`, `debt_records`, `debt_events`; `orders.payment_status = 'debt'`.
+Kiểm thử: `npm --prefix backend run test:debts`.
+
+### Đóng ngày (kế toán)
+
+Nút **🧾 Đóng ngày** ở tab Đơn hàng (người được xem doanh thu) → `/quan-tri/dong-ngay`:
+- Chọn ngày; các mục mở / thu gọn: **Doanh thu hôm nay** (tổng; đơn online tiền mặt / chuyển khoản / công nợ,
+  bán quầy, trả hàng), **Chuyển khoản**, **Tiền mặt** (sổ sách + **kê loại tiền** 500.000đ → 1.000đ, tổng đếm
+  được, chênh lệch thừa/thiếu), **Công nợ** (phát sinh, thu nợ, tổng đang mở), ghi chú.
+- **Lưu phiếu đóng ngày** (lưu lại người đóng, giờ; mở lại ngày cũ thấy phiếu) và **🖨️ In báo cáo**.
+- Quy ước: đơn online tính vào ngày **giao xong**; bán quầy / trả hàng theo ngày lập; thu nợ theo ngày kế toán ký.
+
 ## Mã giảm giá, tài khoản nhân viên, tạo đơn bằng tay (01/11/2026)
 
 ### Mã giảm giá

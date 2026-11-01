@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api, DELIVERY_SLOT_LABEL, formatDateTime, formatVND, mapLink } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
 import PushSettings from '../components/PushSettings.jsx';
+import ProofPhoto from '../components/ProofPhoto.jsx';
 
 const REFRESH_MS = 30_000;
 const formatPhone = (phone) => String(phone || '').replace(/^(\d{4})(\d{3})(\d{3})$/, '$1 $2 $3');
@@ -19,6 +20,9 @@ export default function Delivery() {
   const [orders, setOrders] = useState(null);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
+  const [photos, setPhotos] = useState({});   // { orderId: { id, url } } ảnh gạo đã giao
+  const [debtForms, setDebtForms] = useState({});   // { orderId: { delivered, invoice, company, comment, errors } }
+  const setDebt = (orderId, patch) => setDebtForms((cur) => ({ ...cur, [orderId]: { ...cur[orderId], ...patch } }));
 
   const load = useCallback(async () => {
     try {
@@ -42,7 +46,7 @@ export default function Delivery() {
     if (status === 'completed' && !window.confirm(`Xác nhận đã giao đơn ${order.code} cho ${order.receiver_name}${order.payment_method === 'cod' ? ` và đã thu ${formatVND(order.total)}` : ''}?`)) return;
     setBusyId(order.id);
     try {
-      await api.deliverySetStatus(order.id, status);
+      await api.deliverySetStatus(order.id, status, status === 'completed' ? photos[order.id]?.id : undefined);
       await load();
     } catch (err) {
       setError(err.message);
@@ -51,9 +55,34 @@ export default function Delivery() {
     }
   };
 
+  // Khách nợ: ảnh gạo đã giao + ảnh hoá đơn nợ → chuyển kế toán duyệt.
+  const submitDebt = async (order) => {
+    const form = debtForms[order.id] || {};
+    if (!form.delivered || !form.invoice) {
+      setDebt(order.id, { errors: { delivered: !form.delivered ? 'Chụp ảnh gạo đã giao.' : '', invoice: !form.invoice ? 'Chụp ảnh hoá đơn nợ.' : '' } });
+      return;
+    }
+    if (!window.confirm(`Ghi nợ đơn ${order.code} (${formatVND(order.total)}) và gửi kế toán duyệt?`)) return;
+    setBusyId(order.id);
+    try {
+      await api.deliveryDebt(order.id, {
+        delivered_photo: form.delivered.id, invoice_photo: form.invoice.id,
+        company: form.company?.trim() || null, comment: form.comment?.trim() || null,
+      });
+      setDebtForms((cur) => { const next = { ...cur }; delete next[order.id]; return next; });
+      await load();
+    } catch (err) {
+      setDebt(order.id, { errors: { form: err.message, ...(err.errors || {}) } });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const active = (orders || []).filter((o) => ['confirmed', 'shipping'].includes(o.status));
   const finished = (orders || []).filter((o) => !['confirmed', 'shipping'].includes(o.status));
   const toCollect = active.filter((o) => o.payment_method === 'cod').reduce((sum, o) => sum + o.total, 0);
+  const collected = finished.filter((o) => o.status === 'completed' && o.payment_status !== 'debt' && o.payment_method === 'cod')
+    .reduce((sum, o) => sum + o.total, 0);
 
   return (
     <div className="admin-app delivery-app">
@@ -70,7 +99,7 @@ export default function Delivery() {
         <div className="delivery-summary">
           <div><strong>{active.length}</strong><span>đơn cần giao</span></div>
           <div><strong>{formatVND(toCollect)}</strong><span>tiền mặt cần thu</span></div>
-          <div><strong>{finished.filter((o) => o.status === 'completed').length}</strong><span>đã giao hôm nay</span></div>
+          <div><strong>{finished.filter((o) => o.status === 'completed').length}</strong><span>đã giao hôm nay · thu {formatVND(collected)}</span></div>
         </div>
         {error && <p className="alert error" role="alert">{error} <button type="button" className="link-button" onClick={load}>Thử lại</button></p>}
         {!orders && !error && <div className="loading-state" role="status"><span></span>Đang tải đơn…</div>}
@@ -113,10 +142,37 @@ export default function Delivery() {
                 <button type="button" className="btn btn-primary btn-block btn-large" disabled={busyId === order.id} onClick={() => setStatus(order, 'shipping')}>
                   {busyId === order.id ? 'Đang lưu…' : '🛵 Bắt đầu giao'}
                 </button>
+              ) : debtForms[order.id] ? (
+                <div className="delivery-debt">
+                  <h3>📝 Khách nợ — gửi kế toán duyệt</h3>
+                  <ProofPhoto label="Chụp gạo đã giao tới nơi" value={debtForms[order.id].delivered}
+                              onChange={(v) => setDebt(order.id, { delivered: v })} error={debtForms[order.id].errors?.delivered} />
+                  <ProofPhoto label="Chụp hoá đơn nợ" value={debtForms[order.id].invoice}
+                              onChange={(v) => setDebt(order.id, { invoice: v })} error={debtForms[order.id].errors?.invoice} />
+                  <label>Tên công ty (nếu có)
+                    <input className="input" value={debtForms[order.id].company || ''} maxLength={160}
+                           onChange={(e) => setDebt(order.id, { company: e.target.value })} placeholder="VD: Công ty TNHH ABC" />
+                  </label>
+                  <label>Ghi chú cho kế toán
+                    <textarea className="input" rows={2} maxLength={1000} value={debtForms[order.id].comment || ''}
+                              onChange={(e) => setDebt(order.id, { comment: e.target.value })} placeholder="VD: Khách hẹn trả sau 15 ngày" />
+                  </label>
+                  {debtForms[order.id].errors?.form && <p className="alert error">{debtForms[order.id].errors.form}</p>}
+                  <button type="button" className="btn btn-primary btn-block btn-large" disabled={busyId === order.id} onClick={() => submitDebt(order)}>
+                    {busyId === order.id ? 'Đang gửi…' : 'Gửi kế toán duyệt'}
+                  </button>
+                  <button type="button" className="link-button" onClick={() => setDebtForms((cur) => { const next = { ...cur }; delete next[order.id]; return next; })}>Huỷ, khách trả tiền</button>
+                </div>
               ) : (
-                <button type="button" className="btn btn-primary btn-block btn-large delivery-done" disabled={busyId === order.id} onClick={() => setStatus(order, 'completed')}>
-                  {busyId === order.id ? 'Đang lưu…' : '✅ Đã giao xong'}
-                </button>
+                <>
+                  <ProofPhoto label="Chụp ảnh gạo đã giao" value={photos[order.id]}
+                              onChange={(v) => setPhotos((cur) => ({ ...cur, [order.id]: v }))} />
+                  <button type="button" className="btn btn-primary btn-block btn-large delivery-done" disabled={busyId === order.id || !photos[order.id]}
+                          onClick={() => setStatus(order, 'completed')}>
+                    {busyId === order.id ? 'Đang lưu…' : photos[order.id] ? '✅ Hoàn thành đơn' : '✅ Hoàn thành đơn (chụp ảnh trước)'}
+                  </button>
+                  <button type="button" className="btn btn-secondary btn-block" onClick={() => setDebt(order.id, {})}>📝 Khách nợ (công nợ)</button>
+                </>
               )}
             </article>
           ))}
@@ -129,7 +185,9 @@ export default function Delivery() {
               {finished.map((order) => (
                 <li key={order.id}>
                   <span><strong>{order.code}</strong> · {order.receiver_name}</span>
-                  <span className={`status ${order.status}`}>{order.status === 'completed' ? `Đã giao ${formatDateTime(order.completed_at).split(' ')[0]}` : 'Đã huỷ'}</span>
+                  <span className={`status ${order.status}`}>
+                    {order.status === 'completed' ? `${order.payment_status === 'debt' ? 'Ghi nợ' : 'Đã giao'} ${formatDateTime(order.completed_at).split(' ')[0]}` : 'Đã huỷ'}
+                  </span>
                 </li>
               ))}
             </ul>

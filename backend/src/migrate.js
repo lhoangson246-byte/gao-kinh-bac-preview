@@ -947,5 +947,75 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(novemberCode)
   db.exec('CREATE INDEX IF NOT EXISTS idx_orders_shipper ON orders(shipper_id, status)');
 }
 
+// 12/11/2026: ảnh chứng từ giao hàng / hoá đơn nợ (riêng tư, không nằm trong kho ảnh sản phẩm công
+// khai), đơn công nợ duyệt nhiều cấp, và phiếu đóng ngày của kế toán.
+db.exec(`
+CREATE TABLE IF NOT EXISTS proof_photos (
+  id          TEXT PRIMARY KEY,
+  mime        TEXT NOT NULL,
+  bytes       BLOB NOT NULL,
+  size        INTEGER NOT NULL,
+  uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS debt_accounts (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  phone        TEXT NOT NULL UNIQUE,
+  contact_name TEXT NOT NULL,
+  company      TEXT,
+  term_days    INTEGER NOT NULL DEFAULT 15 CHECK (term_days BETWEEN 1 AND 365),
+  note         TEXT,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS debt_records (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_id        INTEGER NOT NULL UNIQUE REFERENCES orders(id) ON DELETE CASCADE,
+  account_id      INTEGER NOT NULL REFERENCES debt_accounts(id),
+  amount          INTEGER NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'pending_accounting'
+                  CHECK (status IN ('pending_accounting', 'pending_final', 'open', 'paid_pending_final', 'settled', 'rejected')),
+  delivered_photo TEXT NOT NULL,
+  invoice_photo   TEXT NOT NULL,
+  delivered_on    TEXT NOT NULL,
+  created_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  accounting_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  accounting_at   TEXT,
+  final_by        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  final_at        TEXT,
+  paid_by         INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  paid_at         TEXT,
+  paid_method     TEXT CHECK (paid_method IS NULL OR paid_method IN ('cash', 'transfer')),
+  settled_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  settled_at      TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_debt_records_status ON debt_records(status, account_id);
+CREATE TABLE IF NOT EXISTS debt_events (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  debt_id    INTEGER NOT NULL REFERENCES debt_records(id) ON DELETE CASCADE,
+  user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  user_name  TEXT,
+  action     TEXT NOT NULL,
+  comment    TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_debt_events_debt ON debt_events(debt_id, id);
+CREATE TABLE IF NOT EXISTS day_closings (
+  day        TEXT PRIMARY KEY,
+  data       TEXT NOT NULL,
+  closed_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  closer_name TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`);
+{
+  const columns = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
+  if (!columns.includes('delivery_photo')) db.exec('ALTER TABLE orders ADD COLUMN delivery_photo TEXT');
+  if (!columns.includes('payment_status')) db.exec("ALTER TABLE orders ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'normal'");
+}
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

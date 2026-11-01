@@ -14,7 +14,7 @@ import { creditPoints, loyaltyPhoneForOrder } from './loyalty.js';
  * `guard(current)` (tuỳ chọn) chạy trong transaction trước khi đổi, để kiểm tra thêm điều kiện, ví
  * dụ nhân viên giao hàng chỉ được đổi đơn của chính mình. Trả { before, order }.
  */
-export function changeOrderStatus(orderId, status, { guard } = {}) {
+export function changeOrderStatus(orderId, status, { guard, within } = {}) {
   if (!ORDER_STATUSES.includes(status)) {
     throw new HttpError(400, `Trạng thái phải thuộc: ${ORDER_STATUSES.join(', ')}.`);
   }
@@ -58,6 +58,8 @@ export function changeOrderStatus(orderId, status, { guard } = {}) {
         db.prepare('UPDATE orders SET points_earned = ? WHERE id = ?').run(earned, order.id);
       }
     }
+    // Việc kèm theo phải thành công cùng lần đổi trạng thái (ví dụ ảnh giao hàng, đơn công nợ).
+    within?.(current);
     return current;
   })();
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);

@@ -1591,3 +1591,117 @@ label b { color: var(--danger); }
 @media (max-width: 560px) {
   .orders-toolbar { align-items: stretch; flex-direction: column; }
 }
+
+/* --- Ảnh chứng từ (giao hàng, hoá đơn nợ) --- */
+.proof-photo { display: flex; flex-direction: column; gap: 4px; }
+.proof-photo-button { min-height: 50px; border-style: dashed; font-size: 1rem; cursor: pointer; }
+.proof-photo-button.busy { opacity: .7; pointer-events: none; }
+.proof-photo-preview { display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid #b9d4c1; border-radius: 12px; background: var(--green-100); }
+.proof-photo-preview img { width: 64px; height: 64px; border-radius: 8px; object-fit: cover; }
+.proof-photo-preview span { flex: 1; color: var(--green-950); font-weight: 750; }
+.proof-photo-preview .link-button { cursor: pointer; }
+.delivery-debt { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 2px dashed var(--gold); border-radius: 14px; background: #fffaf0; }
+.delivery-debt h3 { margin: 0; color: #6b4a0c; }
+.delivery-debt label { display: flex; flex-direction: column; gap: 4px; font-weight: 700; font-size: .9rem; }
+.guest-tag.debt { background: #fde8e4; color: var(--danger); }
+.shipper-tag.photo { background: #e8f1ff; color: #1d3f78; text-decoration: none; }
+
+/* --- Theo dõi công nợ --- */
+.debt-link { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; padding: 8px 14px; border: 1px dashed var(--green-800); border-radius: 99px; color: var(--green-950); font-weight: 800; text-decoration: none; white-space: nowrap; }
+.debt-link span { padding: 1px 8px; border-radius: 99px; background: var(--danger); color: white; font-size: .72rem; }
+.debt-link.overdue { border-color: var(--danger); color: var(--danger); }
+.debts-main { max-width: 1180px; margin: 0 auto; padding: 18px 16px 60px; }
+.debt-stats { margin-bottom: 14px; }
+.debt-warning { margin: 0 0 14px; padding: 14px 16px; border: 2px solid var(--danger); border-radius: 14px; background: var(--danger-light); color: var(--danger); }
+.debt-warning ul { margin: 6px 0 0; padding-left: 18px; color: var(--ink); }
+.debt-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+.debt-toolbar .input { flex: 1; min-width: 220px; }
+.debt-flow { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); gap: 0 26px; margin-bottom: 18px; padding: 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--paper); }
+.debt-flow.overdue { border-color: var(--danger); box-shadow: 0 0 0 2px rgba(165, 61, 50, .15); }
+.debt-customer { position: sticky; top: 90px; align-self: start; display: flex; flex-direction: column; gap: 6px; }
+.debt-customer h2 { margin: 0; font-size: 1.25rem; }
+.debt-company { margin: 0; color: var(--green-800); font-weight: 800; }
+.debt-term { margin: 4px 0 0; color: var(--muted); font-size: .86rem; }
+.debt-term .link-button { margin-left: 6px; }
+.debt-term-edit { display: flex; flex-direction: column; gap: 6px; }
+.debt-term-edit label { display: flex; flex-direction: column; gap: 3px; font-size: .8rem; font-weight: 700; }
+.debt-total { display: flex; flex-direction: column; margin-top: 8px; padding: 12px; border-radius: 12px; background: var(--green-950); color: white; }
+.debt-total span { font-size: .78rem; opacity: .85; }
+.debt-total strong { font-size: 1.35rem; }
+.debt-total small { color: #ffd8d0; font-weight: 800; }
+/* Sơ đồ: mỗi đơn nợ nối về khách bằng đường kẻ bên trái */
+.debt-records { position: relative; display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0 0 0 22px; list-style: none; border-left: 3px solid #cfe0d4; }
+.debt-record { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; background: white; }
+.debt-record::before { content: ""; position: absolute; left: -25px; top: 22px; width: 22px; height: 3px; background: #cfe0d4; }
+.debt-record.overdue { border-color: var(--danger); }
+.debt-record.overdue::before { background: var(--danger); }
+.debt-record.settled { opacity: .85; }
+.debt-record-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.debt-record-head b { color: var(--green-950); font-size: 1.05rem; }
+.debt-status { padding: 2px 10px; border-radius: 99px; background: #eeece6; font-size: .76rem; font-weight: 800; }
+.debt-status.pending_accounting, .debt-status.pending_final, .debt-status.paid_pending_final { background: #fff3d6; color: #6b4a0c; }
+.debt-status.open { background: #e8f1ff; color: #1d3f78; }
+.debt-status.settled { background: var(--success-light); color: var(--success); }
+.debt-status.rejected { background: var(--danger-light); color: var(--danger); }
+.debt-overdue { color: var(--danger); font-weight: 800; font-size: .84rem; }
+.debt-due { color: var(--muted); font-size: .84rem; }
+.debt-steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: step; }
+.debt-steps li { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 8px 8px 8px 30px; border-radius: 10px; background: #f6f5f0; font-size: .78rem; }
+.debt-steps li::before { counter-increment: step; content: counter(step); position: absolute; left: 8px; top: 8px; display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; background: #d9d7cf; color: white; font-size: .68rem; font-weight: 800; }
+.debt-steps li.done { background: var(--green-100); }
+.debt-steps li.done::before { content: "✓"; background: var(--green-800); }
+.debt-steps li span { font-weight: 800; }
+.debt-steps li small { color: var(--muted); }
+.debt-photos { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
+.debt-photos button { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px; border: 1px solid var(--border); border-radius: 10px; background: white; cursor: zoom-in; font-size: .72rem; color: var(--muted); }
+.debt-photos img { width: 92px; height: 92px; border-radius: 8px; object-fit: cover; background: #eee; }
+.debt-items { flex: 1; min-width: 200px; margin: 0; font-size: .86rem; }
+.debt-items small { display: block; color: var(--muted); }
+.debt-events { margin: 0; padding: 8px 10px; border-radius: 10px; background: #faf9f5; list-style: none; font-size: .82rem; }
+.debt-events li { padding: 4px 0; border-bottom: 1px dashed #e5e3dc; }
+.debt-events li:last-child { border-bottom: 0; }
+.debt-events small { margin-left: 6px; color: var(--muted); }
+.debt-events p { margin: 2px 0 0; color: var(--ink); font-style: italic; }
+.debt-actions { display: flex; flex-direction: column; gap: 6px; }
+.debt-buttons { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.debt-buttons .btn { min-height: 38px; padding: 6px 12px; font-size: .84rem; }
+.debt-method { width: auto; min-height: 38px; padding: 6px 10px; }
+@media (max-width: 860px) {
+  .debt-flow { grid-template-columns: 1fr; gap: 12px; }
+  .debt-customer { position: static; }
+  .debt-steps { grid-template-columns: 1fr 1fr; }
+}
+
+/* --- Đóng ngày (in được) --- */
+.closing-main { max-width: 820px; margin: 0 auto; padding: 18px 16px 60px; }
+.closing-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 14px; }
+.closing-head h1 { margin: 4px 0; }
+.closing-head label { display: flex; flex-direction: column; gap: 4px; font-weight: 700; font-size: .84rem; }
+.closing-saved { margin: 0; color: var(--success); font-weight: 750; }
+.closing-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.closing-summary div { display: flex; flex-direction: column; gap: 2px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: white; }
+.closing-summary span { color: var(--muted); font-size: .76rem; }
+.closing-summary strong { color: var(--green-950); font-size: 1.1rem; }
+.closing-section { margin-bottom: 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--paper); }
+.closing-section summary { padding: 14px 16px; font-weight: 850; color: var(--green-950); cursor: pointer; }
+.closing-section > :not(summary) { margin-left: 16px; margin-right: 16px; }
+.closing-section h3 { margin-top: 14px; }
+.closing-table { width: calc(100% - 32px); margin-bottom: 14px; border-collapse: collapse; font-size: .9rem; }
+.closing-table th, .closing-table td { padding: 8px 6px; border-bottom: 1px solid #efede6; text-align: left; font-weight: 500; }
+.closing-table .num { text-align: right; white-space: nowrap; }
+.closing-table tr.strong th, .closing-table tr.strong td, .closing-table tfoot th, .closing-table tfoot td { font-weight: 850; }
+.closing-table th small { color: var(--muted); }
+.cash-count input { width: 90px; min-height: 36px; padding: 4px 8px; text-align: right; }
+.cash-count tr.diff td { color: var(--danger); }
+.cash-count tr.ok td { color: var(--success); }
+.closing-note { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; font-weight: 700; }
+.print-only { display: none; }
+@media (max-width: 560px) { .closing-summary { grid-template-columns: 1fr 1fr; } }
+@media print {
+  .no-print, .admin-topbar { display: none !important; }
+  .print-only { display: block; margin-top: 30px; }
+  body, .admin-app { background: white !important; }
+  .closing-main { max-width: none; padding: 0; }
+  .closing-section { break-inside: avoid; border-color: #999; }
+  .cash-count input { border: 0; background: none; }
+}

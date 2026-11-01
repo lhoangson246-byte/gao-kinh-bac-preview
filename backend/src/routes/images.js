@@ -116,6 +116,42 @@ router.get('/admin/images', requireAuth, requirePermission('products.manage'), (
   res.json({ uploaded, inUse });
 });
 
+/**
+ * POST /api/proofs — ảnh chứng từ: ảnh gạo đã giao tới nơi, ảnh hoá đơn nợ. KHÁC ảnh sản phẩm: không
+ * công khai, chỉ người trong cửa hàng có quyền mới xem được (GET /api/proofs/:id).
+ */
+router.post(
+  '/proofs',
+  requireAuth,
+  requirePermission('delivery', 'orders.manage', 'debt.accounting', 'debt.final'),
+  express.raw({ type: ACCEPTED, limit: MAX_IMAGE_BYTES }),
+  (req, res, next) => {
+    try {
+      const buf = req.body;
+      if (!Buffer.isBuffer(buf) || buf.length === 0) throw new HttpError(400, 'Chưa chụp được ảnh. Vui lòng chụp lại.');
+      const mime = sniffImage(buf);
+      if (!mime) throw new HttpError(400, 'Tệp này không phải ảnh JPG, PNG hay WEBP.');
+      const id = randomBytes(16).toString('hex');
+      db.prepare('INSERT INTO proof_photos (id, mime, bytes, size, uploaded_by) VALUES (?, ?, ?, ?, ?)')
+        .run(id, mime, buf, buf.length, req.user.id);
+      res.status(201).json({ id, url: `/api/proofs/${id}` });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/** GET /api/proofs/:id — chỉ người trong cửa hàng (xem đơn, giao hàng, công nợ). */
+router.get('/proofs/:id', requireAuth, requirePermission('orders.view', 'delivery', 'debt.view'), (req, res) => {
+  const id = String(req.params.id);
+  if (!/^[0-9a-f]{32}$/.test(id)) return res.status(404).json({ message: 'Không tìm thấy ảnh.' });
+  const row = db.prepare('SELECT mime, bytes FROM proof_photos WHERE id = ?').get(id);
+  if (!row) return res.status(404).json({ message: 'Không tìm thấy ảnh.' });
+  res.set('Cache-Control', 'private, max-age=86400');
+  res.type(row.mime);
+  return res.send(row.bytes);
+});
+
 /** GET /api/images/:file — phát ảnh cho khách xem. Ai cũng xem được, như ảnh trong thư mục public. */
 router.get('/images/:file', (req, res) => {
   // Bỏ phần đuôi tệp: đuôi chỉ để đường dẫn đẹp, danh tính nằm ở phần id.
