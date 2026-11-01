@@ -4,7 +4,7 @@ const ImagePicker = lazy(() => import('../components/ImagePicker.jsx'));
 const BannerSettings = lazy(() => import('../components/BannerSettings.jsx'));
 const GroupManager = lazy(() => import('../components/GroupManager.jsx'));
 import OrderAlerts from '../components/OrderAlerts.jsx';
-import { api, salePercent, PRODUCT_CATEGORIES, formatDateTime, formatVND, pointsForLines, mapLink, STATUS_LABEL, DELIVERY_SLOT_LABEL, deliveryDateLabel } from '../api';
+import { api, salePercent, PRODUCT_CATEGORIES, formatDateTime, formatVND, pointsForLines, mapLink, STATUS_LABEL, DELIVERY_SLOT_LABEL, deliveryDateLabel, vietnamDate } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
 const RevenueReport = lazy(() => import('../components/RevenueReport.jsx'));
 const CustomerManager = lazy(() => import('../components/CustomerManager.jsx'));
@@ -15,6 +15,8 @@ const DiscountCodeManager = lazy(() => import('../components/DiscountCodeManager
 const StaffManager = lazy(() => import('../components/StaffManager.jsx'));
 import ProductImage from '../components/ProductImage.jsx';
 import OrdersExportButton from '../components/OrdersExportButton.jsx';
+import OrdersTable from '../components/OrdersTable.jsx';
+const ManualOrderForm = lazy(() => import('../components/ManualOrderForm.jsx'));
 import PageLoadBoundary from '../components/PageLoadBoundary.jsx';
 
 /**
@@ -64,7 +66,13 @@ export default function Admin() {
   const canProducts = can('products.manage');
   const canManageOrders = can('orders.manage');
   const [tab, setTab] = useState(firstTab || 'orders');
-  const [filter, setFilter] = useState('pending');
+  // Xem đơn: dạng thẻ (xử lý từng đơn) hoặc bảng theo ngày. Người chỉ xem (kế toán) mặc định dạng bảng.
+  const [view, setView] = useState(canManageOrders ? 'cards' : 'table');
+  const [dateFrom, setDateFrom] = useState(canManageOrders ? '' : vietnamDate());
+  const [dateTo, setDateTo] = useState(canManageOrders ? '' : vietnamDate());
+  const [showCreate, setShowCreate] = useState(false);
+  // Người xử lý đơn mở ra là đơn chờ xác nhận; người chỉ xem (kế toán) thấy mọi đơn.
+  const [filter, setFilter] = useState(canManageOrders ? 'pending' : 'all');
   const [stats, setStats] = useState(null);
   const [orders, setOrders] = useState([]);
   const [offset, setOffset] = useState(0);
@@ -99,7 +107,11 @@ export default function Admin() {
       // Chỉ tải phần nhân viên được xem — máy chủ cũng chặn phần còn lại.
       const [statsResult, ordersResult, productsResult] = await Promise.all([
         canOrders || canProducts ? api.adminStats() : Promise.resolve({ stats: null }),
-        canOrders ? api.adminOrders(filter, { offset }) : Promise.resolve({ orders: [], counts: {}, total: 0 }),
+        canOrders
+          ? api.adminOrders(filter, view === 'table'
+            ? { offset: 0, limit: 300, from: dateFrom, to: dateTo || dateFrom }
+            : { offset, from: dateFrom, to: dateTo || dateFrom })
+          : Promise.resolve({ orders: [], counts: {}, total: 0 }),
         canProducts && (refreshProducts || !productsLoaded.current)
           ? Promise.all([api.adminProducts(), api.adminGroups()])
             .then(([productList, groupList]) => ({ ...productList, groups: groupList.groups }))
@@ -125,11 +137,26 @@ export default function Admin() {
     } finally {
       if (id === requestId.current) setLoading(false);
     }
-  }, [filter, offset, canOrders, canProducts]);
+  }, [filter, offset, canOrders, canProducts, view, dateFrom, dateTo]);
 
   useEffect(() => {
-    if (canManageOrders) api.adminShippers().then((d) => setShippers(d.shippers)).catch(() => {});
-  }, [canManageOrders]);
+    if (canManageOrders || can('orders.create')) api.adminShippers().then((d) => setShippers(d.shippers)).catch(() => {});
+  }, [canManageOrders]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const today = vietnamDate();
+  const yesterday = vietnamDate(new Date(Date.now() - 86400000));
+  const pickDay = (day) => { setDateFrom(day); setDateTo(day); setOffset(0); };
+  const switchView = (next) => {
+    setView(next);
+    setOffset(0);
+    if (next === 'table' && !dateFrom) pickDay(today);
+  };
+  // Xuất Excel đúng mục đang xem: trạng thái đang lọc + khoảng ngày (chưa chọn ngày thì hôm nay).
+  const exportFrom = dateFrom || today;
+  const exportFilters = {
+    period: 'range', from: exportFrom, to: dateTo || exportFrom,
+    ...(filter !== 'all' ? { status: filter } : {}),
+  };
 
   const assignShipper = async (order, shipperId) => {
     setBusyId(order.id);
@@ -162,6 +189,9 @@ export default function Admin() {
     focusOrder.current = { id, action: searchParams.get('action'), request: requestId.current + 2 };
     setSearchParams({}, { replace: true });
     setTab('orders');
+    setView('cards');
+    setDateFrom('');
+    setDateTo('');
     setFilter('all');
     setOffset(0);
     setReloadTick((tick) => tick + 1);
@@ -505,7 +535,35 @@ export default function Admin() {
                 : tab === 'customers' ? <CustomerManager />
                 : tab === 'orders' ? (
                 <section>
-                  <OrdersExportButton>Xuất đơn hôm nay</OrdersExportButton>
+                  <div className="orders-toolbar">
+                    <div className="orders-dates">
+                      <label>Từ ngày<input className="input" type="date" value={dateFrom} max={dateTo || undefined}
+                                           onChange={(e) => { setDateFrom(e.target.value); if (!dateTo || e.target.value > dateTo) setDateTo(e.target.value); setOffset(0); }} /></label>
+                      <label>Đến ngày<input className="input" type="date" value={dateTo} min={dateFrom || undefined}
+                                            onChange={(e) => { setDateTo(e.target.value); if (!dateFrom) setDateFrom(e.target.value); setOffset(0); }} /></label>
+                      <button type="button" className={`btn btn-secondary${dateFrom === today && dateTo === today ? ' active' : ''}`} onClick={() => pickDay(today)}>Hôm nay</button>
+                      <button type="button" className={`btn btn-secondary${dateFrom === yesterday && dateTo === yesterday ? ' active' : ''}`} onClick={() => pickDay(yesterday)}>Hôm qua</button>
+                      {dateFrom && view === 'cards' && <button type="button" className="link-button" onClick={() => { setDateFrom(''); setDateTo(''); setOffset(0); }}>Mọi ngày</button>}
+                    </div>
+                    <div className="orders-actions">
+                      <div className="view-toggle" role="group" aria-label="Cách xem đơn">
+                        <button type="button" aria-pressed={view === 'cards'} onClick={() => switchView('cards')}>Dạng thẻ</button>
+                        <button type="button" aria-pressed={view === 'table'} onClick={() => switchView('table')}>Bảng theo ngày</button>
+                      </div>
+                      {can('orders.export') && (
+                        <OrdersExportButton filters={exportFilters}>
+                          📥 Xuất Excel{filter !== 'all' ? ` (${FILTERS.find(([v]) => v === filter)?.[1].toLowerCase()})` : ''}
+                        </OrdersExportButton>
+                      )}
+                      {can('orders.create') && (
+                        <button type="button" className="btn btn-primary" onClick={() => setShowCreate(true)}>+ Tạo đơn</button>
+                      )}
+                    </div>
+                  </div>
+                  {showCreate && (
+                    <ManualOrderForm shippers={shippers} onClose={() => setShowCreate(false)}
+                                     onCreated={(order) => { setShowCreate(false); notify(`Đã tạo đơn ${order.code}.`); reload({ refreshProducts: false }); }} />
+                  )}
                   <div className="filter-bar" aria-label="Lọc đơn theo trạng thái">
                     {FILTERS.map(([value, label]) => {
                       const count = counts[value] || 0;
@@ -514,7 +572,9 @@ export default function Admin() {
                   </div>
 
                   {visibleOrders.length === 0 ? (
-                    <div className="admin-empty"><span>✓</span><h2>Không có đơn nào ở mục này</h2><p>Bạn đã xử lý xong phần việc hiện tại.</p></div>
+                    <div className="admin-empty"><span>✓</span><h2>Không có đơn nào ở mục này</h2><p>{dateFrom ? 'Không có đơn trong ngày đã chọn.' : 'Bạn đã xử lý xong phần việc hiện tại.'}</p></div>
+                  ) : view === 'table' ? (
+                    <OrdersTable orders={visibleOrders} />
                   ) : (
                     <div className="admin-orders">
                       {visibleOrders.map((order) => {
@@ -522,7 +582,7 @@ export default function Admin() {
                         return (
                           <article key={order.id} id={`admin-order-${order.id}`} className={`admin-order-card${highlightId === order.id ? ' highlight' : ''}`}>
                             <header>
-                              <div><span className="order-number">Đơn {order.code || `#${order.id}`}</span><span className={`status ${order.status}`}>{STATUS_LABEL[order.status]}</span>{!!order.is_guest && <span className="guest-tag" title="Khách đặt không cần đăng nhập">Mua nhanh</span>}</div>
+                              <div><span className="order-number">Đơn {order.code || `#${order.id}`}</span><span className={`status ${order.status}`}>{STATUS_LABEL[order.status]}</span>{order.source === 'staff' ? <span className="guest-tag staff">Nhân viên tạo</span> : !!order.is_guest && <span className="guest-tag" title="Khách đặt không cần đăng nhập">Mua nhanh</span>}{order.fulfillment === 'pickup' && <span className="guest-tag pickup">Lấy tại cửa hàng</span>}</div>
                               <time>{formatDateTime(order.created_at)}</time>
                             </header>
                             <div className="admin-order-grid">
@@ -604,7 +664,7 @@ export default function Admin() {
                       })}
                     </div>
                   )}
-                  {orderTotal > 30 && <nav className="filter-bar" aria-label="Phân trang đơn hàng">
+                  {view === 'cards' && orderTotal > 30 && <nav className="filter-bar" aria-label="Phân trang đơn hàng">
                     <button disabled={offset === 0 || loading} onClick={() => setOffset(Math.max(0, offset - 30))}>Trang trước</button>
                     <span>{offset + 1}–{Math.min(offset + 30, orderTotal)} / {orderTotal} đơn</span>
                     <button disabled={offset + 30 >= orderTotal || loading} onClick={() => setOffset(offset + 30)}>Trang sau</button>

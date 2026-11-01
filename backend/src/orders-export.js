@@ -8,31 +8,42 @@ const statusNames = { pending: 'Chờ xác nhận', confirmed: 'Đã xác nhận
 const paymentNames = { cod: 'Thanh toán khi nhận hàng', bank: 'Chuyển khoản', cash: 'Tiền mặt', transfer: 'Chuyển khoản' };
 const slotNames = { sang: 'Buổi sáng 07:00–11:30', chieu: 'Buổi chiều 13:30–18:00' };
 
-export async function buildOrdersWorkbook(period) {
+/**
+ * `status`: chỉ xuất đơn online ở trạng thái đó (ví dụ 'completed' — đơn đã giao xong) và bỏ hoá đơn
+ * quầy; không truyền thì xuất mọi đơn online lẫn hoá đơn quầy như trước.
+ */
+export async function buildOrdersWorkbook(period, { status = null } = {}) {
   const days = Math.round((Date.parse(period.to) - Date.parse(period.from)) / DAY_MS) + 1;
   if (!Number.isFinite(days) || days < 1 || days > 366) {
     throw new HttpError(400, 'Chỉ xuất tối đa 366 ngày. Vui lòng chọn khoảng ngày ngắn hơn.');
   }
   const args = [period.from, period.to];
+  // Lọc trạng thái đơn online (chuỗi cố định, giá trị truyền qua tham số).
+  const statusClause = status ? 'AND o.status = ?' : '';
+  const onlineArgs = status ? [...args, status] : args;
+  const withRetail = !status;
   // Cùng một snapshot, tránh đơn vừa thay đổi làm lệch tổng hoặc vượt giới hạn.
   const data = db.transaction(() => {
     const counts = db.prepare(`SELECT
-      (SELECT COUNT(*) FROM orders WHERE ${localDate('created_at')} BETWEEN ? AND ?) +
-      (SELECT COUNT(*) FROM retail_invoices WHERE ${localDate('created_at')} BETWEEN ? AND ?) +
-      (SELECT COUNT(*) FROM order_items i JOIN orders o ON o.id=i.order_id WHERE ${localDate('o.created_at')} BETWEEN ? AND ?) +
-      (SELECT COUNT(*) FROM retail_invoice_items i JOIN retail_invoices v ON v.id=i.invoice_id WHERE ${localDate('v.created_at')} BETWEEN ? AND ?) AS n`)
-      .get(...args, ...args, ...args, ...args);
+      (SELECT COUNT(*) FROM orders o WHERE ${localDate('o.created_at')} BETWEEN ? AND ? ${statusClause}) +
+      (SELECT COUNT(*) FROM order_items i JOIN orders o ON o.id=i.order_id WHERE ${localDate('o.created_at')} BETWEEN ? AND ? ${statusClause}) +
+      (SELECT COUNT(*) FROM retail_invoices WHERE ${withRetail ? '1' : '0'} AND ${localDate('created_at')} BETWEEN ? AND ?) +
+      (SELECT COUNT(*) FROM retail_invoice_items i JOIN retail_invoices v ON v.id=i.invoice_id WHERE ${withRetail ? '1' : '0'} AND ${localDate('v.created_at')} BETWEEN ? AND ?) AS n`)
+      .get(...onlineArgs, ...onlineArgs, ...args, ...args);
     if (counts.n + days + 3 > MAX_ROWS) throw new HttpError(400, 'Báo cáo vượt 50.000 dòng. Vui lòng chọn khoảng ngày ngắn hơn.');
-    const online = db.prepare(`SELECT *, ${localDate('created_at')} AS day,
-      time(created_at, '${REPORT_TIME_SHIFT}') AS clock FROM orders
-      WHERE ${localDate('created_at')} BETWEEN ? AND ? ORDER BY created_at, id`).all(...args);
-    const retail = db.prepare(`SELECT *, ${localDate('created_at')} AS day,
+    const online = db.prepare(`SELECT o.*, ${localDate('o.created_at')} AS day,
+      time(o.created_at, '${REPORT_TIME_SHIFT}') AS clock,
+      strftime('%d/%m %H:%M', o.completed_at, '${REPORT_TIME_SHIFT}') AS completed_clock,
+      s.full_name AS shipper_name, c.full_name AS creator_name
+      FROM orders o LEFT JOIN users s ON s.id = o.shipper_id LEFT JOIN users c ON c.id = o.created_by
+      WHERE ${localDate('o.created_at')} BETWEEN ? AND ? ${statusClause} ORDER BY o.created_at, o.id`).all(...onlineArgs);
+    const retail = withRetail ? db.prepare(`SELECT *, ${localDate('created_at')} AS day,
       time(created_at, '${REPORT_TIME_SHIFT}') AS clock FROM retail_invoices
-      WHERE ${localDate('created_at')} BETWEEN ? AND ? ORDER BY created_at, id`).all(...args);
+      WHERE ${localDate('created_at')} BETWEEN ? AND ? ORDER BY created_at, id`).all(...args) : [];
     const onlineItems = db.prepare(`SELECT i.* FROM order_items i JOIN orders o ON o.id=i.order_id
-      WHERE ${localDate('o.created_at')} BETWEEN ? AND ? ORDER BY o.created_at, o.id, i.id`).all(...args);
-    const retailItems = db.prepare(`SELECT i.* FROM retail_invoice_items i JOIN retail_invoices v ON v.id=i.invoice_id
-      WHERE ${localDate('v.created_at')} BETWEEN ? AND ? ORDER BY v.created_at, v.id, i.id`).all(...args);
+      WHERE ${localDate('o.created_at')} BETWEEN ? AND ? ${statusClause} ORDER BY o.created_at, o.id, i.id`).all(...onlineArgs);
+    const retailItems = withRetail ? db.prepare(`SELECT i.* FROM retail_invoice_items i JOIN retail_invoices v ON v.id=i.invoice_id
+      WHERE ${localDate('v.created_at')} BETWEEN ? AND ? ORDER BY v.created_at, v.id, i.id`).all(...args) : [];
     return { online, retail, onlineItems, retailItems };
   })();
 
@@ -53,7 +64,8 @@ export async function buildOrdersWorkbook(period) {
     ['Mã', 15], ['Ngày', 13], ['Giờ', 11], ['Kênh', 12], ['Trạng thái', 19],
     ['Khách', 26], ['SĐT', 16], ['Địa chỉ', 45], ['Khung giờ giao', 28], ['Thanh toán', 28],
     ['Tiền hàng', 17], ['Giảm giá', 16], ['Khách trả', 17], ['Điểm cộng', 14],
-    ['Điểm đã đổi', 14], ['Vị trí giao hàng', 46],
+    ['Điểm đã đổi', 14], ['Vị trí giao hàng', 46], ['Mã giảm giá', 16], ['Nguồn đơn', 22],
+    ['Cách nhận', 20], ['Người giao', 22], ['Giao xong lúc', 16],
   ], [11, 12, 13, 14, 15]);
   const items = sheet('Chi tiết mặt hàng', [
     ['Mã đơn', 15], ['Ngày', 13], ['Kênh', 12], ['Tên gạo', 38], ['Đơn vị', 16],
@@ -85,6 +97,10 @@ export async function buildOrdersWorkbook(period) {
         online ? order.address : (order.customer_address || ''),
         online ? (slotNames[order.delivery_slot] || '') : '', paymentNames[order.payment_method] || order.payment_method,
         order.subtotal, discount, order.total, order.points_earned, order.points_used || 0, mapLink,
+        online ? (order.discount_code || '') : '',
+        online ? (order.source === 'staff' ? `Nhân viên tạo${order.creator_name ? ` (${order.creator_name})` : ''}` : order.is_guest ? 'Khách mua nhanh' : 'Khách có tài khoản') : 'Tại quầy',
+        online ? (order.fulfillment === 'pickup' ? 'Lấy tại cửa hàng' : 'Giao tận nơi') : '',
+        online ? (order.shipper_name || '') : '', online ? (order.completed_clock || '') : '',
       ]);
       if (online && order.status !== 'completed') continue;
       const day = byDay.get(order.day);

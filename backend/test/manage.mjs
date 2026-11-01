@@ -706,7 +706,9 @@ const guestToken = (await call('/auth/register', {
   const completed = await call('/admin/orders?status=completed&limit=1', { token: admin });
   check('Lọc trạng thái kết hợp phân trang', completed.data.total === first.data.counts.completed
     && completed.data.orders.every(order => order.status === 'completed'));
-  check('Giới hạn phân trang không hợp lệ bị chặn', (await call('/admin/orders?limit=101', { token: admin })).status === 400);
+  // Bảng theo ngày lấy tối đa 300 đơn một lần (01/11/2026); quá mức đó bị chặn.
+  check('Giới hạn phân trang không hợp lệ bị chặn', (await call('/admin/orders?limit=301', { token: admin })).status === 400
+    && (await call('/admin/orders?limit=300', { token: admin })).status === 200);
 }
 
 /* --- Bộ lọc danh mục: giảm giá, gạo nhà hàng, thực phẩm khô --- */

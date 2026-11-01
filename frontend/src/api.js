@@ -116,6 +116,7 @@ export const api = {
   adminLockStaff: (id, isLocked) => request(`/admin/staff/${id}/lock`, { method: 'PATCH', auth: true, body: { is_locked: isLocked } }),
   adminResetStaffPassword: (id, password) => request(`/admin/staff/${id}/reset-password`, { method: 'POST', auth: true, body: { password } }),
   adminShippers: () => request('/admin/shippers', { auth: true }),
+  adminCreateOrder: (body) => request('/admin/orders', { method: 'POST', auth: true, body }),
   adminAssignShipper: (orderId, shipperId) => request(`/admin/orders/${orderId}/shipper`, { method: 'PATCH', auth: true, body: { shipper_id: shipperId } }),
   deliveryOrders: () => request('/delivery/orders', { auth: true }),
   deliverySetStatus: (orderId, status) => request(`/delivery/orders/${orderId}/status`, { method: 'PATCH', auth: true, body: { status } }),
@@ -149,9 +150,11 @@ export const api = {
   adminAboutCreateReview: (review) => request('/admin/about/reviews', { method: 'POST', auth: true, body: review }),
   adminAboutUpdateReview: (id, review) => request(`/admin/about/reviews/${id}`, { method: 'PUT', auth: true, body: review }),
   adminAboutDeleteReview: (id) => request(`/admin/about/reviews/${id}`, { method: 'DELETE', auth: true }),
-  adminOrders: (status, { limit = 30, offset = 0 } = {}) => {
+  adminOrders: (status, { limit = 30, offset = 0, from = '', to = '' } = {}) => {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (status && status !== 'all') params.set('status', status);
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
     return request(`/admin/orders?${params}`, { auth: true });
   },
   adminSetOrderStatus: (id, status) =>

@@ -1249,6 +1249,68 @@ Tạo cặp khoá VAPID một lần: `cd backend && npx web-push generate-vapid-
 Trên iPhone (iOS 16.4 trở lên): phải "Thêm vào MH chính" từ Safari rồi mở app từ biểu tượng đó mới
 bật được thông báo.
 
+## Mã giảm giá, tài khoản nhân viên, tạo đơn bằng tay (01/11/2026)
+
+### Mã giảm giá
+
+- Trang đặt hàng (mua nhanh và có tài khoản) có ô **Mã giảm giá** + nút **Áp dụng**.
+- Mã **GAOKINHBAC11**: giảm **10.000đ**, từ 01/11 đến hết 30/11/2026, không giới hạn lượt (tạo sẵn
+  bằng migration; sửa / tắt ở **Quản trị → Mã giảm giá**).
+- **Mỗi đơn chỉ 1 khuyến mãi**: ưu đãi đơn đầu tiên (20.000đ) HOẶC mã — máy chủ chọn cái lợi hơn cho
+  khách. Đơn đầu nhập GAOKINHBAC11 vẫn chỉ giảm 20.000đ và mã không bị tính lượt; từ đơn thứ hai mới
+  giảm 10.000đ bằng mã. Voucher đổi điểm là quà khách đổi bằng điểm của mình nên vẫn dùng kèm được.
+- Mỗi mã đặt được: số tiền, từ ngày – đến hết ngày (giờ Việt Nam), đơn tối thiểu, số lần mỗi SĐT,
+  tổng số lượt. Đơn huỷ trả lại lượt. Danh sách mã có số đơn đã dùng và tổng tiền đã giảm.
+- API: `POST /api/orders/discount-code` (xem trước, giới hạn 30 lần / 15 phút), `/api/admin/discount-codes`.
+  Kiểm thử: `npm --prefix backend run test:codes`.
+
+### Tài khoản nhân viên và phân quyền
+
+- **Quản trị → Nhân viên** (chỉ chị Linh, tài khoản chủ): tạo tài khoản, tick quyền hoặc chọn mẫu,
+  đặt lại mật khẩu, khoá khi nghỉ việc. Nhân viên đăng nhập ở trang Đăng nhập chung bằng **số điện thoại**
+  (hoặc email). Số điện thoại phải chưa có tài khoản khách.
+- Mẫu quyền:
+  - **Kế toán**: xem đơn hàng, xuất Excel, xem doanh thu (không sửa được gì).
+  - **Nhân viên giao hàng**: chỉ trang giao hàng (đơn được phân công cho mình).
+  - **Nhân viên bán hàng**: xem / xác nhận / huỷ đơn, phân công giao, tạo đơn bằng tay, bán tại quầy.
+- Các quyền: xem đơn · xử lý đơn (xác nhận, huỷ, phân công giao) · tạo đơn bằng tay · xuất Excel ·
+  xem doanh thu · sửa sản phẩm / giá / kho · quản lý khách · bán tại quầy · giao hàng.
+- **Chỉ chủ cửa hàng**: cài đặt cửa hàng (banner, số điện thoại, cơ sở), mã giảm giá, trang Về chúng tôi,
+  nhật ký, quản lý nhân viên.
+- Máy chủ kiểm tra quyền ở **mọi** API; đường dẫn quản trị không có trong bảng quyền thì chỉ chủ cửa hàng
+  vào được. Quyền đọc lại mỗi lần gọi nên đổi quyền / khoá có hiệu lực ngay. Kế toán không thấy giá trị
+  vốn tồn kho; người không có quyền doanh thu không thấy số doanh thu.
+- Dữ liệu: `users.role = 'staff'`, `users.permissions` (JSON), `users.staff_title`.
+  Kiểm thử: `npm --prefix backend run test:staff`.
+
+### Quy trình giao hàng (mặc định — chờ cửa hàng bổ sung)
+
+1. Đơn mới về → người xử lý đơn **xác nhận** và chọn **Người giao** ngay trên thẻ đơn (hoặc chọn khi tạo
+   đơn tay). Nhân viên giao nhận thông báo đẩy "🛵 GIAO ĐƠN #…" trên điện thoại.
+2. Nhân viên giao đăng nhập → vào thẳng **/quan-tri/giao-hang**: thấy đơn của mình với tên khách,
+   nút **📞 Gọi**, **🗺️ Chỉ đường** (tới vị trí khách ghim nếu có), hàng, **số tiền mặt phải thu**.
+3. Bấm **🛵 Bắt đầu giao** (khách tra cứu thấy "Đang giao hàng") → giao xong bấm **✅ Đã giao xong**
+   (khách thấy "Đã giao xong", được cộng điểm như khi cửa hàng bấm).
+4. Đầu trang có tổng số đơn cần giao, tiền mặt cần thu, số đơn đã giao hôm nay.
+- Nhân viên giao chỉ thấy và chỉ đổi được đơn của chính mình, không huỷ được đơn.
+- API: `/api/delivery/orders`, `PATCH /api/admin/orders/:id/shipper`, `GET /api/admin/shippers`.
+
+### Tạo đơn bằng tay, xem đơn theo ngày, xuất Excel
+
+- Tab **Đơn hàng** có thanh công cụ: **Từ ngày / Đến ngày**, nút **Hôm nay / Hôm qua**, chuyển **Dạng thẻ**
+  (xử lý từng đơn) ↔ **Bảng theo ngày**, **📥 Xuất Excel**, **+ Tạo đơn**.
+- **+ Tạo đơn** (khách gọi điện / nhắn Zalo): họ tên, SĐT, tick **Giao hàng tận nơi** (bỏ tick = khách lấy
+  tại cửa hàng, không cần địa chỉ), chọn gạo + số lượng, khung giờ, thanh toán, mã giảm giá, người giao,
+  ghi chú. Giá, tồn kho, ưu đãi đơn đầu / mã do máy chủ tính như đơn online; đơn **đã xác nhận ngay** và
+  ghi nguồn "Nhân viên tạo" + tên người tạo.
+- **Bảng theo ngày**: mỗi đơn một dòng (mã, giờ, khách, SĐT, nhận hàng, hàng, tiền, thanh toán, trạng thái,
+  nguồn, người giao); cuối bảng có tổng tiền (không tính đơn huỷ) và tiền mặt cần thu. Kế toán mở ra là
+  bảng mọi đơn của hôm nay.
+- **Xuất Excel** xuất đúng mục đang xem: trạng thái đang lọc (ví dụ **Hoàn thành**) và khoảng ngày (chưa
+  chọn ngày thì hôm nay). Lọc theo **ngày đặt đơn** như báo cáo doanh thu; tệp có thêm cột mã giảm giá,
+  nguồn đơn, cách nhận, người giao và **giờ giao xong**. Xuất theo trạng thái thì chỉ có đơn online.
+- Kiểm thử: `npm --prefix backend run test:manual`.
+
 ## Hẹn giờ giao, tra cứu đơn, trang "Về chúng tôi" (24/10/2026)
 
 ### Sau khi khách đặt hàng

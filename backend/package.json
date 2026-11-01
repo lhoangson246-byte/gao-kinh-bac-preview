@@ -24,6 +24,7 @@
     "test:about": "node test/about-track.mjs",
     "test:codes": "node test/discount-codes.mjs",
     "test:staff": "node test/staff.mjs",
+    "test:manual": "node test/manual-orders.mjs",
     "check:live": "node test/live-security.mjs"
   },
   "dependencies": {

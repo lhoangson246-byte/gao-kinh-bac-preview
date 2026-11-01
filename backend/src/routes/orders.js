@@ -76,7 +76,7 @@ export function placeOrder({
   userId, guest = false, receiverName, customerPhone, deliveryAddress, customerNote,
   paymentMethod, deliverySlot, lat = null, lng = null, wanted,
   wantedRewards = new Map(), vouchers = 0, pointsPhone = null, guestTokenHash = null, promoGift = null,
-  discountCode = null,
+  discountCode = null, staff = null,
 }) {
   const rewardCount = vouchers + [...wantedRewards.values()].reduce((sum, q) => sum + q, 0);
   return db.transaction(() => {
@@ -165,6 +165,14 @@ export function placeOrder({
     // Mã đơn tự tạo từ số thứ tự: DH000123, cùng kiểu mã hoá đơn quầy HD000123.
     db.prepare('UPDATE orders SET code = ?, discount_code = ?, code_discount = ? WHERE id = ?')
       .run(orderCode(orderId), useCode ? codeRow.code : null, codeDiscount, orderId);
+    // Đơn nhân viên nhập tay (khách gọi điện / nhắn Zalo): đã xác nhận ngay, ghi người tạo, cách
+    // nhận hàng và người giao — trong cùng transaction với đơn.
+    if (staff) {
+      db.prepare(`
+        UPDATE orders SET source = 'staff', created_by = ?, fulfillment = ?, status = 'confirmed',
+          confirmed_at = datetime('now'), shipper_id = ? WHERE id = ?
+      `).run(staff.createdBy, staff.fulfillment, staff.shipperId ?? null, orderId);
+    }
 
     for (const { product, quantity } of lines) {
       const changed = decStock.run(quantity, product.id, quantity).changes;
@@ -484,6 +492,8 @@ router.get('/:id', requireAuth, (req, res, next) => {
  * Luôn gọi bên trong transaction đã khoá trạng thái đơn (UPDATE ... WHERE status = ?),
  * nên mỗi đơn chỉ được hoàn kho và hoàn điểm đúng một lần.
  */
+export { guestAccountId, normalizeItems };
+
 export function restoreStockForOrder(orderId) {
   const items = db
     .prepare('SELECT product_id, quantity FROM order_items WHERE order_id = ?')

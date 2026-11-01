@@ -121,7 +121,15 @@ add('customers', 'POST', /^\/[^/]+\/reset-password\/?$/, obj({ password: newPass
 add('customers', 'PATCH', /^\/[^/]+\/lock\/?$/, obj({ is_locked: flag }));
 add('customers', 'PUT', /^\/[^/]+\/?$/, obj({ full_name: name }));
 add('customers', 'DELETE', /^\/[^/]+\/?$/);
-add('admin', 'GET', /^\/orders\/?$/, empty, obj({ ...page, status: z.enum(ORDER_STATUSES).optional() }));
+add('admin', 'GET', /^\/orders\/?$/, empty, obj({
+  limit: integer(1, 300).optional(), offset: page.offset, status: z.enum(ORDER_STATUSES).optional(),
+  from: day.optional(), to: day.optional(),
+}));
+add('admin', 'POST', /^\/orders\/?$/, obj({
+  receiver_name: name, phone: text(LIMITS.phone), home_delivery: z.boolean().optional(), address: optionalText(LIMITS.address),
+  delivery_slot: z.enum(['sang', 'chieu', '']).nullable().optional(), note, payment_method: z.enum(['cod', 'bank']).optional(),
+  items: lines.min(1), discount_code: z.string().max(40).nullable().optional(), shipper_id: id.nullable().optional(),
+}));
 add('admin', 'PATCH', /^\/orders\/[^/]+\/status\/?$/, obj({ status: z.enum(ORDER_STATUSES) }));
 add('admin', 'PATCH', /^\/orders\/[^/]+\/shipper\/?$/, obj({ shipper_id: id.nullable() }));
 add('admin', 'GET', /^\/shippers\/?$/);
@@ -154,6 +162,7 @@ add('admin', 'GET', /^\/(stock-entries|activity)\/?$/, empty, obj({ limit: page.
 add('admin', 'GET', /^\/(revenue|export\/orders)\/?$/, empty, obj({
   period: z.enum(['day', 'month', 'range']).optional(), date: day.optional(),
   month: text(7).regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(), from: day.optional(), to: day.optional(),
+  status: z.enum(ORDER_STATUSES).optional(),
 }));
 add('retail', 'GET', /^\/(policy|stats)\/?$/);
 add('retail', 'GET', /^\/customers\/?$/, empty, obj({ phone: text(LIMITS.phone) }));

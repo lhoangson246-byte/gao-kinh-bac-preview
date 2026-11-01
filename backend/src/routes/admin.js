@@ -5,6 +5,8 @@ import { requireAuth } from '../middleware/auth.js';
 import { accessTable, can, requireStaff } from '../permissions.js';
 import { changeOrderStatus } from '../order-status.js';
 import { notifyShipperAssigned } from '../push.js';
+import { guestAccountId, normalizeItems, placeOrder } from './orders.js';
+import { DELIVERY_SLOT_CODES, mentionsOtherProvince, normalizeBacNinhAddress } from '../constants.js';
 import { MAX_POINTS_PER_UNIT } from '../constants.js';
 import {
   ORDER_STATUSES, LIMITS, localDate, parseWeightKg, PRODUCT_CATEGORY_CODES,
@@ -44,9 +46,13 @@ router.get('/orders', (req, res, next) => {
       throw new HttpError(400, `Trạng thái phải thuộc: ${ORDER_STATUSES.join(', ')}.`);
     }
 
-    const limit = toInteger(req.query.limit, { min: 1, max: 100 }) ?? 30;
+    const limit = toInteger(req.query.limit, { min: 1, max: 300 }) ?? 30;
     const offset = toInteger(req.query.offset, { min: 0, max: 100000 }) ?? 0;
-    res.json(listAdminOrders({ status, limit, offset }));
+    // Lọc theo ngày đặt (giờ Việt Nam), tính cả hai đầu.
+    const from = req.query.from || null;
+    const to = req.query.to || req.query.from || null;
+    if (from && to && from > to) throw new HttpError(400, '"Từ ngày" phải trước hoặc bằng "đến ngày".');
+    res.json(listAdminOrders({ status, from, to, limit, offset }));
   } catch (err) {
     next(err);
   }
@@ -76,6 +82,68 @@ router.patch('/orders/:id/status', (req, res, next) => {
       before: { status: before.status }, after: { status: order.status },
     });
     res.json({ order });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/admin/orders — nhân viên nhập đơn bằng tay (khách gọi điện, nhắn Zalo) rồi giao cho khách.
+ *  body: { receiver_name, phone, home_delivery, address?, delivery_slot?, note?, payment_method?,
+ *          items: [{product_id, quantity}], discount_code?, shipper_id? }
+ * Giá, tồn kho, ưu đãi đơn đầu / mã giảm giá tính y như đơn online (cùng hàm placeOrder). Đơn được
+ * xác nhận ngay; không giao tận nơi thì ghi "Khách lấy tại cửa hàng".
+ */
+router.post('/orders', async (req, res, next) => {
+  try {
+    const body = req.body;
+    const errors = {};
+    const receiverName = cleanText(body.receiver_name, LIMITS.name);
+    if (!receiverName || receiverName.length < 2) errors.receiver_name = 'Nhập họ tên khách.';
+    const phone = normalizePhone(body.phone);
+    if (!phone) errors.phone = 'Số điện thoại không hợp lệ (10 số, ví dụ 0912345678).';
+    const homeDelivery = body.home_delivery !== false;
+    let address = 'Khách lấy tại cửa hàng';
+    if (homeDelivery) {
+      const raw = cleanText(body.address, LIMITS.address);
+      if (!raw || raw.length < 8) errors.address = 'Nhập địa chỉ giao hàng chi tiết.';
+      else if (mentionsOtherProvince(raw)) errors.address = 'Cửa hàng chỉ giao trong tỉnh Bắc Ninh.';
+      else address = normalizeBacNinhAddress(raw);
+    }
+    const slot = body.delivery_slot || null;
+    if (slot && !DELIVERY_SLOT_CODES.includes(slot)) errors.delivery_slot = 'Khung giờ giao không hợp lệ.';
+    const payment = body.payment_method || 'cod';
+    if (!['cod', 'bank'].includes(payment)) errors.payment_method = 'Hình thức thanh toán không hợp lệ.';
+    const shipperId = body.shipper_id == null ? null : toInteger(body.shipper_id, { min: 1 });
+    if (shipperId) {
+      const shipper = db.prepare("SELECT permissions, is_locked FROM users WHERE id = ? AND role = 'staff'").get(shipperId);
+      if (!shipper || shipper.is_locked || !can({ role: 'staff', permissions: shipper.permissions }, 'delivery')) {
+        errors.shipper_id = 'Người này không phải nhân viên giao hàng đang làm.';
+      }
+    }
+    if (Object.keys(errors).length) throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', errors);
+
+    const orderId = placeOrder({
+      userId: guestAccountId(),
+      guest: true,
+      receiverName,
+      customerPhone: phone,
+      deliveryAddress: address,
+      customerNote: cleanText(body.note, LIMITS.note),
+      paymentMethod: payment,
+      deliverySlot: slot,
+      wanted: normalizeItems(body.items),
+      discountCode: body.discount_code || null,
+      staff: { createdBy: req.user.id, fulfillment: homeDelivery ? 'delivery' : 'pickup', shipperId },
+    });
+    writeAdminAudit(req, { action: 'create_order', entityType: 'order', entityId: orderId, after: { phone, home_delivery: homeDelivery, shipper_id: shipperId } });
+    if (shipperId) await notifyShipperAssigned(orderId, shipperId);
+    const order = db.prepare(`
+      SELECT o.*, s.full_name AS shipper_name FROM orders o LEFT JOIN users s ON s.id = o.shipper_id WHERE o.id = ?
+    `).get(orderId);
+    delete order.guest_token_hash;
+    order.items = db.prepare('SELECT * FROM order_items WHERE order_id = ? ORDER BY id').all(orderId);
+    res.status(201).json({ order });
   } catch (err) {
     next(err);
   }
@@ -779,9 +847,11 @@ export function resolvePeriod(query) {
 
 router.get('/export/orders', async (req, res, next) => {
   try {
-    const period = resolvePeriod(req.query);
-    const buffer = await buildOrdersWorkbook(period);
-    const filename = `don-hang-${period.from}_${period.to}.xlsx`;
+    const { status, ...rest } = req.query;
+    const period = resolvePeriod(rest);
+    // ?status=completed: chỉ đơn online ở trạng thái đó (ví dụ kế toán xuất đơn đã giao xong).
+    const buffer = await buildOrdersWorkbook(period, { status: status || null });
+    const filename = `don-hang${status ? `-${status}` : ''}-${period.from}_${period.to}.xlsx`;
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
