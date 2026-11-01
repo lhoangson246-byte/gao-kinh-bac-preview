@@ -107,6 +107,10 @@ export const api = {
   createOrder: (payload) => request('/orders', { method: 'POST', body: payload, auth: true }),
   /** Đặt hàng nhanh không cần tài khoản. */
   createGuestOrder: (payload) => request('/orders/guest', { method: 'POST', body: payload }),
+  checkDiscountCode: (code, subtotal) => request('/orders/discount-code', { method: 'POST', body: { code, subtotal } }),
+  adminDiscountCodes: () => request('/admin/discount-codes', { auth: true }),
+  adminCreateDiscountCode: (body) => request('/admin/discount-codes', { method: 'POST', auth: true, body }),
+  adminUpdateDiscountCode: (id, body) => request(`/admin/discount-codes/${id}`, { method: 'PUT', auth: true, body }),
   myOrders: () => request('/orders', { auth: true }),
   cancelOrder: (id) => request(`/orders/${id}/cancel`, { method: 'PATCH', auth: true }),
   orderDiscount: () => request('/orders/discount', { auth: true }),

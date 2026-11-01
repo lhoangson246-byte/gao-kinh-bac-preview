@@ -95,6 +95,7 @@ add('orders', 'POST', /^\/?$/, obj({
   payment_method: z.enum(['cod', 'bank']).optional(), items: lines.min(1),
   voucher_count: integer(0, 20).optional(), rewards: z.array(line).max(LIMITS.linesPerOrder).optional(),
   promo_gift: z.enum(['nep', 'lut']).optional(),
+  discount_code: z.string().max(40).nullable().optional(),
 }));
 add('guest-orders', 'POST', /^\/guest\/?$/, obj({
   receiver_name: name, phone: text(LIMITS.phone), address: text(LIMITS.address),
@@ -103,7 +104,9 @@ add('guest-orders', 'POST', /^\/guest\/?$/, obj({
   payment_method: z.enum(['cod', 'bank']).optional(), items: lines.min(1),
   latitude: address.latitude, longitude: address.longitude, location_accuracy: address.location_accuracy,
   promo_gift: z.enum(['nep', 'lut']).optional(),
+  discount_code: z.string().max(40).nullable().optional(),
 }));
+add('guest-orders', 'POST', /^\/discount-code\/?$/, obj({ code: z.string().max(40), subtotal: integer(0).optional() }));
 add('guest-orders', 'POST', /^\/track\/?$/, obj({ phone: text(LIMITS.phone), code: text(20) }));
 add('orders', 'GET', /^\/?$/);
 add('orders', 'GET', /^\/[^/]+\/?$/);
@@ -200,6 +203,19 @@ add('about-admin', 'DELETE', /^\/documents\/[^/]+\/?$/);
 add('about-admin', 'POST', /^\/reviews\/?$/, obj(aboutReview));
 add('about-admin', 'PUT', /^\/reviews\/[^/]+\/?$/, obj(aboutReview));
 add('about-admin', 'DELETE', /^\/reviews\/[^/]+\/?$/);
+
+// Mã giảm giá (chủ cửa hàng). Kiểm tra kỹ hơn ở routes/discount-codes-admin.js.
+const discountCode = {
+  code: z.string().max(40).optional(), amount: integer(0, 100_000_000).or(z.literal('')).optional(),
+  starts_on: z.string().max(10).nullable().optional(), ends_on: z.string().max(10).nullable().optional(),
+  min_subtotal: integer(0, 100_000_000).or(z.literal('')).nullable().optional(),
+  per_phone_limit: integer(0, 100_000_000).or(z.literal('')).nullable().optional(),
+  max_uses: integer(0, 100_000_000).or(z.literal('')).nullable().optional(),
+  is_active: flag.optional(), note: optionalText(200),
+};
+add('discount-codes', 'GET', /^\/?$/);
+add('discount-codes', 'POST', /^\/?$/, obj(discountCode));
+add('discount-codes', 'PUT', /^\/[^/]+\/?$/, obj(discountCode));
 
 export function validateRoutes(group) {
   return (req, res, next) => {

@@ -11,6 +11,7 @@ const CustomerManager = lazy(() => import('../components/CustomerManager.jsx'));
 const StockReceive = lazy(() => import('../components/StockReceive.jsx'));
 const ActivityLog = lazy(() => import('../components/ActivityLog.jsx'));
 const AboutManager = lazy(() => import('../components/AboutManager.jsx'));
+const DiscountCodeManager = lazy(() => import('../components/DiscountCodeManager.jsx'));
 import ProductImage from '../components/ProductImage.jsx';
 import OrdersExportButton from '../components/OrdersExportButton.jsx';
 import PageLoadBoundary from '../components/PageLoadBoundary.jsx';
@@ -364,6 +365,9 @@ export default function Admin() {
           <button className={tab === 'activity' ? 'active' : ''} onClick={() => setTab('activity')}>
             <span aria-hidden="true">⌁</span><span>Nhật ký<small>Thay đổi và đăng nhập</small></span>
           </button>
+          <button className={tab === 'codes' ? 'active' : ''} onClick={() => setTab('codes')}>
+            <span aria-hidden="true">%</span><span>Mã giảm giá<small>Khuyến mãi theo mã</small></span>
+          </button>
           <button className={tab === 'about' ? 'active' : ''} onClick={() => setTab('about')}>
             <span aria-hidden="true">✦</span><span>Về chúng tôi<small>Giấy tờ và đánh giá</small></span>
           </button>
@@ -379,7 +383,7 @@ export default function Admin() {
             <PageLoadBoundary key={tab}>
             <Suspense fallback={<div className="loading-state" role="status"><span></span>Đang mở chức năng…</div>}>
             <>
-              {!['revenue', 'customers', 'activity', 'about'].includes(tab) && (
+              {!['revenue', 'customers', 'activity', 'about', 'codes'].includes(tab) && (
               <div className="admin-page-heading">
                 <div>
                   <p className="eyebrow dark"><span></span>{tab === 'orders' ? 'Công việc hôm nay' : 'Quản lý gian hàng'}</p>
@@ -394,6 +398,15 @@ export default function Admin() {
               </div>
               )}
 
+              {tab === 'codes' && (
+              <div className="admin-page-heading">
+                <div>
+                  <p className="eyebrow dark"><span></span>Khuyến mãi</p>
+                  <h1>Mã giảm giá</h1>
+                  <p>Tạo mã cho khách nhập khi đặt hàng, đặt hạn dùng và theo dõi số lượt đã dùng.</p>
+                </div>
+              </div>
+              )}
               {tab === 'about' && (
               <div className="admin-page-heading">
                 <div>
@@ -403,7 +416,7 @@ export default function Admin() {
                 </div>
               </div>
               )}
-              {!['revenue', 'customers', 'activity', 'about'].includes(tab) && stats && (
+              {!['revenue', 'customers', 'activity', 'about', 'codes'].includes(tab) && stats && (
                 <section className="stats" aria-label="Thống kê cửa hàng">
                   <div className="stat urgent"><span>Đơn cần xác nhận</span><strong>{pendingCount}</strong><small>Nên xử lý trước</small></div>
                   <div className="stat"><span>Tổng đơn hàng</span><strong>{stats.orders}</strong><small>Tất cả thời gian</small></div>
@@ -412,7 +425,7 @@ export default function Admin() {
                 </section>
               )}
 
-              {!['revenue', 'customers', 'activity', 'about'].includes(tab) && stats?.missingPrice > 0 && (
+              {!['revenue', 'customers', 'activity', 'about', 'codes'].includes(tab) && stats?.missingPrice > 0 && (
                 <div className="alert warning" role="status">
                   <strong>{stats.missingPrice} loại gạo chưa có giá bán.</strong>{' '}
                   Khách nhìn thấy sản phẩm nhưng chưa đặt mua được.{' '}
@@ -432,6 +445,7 @@ export default function Admin() {
 
               {tab === 'activity' ? <ActivityLog />
                 : tab === 'about' ? <AboutManager />
+                : tab === 'codes' ? <DiscountCodeManager />
                 : tab === 'revenue' ? <RevenueReport />
                 : tab === 'customers' ? <CustomerManager />
                 : tab === 'orders' ? (
@@ -482,7 +496,7 @@ export default function Admin() {
                                     <div className="admin-order-line"><span>Tiền hàng</span><span>{formatVND(order.subtotal || order.total + order.discount)}</span></div>
                                     {order.discount - (order.voucher_discount || 0) > 0 && (
                                       <div className="admin-order-line discount">
-                                        <span>Giảm giá <small>đơn đầu tiên của khách</small></span>
+                                        <span>Giảm giá <small>{order.discount_code ? `mã ${order.discount_code}` : 'đơn đầu tiên của khách'}</small></span>
                                         <span>− {formatVND(order.discount - (order.voucher_discount || 0))}</span>
                                       </div>
                                     )}

@@ -8,6 +8,7 @@ import {
   api, formatNumber, formatVND, pointsForLines, DELIVERY_AREA_CODE, DELIVERY_SLOTS, deliveryPlan, slotDay,
 } from '../api';
 import { useI18n } from '../i18n/index.jsx';
+import DiscountCodeField from '../components/DiscountCodeField.jsx';
 
 export default function Checkout() {
   const { items, total, hasUnavailable, clear } = useCart();
@@ -18,7 +19,12 @@ export default function Checkout() {
   const orderable = items.filter((item) => item.stock > 0 && item.quantity > 0);
   // Xem trước ưu đãi đơn đầu tiên; máy chủ vẫn tự quyết khi tạo đơn.
   const [firstOrder, setFirstOrder] = useState(null);
-  const discount = firstOrder?.available ? Math.min(firstOrder.amount, total) : 0;
+  const firstDiscount = firstOrder?.available ? Math.min(firstOrder.amount, total) : 0;
+  // Mã giảm giá. Mỗi đơn chỉ MỘT khuyến mãi: đơn đầu hoặc mã, lấy cái lợi hơn (máy chủ cũng vậy).
+  const [promoCode, setPromoCode] = useState(null);
+  const codeDiscount = promoCode && total >= (promoCode.min_subtotal || 0) ? Math.min(promoCode.amount, total) : 0;
+  const useCode = codeDiscount > firstDiscount;
+  const discount = useCode ? codeDiscount : firstDiscount;
 
   // Đổi điểm: mỗi 1.000 điểm = 1 voucher giảm 30.000đ hoặc 1 phần quà 1kg.
   const [vouchers, setVouchers] = useState(0);
@@ -105,6 +111,7 @@ export default function Checkout() {
         address_id: selectedAddress.id,
         items: orderable.map((item) => ({ product_id: item.id, quantity: item.quantity })),
         promo_gift: promoGift,
+        discount_code: useCode ? promoCode.code : undefined,
         voucher_count: vouchers > 0 ? vouchers : undefined,
         rewards: giftCount > 0
           ? Object.entries(gifts).map(([id, quantity]) => ({ product_id: Number(id), quantity }))
@@ -264,8 +271,15 @@ export default function Checkout() {
               </div>
             ))}
           </div>
-          {discount > 0 && (
+          <DiscountCodeField subtotal={total} value={promoCode} onChange={setPromoCode} error={fieldErrors.discount_code} />
+          {useCode && (
+            <div className="summary-row"><span>{t('code.line', { code: promoCode.code })}</span><strong className="free-tag">− {formatVND(discount)}</strong></div>
+          )}
+          {!useCode && discount > 0 && (
             <div className="summary-row"><span>{t('cart.discount')} <small>{t('cart.discountFirst')}</small></span><strong className="free-tag">− {formatVND(discount)}</strong></div>
+          )}
+          {promoCode && !useCode && firstDiscount > 0 && (
+            <p className="discount-code-note">{t('code.firstWins', { first: formatVND(firstDiscount) })}</p>
           )}
           {voucherDiscount > 0 && (
             <div className="summary-row"><span>{t('rewards.voucherLine', { n: vouchers })}</span><strong className="free-tag">− {formatVND(voucherDiscount)}</strong></div>

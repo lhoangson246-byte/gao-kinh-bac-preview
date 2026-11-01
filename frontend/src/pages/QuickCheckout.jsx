@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import DeliveryPromise from '../components/DeliveryPromise.jsx';
+import DiscountCodeField from '../components/DiscountCodeField.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useCart } from '../context/CartContext.jsx';
 import { useI18n } from '../i18n/index.jsx';
@@ -59,6 +60,7 @@ export default function QuickCheckout() {
   const [locating, setLocating] = useState(false);
   const [showNote, setShowNote] = useState(false);
   const [promoGift, setPromoGift] = useState('nep');   // quà khuyến mãi: nếp hoặc lứt
+  const [promoCode, setPromoCode] = useState(null);   // mã giảm giá đã áp dụng
   const [errors, setErrors] = useState({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -74,6 +76,7 @@ export default function QuickCheckout() {
 
   const orderable = items.filter((item) => item.stock > 0 && item.quantity > 0);
   const count = orderable.reduce((sum, item) => sum + item.quantity, 0);
+  const codeDiscount = promoCode && total >= (promoCode.min_subtotal || 0) ? Math.min(promoCode.amount, total) : 0;
 
   if (loading) return <div className="loading-state page-loading" role="status"><span></span>{t('common.loading')}</div>;
   // Đã đăng nhập thì dùng trang đặt hàng có sổ địa chỉ và đổi điểm.
@@ -148,6 +151,7 @@ export default function QuickCheckout() {
         note: form.note.trim() || undefined,
         items: orderable.map((item) => ({ product_id: item.id, quantity: item.quantity })),
         promo_gift: promoGift,
+        discount_code: promoCode?.code,
         ...(location || {}),
       });
       writeSaved({ name: form.receiver_name.trim(), phone: normalizePhone(form.phone), address: form.address.trim() });
@@ -283,17 +287,22 @@ export default function QuickCheckout() {
           </ul>
           <div className="quick-total-row"><span>{t('cart.shipping')}</span><b className="free-tag">{t('common.free')}</b></div>
           <PromoGiftRow items={orderable} choice={promoGift} className="quick-total-row" />
-          <div className="quick-total-row grand"><span>{t('quick.total')}</span><b>{formatVND(total)}</b></div>
+          <DiscountCodeField subtotal={total} value={promoCode} onChange={setPromoCode} error={errors.discount_code} />
+          {codeDiscount > 0 && (
+            <div className="quick-total-row"><span>{t('code.line', { code: promoCode.code })}</span><b className="free-tag">− {formatVND(codeDiscount)}</b></div>
+          )}
+          <div className="quick-total-row grand"><span>{t('quick.total')}</span><b>{formatVND(total - codeDiscount)}</b></div>
           <PromoProgress items={orderable} compact />
           <PromoGiftChoice items={orderable} value={promoGift} onChange={setPromoGift} />
           <p className="quick-promo">🎁 {t('quick.firstOrder', { amount: formatVND(FIRST_ORDER_DISCOUNT) })}</p>
+          {promoCode && <p className="discount-code-note">{t('code.guestNote', { first: formatVND(FIRST_ORDER_DISCOUNT) })}</p>}
           <ul className="quick-trust">
             <li>✓ {t('quick.trustCall')}</li>
             <li>✓ {t('quick.trustFree')}</li>
             <li>✓ {t('quick.trustPoints')}</li>
           </ul>
           <button className="btn btn-primary btn-block quick-submit desktop-only" disabled={busy}>
-            {busy ? t('checkout.sending') : t('quick.submit', { total: formatVND(total) })}
+            {busy ? t('checkout.sending') : t('quick.submit', { total: formatVND(total - codeDiscount) })}
           </button>
           <p className="quick-login">
             {t('quick.haveAccount')} <Link to="/dang-nhap" state={{ from: '/dat-hang' }}>{t('quick.login')}</Link>
@@ -303,7 +312,7 @@ export default function QuickCheckout() {
 
       {/* Thanh dưới cùng trên điện thoại: luôn thấy tổng tiền và nút đặt hàng. */}
       <div className="quick-bar">
-        <div><small>{t('quick.total')}</small><b>{formatVND(total)}</b></div>
+        <div><small>{t('quick.total')}</small><b>{formatVND(total - codeDiscount)}</b></div>
         <button className="btn btn-primary quick-submit" disabled={busy}>
           {busy ? t('checkout.sending') : t('quick.submitShort')}
         </button>
@@ -353,7 +362,11 @@ function QuickSuccess({ order, token }) {
         <p>{t('quick.successCall', { phone: formatPhone(order.phone) })}</p>
         <DeliveryPromise order={order} />
         <div className="quick-total-row grand"><span>{t('quick.total')}</span><b>{formatVND(order.total)}</b></div>
-        {order.discount > 0 && <p className="quick-promo">🎁 {t('orders.discounted', { amount: formatVND(order.discount) })}</p>}
+        {order.discount > 0 && (
+          <p className="quick-promo">🎁 {order.discount_code
+            ? t('orders.codeDiscounted', { amount: formatVND(order.discount), code: order.discount_code })
+            : t('orders.discounted', { amount: formatVND(order.discount) })}</p>
+        )}
         {order.items.filter((item) => item.promo).map((item) => (
           <p key={item.id} className="quick-promo">🌸 {t('promo.received', { kg: item.quantity, name: item.product_name })}</p>
         ))}

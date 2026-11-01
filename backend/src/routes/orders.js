@@ -15,6 +15,7 @@ import { attachItems } from '../order-lists.js';
 import { loyaltyProfile, refundPoints, spendPoints } from '../loyalty.js';
 import { notifyNewOrder, siteOrigin } from '../push.js';
 import { trackOrder } from '../order-tracking.js';
+import { findUsableCode, normalizeCode, publicCode } from '../discount-codes.js';
 
 const router = Router();
 
@@ -71,10 +72,11 @@ function normalizeRewardLines(rewards) {
  * Đọc giá, kiểm tra tồn kho, tạo đơn, trừ kho, trừ điểm đổi quà trong CÙNG một transaction.
  * Giá và tổng tiền luôn do máy chủ tự tính, không tin dữ liệu gửi từ trình duyệt.
  */
-function placeOrder({
+export function placeOrder({
   userId, guest = false, receiverName, customerPhone, deliveryAddress, customerNote,
   paymentMethod, deliverySlot, lat = null, lng = null, wanted,
   wantedRewards = new Map(), vouchers = 0, pointsPhone = null, guestTokenHash = null, promoGift = null,
+  discountCode = null,
 }) {
   const rewardCount = vouchers + [...wantedRewards.values()].reduce((sum, q) => sum + q, 0);
   return db.transaction(() => {
@@ -131,16 +133,26 @@ function placeOrder({
     // transaction với INSERT bên dưới nên hai yêu cầu song song cũng chỉ một đơn được giảm.
     const boughtBefore = firstOrderUsed({ userId: guest ? null : userId, phone: customerPhone, guest });
     // Không để tiền giảm vượt quá tiền hàng.
-    const firstDiscount = boughtBefore ? 0 : Math.min(FIRST_ORDER_DISCOUNT, subtotal);
+    const firstCandidate = boughtBefore ? 0 : Math.min(FIRST_ORDER_DISCOUNT, subtotal);
+    // Mã giảm giá khách nhập (sai, hết hạn, chưa đủ tiền… thì báo lỗi ngay tại ô nhập mã).
+    const codeRow = discountCode ? findUsableCode(discountCode, { subtotal, phone: customerPhone }) : null;
+    const codeCandidate = codeRow ? Math.min(codeRow.amount, subtotal) : 0;
+    // Mỗi đơn chỉ MỘT khuyến mãi (01/11/2026): ưu đãi đơn đầu hoặc mã giảm giá, lấy cái lợi hơn
+    // cho khách. Đơn đầu được 20.000đ thì mã 10.000đ không cộng thêm và không bị tính lượt.
+    const useCode = codeCandidate > firstCandidate;
+    const firstDiscount = useCode ? 0 : firstCandidate;
+    const codeDiscount = useCode ? codeCandidate : 0;
+    const promoDiscount = firstDiscount + codeDiscount;
     // Voucher đổi điểm không được vượt số tiền còn phải trả, để khách không mất điểm oan.
     const voucherDiscount = vouchers * REWARD_VOUCHER_AMOUNT;
-    if (voucherDiscount > subtotal - firstDiscount) {
+    if (voucherDiscount > subtotal - promoDiscount) {
       throw new HttpError(400,
-        `Đơn còn ${(subtotal - firstDiscount).toLocaleString('vi-VN')}đ, chưa đủ để dùng ${vouchers} voucher ${REWARD_VOUCHER_AMOUNT.toLocaleString('vi-VN')}đ.`,
+        `Đơn còn ${(subtotal - promoDiscount).toLocaleString('vi-VN')}đ, chưa đủ để dùng ${vouchers} voucher ${REWARD_VOUCHER_AMOUNT.toLocaleString('vi-VN')}đ.`,
         { rewards: 'Bớt voucher hoặc thêm hàng.' });
     }
-    // orders.discount là TỔNG tiền giảm (đơn đầu + voucher); voucher_discount là phần voucher.
-    const discount = firstDiscount + voucherDiscount;
+    // orders.discount là TỔNG tiền giảm (đơn đầu hoặc mã + voucher); voucher_discount là phần
+    // voucher, code_discount là phần mã giảm giá.
+    const discount = promoDiscount + voucherDiscount;
     const total = subtotal - discount;
     const pointsUsed = rewardCount * RETAIL_POINTS_PER_REWARD;
     if (pointsUsed > 0) spendPoints(pointsPhone, pointsUsed);
@@ -151,7 +163,8 @@ function placeOrder({
       voucherDiscount, pointsUsed, pointsUsed > 0 ? pointsPhone : null, guest ? 1 : 0, guestTokenHash
     ).lastInsertRowid;
     // Mã đơn tự tạo từ số thứ tự: DH000123, cùng kiểu mã hoá đơn quầy HD000123.
-    db.prepare('UPDATE orders SET code = ? WHERE id = ?').run(orderCode(orderId), orderId);
+    db.prepare('UPDATE orders SET code = ?, discount_code = ?, code_discount = ? WHERE id = ?')
+      .run(orderCode(orderId), useCode ? codeRow.code : null, codeDiscount, orderId);
 
     for (const { product, quantity } of lines) {
       const changed = decStock.run(quantity, product.id, quantity).changes;
@@ -274,6 +287,7 @@ router.post('/guest', validateRoutes('guest-orders'), async (req, res, next) => 
       wanted,
       guestTokenHash: createHash('sha256').update(token).digest('hex'),
       promoGift: body.promo_gift,
+      discountCode: body.discount_code || null,
     });
     // Đơn đã lưu xong; báo chủ cửa hàng (Web Push + Telegram) rồi mới trả lời khách.
     await notifyNewOrder(orderId, { origin: siteOrigin(req) });
@@ -292,6 +306,21 @@ router.post('/track', validateRoutes('guest-orders'), (req, res, next) => {
     const order = trackOrder(req.body.phone, req.body.code);
     if (!order) throw new HttpError(404, 'Không tìm thấy đơn. Vui lòng kiểm tra lại số điện thoại và mã đơn.');
     res.json({ order });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/orders/discount-code — khách bấm "Áp dụng" mã ở trang đặt hàng. Chỉ báo mã đúng/sai
+ * và số tiền giảm; khi đặt hàng máy chủ kiểm tra lại toàn bộ (hạn, lượt dùng, đơn đầu tiên).
+ *  body: { code, subtotal? }
+ */
+router.post('/discount-code', validateRoutes('guest-orders'), (req, res, next) => {
+  try {
+    const subtotal = toInteger(req.body.subtotal, { min: 0 });
+    const row = findUsableCode(normalizeCode(req.body.code), { subtotal });
+    res.json({ code: publicCode(row) });
   } catch (err) {
     next(err);
   }
@@ -364,6 +393,7 @@ router.post('/', requireAuth, async (req, res, next) => {
       vouchers,
       pointsPhone,
       promoGift: req.body?.promo_gift,
+      discountCode: req.body?.discount_code || null,
     });
     await notifyNewOrder(orderId, { origin: siteOrigin(req) });
     res.status(201).json({ order: getOrderForUser(orderId, req.user.id) });

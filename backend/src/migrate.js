@@ -897,5 +897,41 @@ CREATE TABLE IF NOT EXISTS service_reviews (
 );
 `);
 
+// 01/11/2026: mã giảm giá khách tự nhập khi đặt hàng. Mỗi đơn chỉ một khuyến mãi (đơn đầu hoặc mã).
+db.exec(`
+CREATE TABLE IF NOT EXISTS discount_codes (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  code            TEXT NOT NULL UNIQUE,
+  amount          INTEGER NOT NULL CHECK (amount > 0),
+  starts_on       TEXT,
+  ends_on         TEXT,
+  min_subtotal    INTEGER NOT NULL DEFAULT 0,
+  per_phone_limit INTEGER NOT NULL DEFAULT 0,
+  max_uses        INTEGER NOT NULL DEFAULT 0,
+  is_active       INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+  note            TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`);
+{
+  const columns = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
+  if (!columns.includes('discount_code')) db.exec('ALTER TABLE orders ADD COLUMN discount_code TEXT');
+  if (!columns.includes('code_discount')) db.exec('ALTER TABLE orders ADD COLUMN code_discount INTEGER NOT NULL DEFAULT 0');
+}
+// Mã tháng 11/2026 theo yêu cầu cửa hàng: GAOKINHBAC11 giảm 10.000đ, 01/11 – 30/11/2026. Chạy một lần;
+// sau đó cửa hàng tự sửa / tắt trong trang quản trị.
+const novemberCode = '2026-11-01-code-gaokinhbac11';
+if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(novemberCode)) {
+  db.transaction(() => {
+    db.prepare(`
+      INSERT OR IGNORE INTO discount_codes (code, amount, starts_on, ends_on, note)
+      VALUES ('GAOKINHBAC11', 10000, '2026-11-01', '2026-11-30', 'Mã tháng 11/2026')
+    `).run();
+    db.prepare('INSERT INTO app_migrations (name) VALUES (?)').run(novemberCode);
+    console.log('✅ Đã tạo mã giảm giá GAOKINHBAC11 (giảm 10.000đ, 01/11 – 30/11/2026).');
+  })();
+}
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

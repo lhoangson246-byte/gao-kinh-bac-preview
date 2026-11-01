@@ -39,7 +39,7 @@ export function vietnamDate(date = new Date()) {
  * Ngày dùng để xét khuyến mãi. Bộ kiểm thử có thể ghim ngày bằng PROMO_TODAY; trên Vercel
  * (VERCEL_ENV luôn có) biến này bị bỏ qua để không ai bật nhầm khuyến mãi ngoài đợt.
  */
-function promoToday() {
+export function promoToday() {
   const pinned = process.env.PROMO_TODAY;
   if (pinned && /^\d{4}-\d{2}-\d{2}$/.test(pinned) && !process.env.VERCEL_ENV) return pinned;
   return vietnamDate();

@@ -156,7 +156,9 @@ export default function Orders() {
                 </div>
                 <div className="total">
                   {order.discount > 0 && (
-                    <small className="order-discount">{t('orders.discounted', { amount: formatVND(order.discount) })}</small>
+                    <small className="order-discount">{order.discount_code
+                      ? t('orders.codeDiscounted', { amount: formatVND(order.discount), code: order.discount_code })
+                      : t('orders.discounted', { amount: formatVND(order.discount) })}</small>
                   )}
                   {t('orders.total')} <strong>{formatVND(order.total)}</strong>
                 </div>

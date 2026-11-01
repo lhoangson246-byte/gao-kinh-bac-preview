@@ -18,6 +18,7 @@ import customerRoutes from './routes/customers.js';
 import pushRoutes from './routes/push.js';
 import aboutRoutes from './routes/about.js';
 import aboutAdminRoutes from './routes/about-admin.js';
+import discountCodeRoutes from './routes/discount-codes-admin.js';
 import { HttpError } from './validate.js';
 import imageRoutes from './routes/images.js';
 import { trustedProxy, originAllowed, protectBrowserRequests } from './security.js';
@@ -90,6 +91,8 @@ const guestPhoneLimiter = rateLimit({
 app.post('/api/orders/guest', guestOrderLimiter, guestPhoneLimiter);
 // Tra cứu đơn bằng SĐT + mã đơn: đủ cho khách xem lại nhiều lần, không đủ để dò đơn người khác.
 app.post('/api/orders/track', rateLimit({ ...limiterOptions, windowMs: 15 * 60 * 1000, limit: 30 }));
+// Thử mã giảm giá: đủ cho khách gõ sai vài lần, không đủ để dò mã.
+app.post('/api/orders/discount-code', rateLimit({ ...limiterOptions, windowMs: 15 * 60 * 1000, limit: 30 }));
 // Nút "Gửi thông báo thử nghiệm": đủ để thử vài lần, không đủ để spam máy chủ push.
 app.post('/api/push/test', rateLimit({ ...limiterOptions, windowMs: 10 * 60 * 1000, limit: 10 }));
 
@@ -101,6 +104,7 @@ app.use('/api/addresses', addressRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin/customers', customerRoutes);
 app.use('/api/admin/about', aboutAdminRoutes);
+app.use('/api/admin/discount-codes', discountCodeRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/retail', retailRoutes);
