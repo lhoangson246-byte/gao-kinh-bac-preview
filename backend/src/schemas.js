@@ -123,6 +123,8 @@ add('customers', 'PUT', /^\/[^/]+\/?$/, obj({ full_name: name }));
 add('customers', 'DELETE', /^\/[^/]+\/?$/);
 add('admin', 'GET', /^\/orders\/?$/, empty, obj({ ...page, status: z.enum(ORDER_STATUSES).optional() }));
 add('admin', 'PATCH', /^\/orders\/[^/]+\/status\/?$/, obj({ status: z.enum(ORDER_STATUSES) }));
+add('admin', 'PATCH', /^\/orders\/[^/]+\/shipper\/?$/, obj({ shipper_id: id.nullable() }));
+add('admin', 'GET', /^\/shippers\/?$/);
 add('admin', 'GET', /^\/(products|stats)\/?$/);
 add('admin', 'GET', /^\/orders\/latest\/?$/);
 add('admin', 'GET', /^\/groups\/?$/);
@@ -216,6 +218,23 @@ const discountCode = {
 add('discount-codes', 'GET', /^\/?$/);
 add('discount-codes', 'POST', /^\/?$/, obj(discountCode));
 add('discount-codes', 'PUT', /^\/[^/]+\/?$/, obj(discountCode));
+
+// Tài khoản nhân viên (chỉ chủ cửa hàng). Kiểm tra kỹ hơn ở routes/staff.js.
+const permissionList = z.array(z.string().max(40)).max(20);
+add('staff', 'GET', /^\/?$/);
+add('staff', 'POST', /^\/?$/, obj({
+  full_name: name, phone: optionalText(LIMITS.phone), email: optionalText(LIMITS.email), password: newPassword,
+  staff_title: optionalText(60), permissions: permissionList,
+}));
+add('staff', 'PUT', /^\/[^/]+\/?$/, obj({
+  full_name: name.optional(), phone: optionalText(LIMITS.phone), email: optionalText(LIMITS.email),
+  staff_title: optionalText(60), permissions: permissionList.optional(),
+}));
+add('staff', 'PATCH', /^\/[^/]+\/lock\/?$/, obj({ is_locked: flag }));
+add('staff', 'POST', /^\/[^/]+\/reset-password\/?$/, obj({ password: newPassword }));
+// Nhân viên giao hàng: chỉ hai bước của chính mình.
+add('delivery', 'GET', /^\/orders\/?$/);
+add('delivery', 'PATCH', /^\/orders\/[^/]+\/status\/?$/, obj({ status: z.enum(['shipping', 'completed']) }));
 
 export function validateRoutes(group) {
   return (req, res, next) => {

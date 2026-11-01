@@ -18,6 +18,7 @@ const Admin = lazy(() => import('./pages/Admin.jsx'));
 const Retail = lazy(() => import('./pages/Retail.jsx'));
 const TrackOrder = lazy(() => import('./pages/TrackOrder.jsx'));
 const About = lazy(() => import('./pages/About.jsx'));
+const Delivery = lazy(() => import('./pages/Delivery.jsx'));
 import NotFound from './pages/NotFound.jsx';
 
 // Khoá dịch cho tiêu đề tab của từng trang khách; trang quản trị giữ tiếng Việt.
@@ -37,6 +38,7 @@ const PAGE_TITLES = {
 const ADMIN_TITLES = {
   '/quan-tri': 'Quản trị cửa hàng',
   '/quan-tri/ban-hang': 'Bán hàng tại quầy',
+  '/quan-tri/giao-hang': 'Giao hàng',
 };
 
 export default function App() {
@@ -75,11 +77,15 @@ export default function App() {
         <Routes>
           <Route
             path="/quan-tri"
-            element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>}
+            element={<ProtectedRoute staffOnly><Admin /></ProtectedRoute>}
           />
           <Route
             path="/quan-tri/ban-hang"
-            element={<ProtectedRoute adminOnly><Retail /></ProtectedRoute>}
+            element={<ProtectedRoute permission="retail.sell"><Retail /></ProtectedRoute>}
+          />
+          <Route
+            path="/quan-tri/giao-hang"
+            element={<ProtectedRoute permission="delivery"><Delivery /></ProtectedRoute>}
           />
           <Route path="*" element={<NotFound />} />
         </Routes>

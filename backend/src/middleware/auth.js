@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import db from '../db.js';
 
 import { JWT_SECRET as SECRET, JWT_OPTIONS, SESSION_TTL, sessionCookie } from '../security.js';
+import { permissionsOf } from '../permissions.js';
 
 /**
  * Ký token phiên. `authTime` (giây) là lúc đăng nhập thật sự; gia hạn giữ nguyên giá trị này để
@@ -23,7 +24,7 @@ export function requireAuth(req, res, next) {
     if (!Number.isSafeInteger(payload.id) || payload.id < 1 || !Number.isSafeInteger(payload.version) || !Number.isSafeInteger(payload.exp) || !Number.isSafeInteger(payload.iat)) throw new Error('Invalid claims');
     // Luôn đọc lại vai trò từ cơ sở dữ liệu, không tin vai trò ghi trong token.
     const user = db
-      .prepare('SELECT id, full_name, email, phone, address, role, is_locked, session_version FROM users WHERE id = ?')
+      .prepare('SELECT id, full_name, email, phone, address, role, is_locked, session_version, permissions, staff_title FROM users WHERE id = ?')
       .get(payload.id);
     if (!user) return res.status(401).json({ message: 'Tài khoản không tồn tại.' });
     // Tài khoản bị cửa hàng khoá thì token cũ cũng hết tác dụng ngay.
@@ -33,6 +34,9 @@ export function requireAuth(req, res, next) {
     if (payload.version !== user.session_version) throw new Error('Revoked session');
     delete user.session_version;
     delete user.is_locked;
+    // Quyền của nhân viên (chủ cửa hàng: tất cả). Đọc lại mỗi yêu cầu nên đổi quyền có hiệu lực ngay.
+    user.permissions = permissionsOf(user);
+    if (user.role !== 'staff') delete user.staff_title;
     req.user = user;
     // Token cũ (trước khi có auth_time) tính từ lúc cấp.
     req.authTime = Number.isSafeInteger(payload.auth_time) ? payload.auth_time : payload.iat;

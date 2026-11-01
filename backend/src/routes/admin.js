@@ -1,16 +1,16 @@
 import { validateRoutes } from '../schemas.js';
 import { Router } from 'express';
 import db from '../db.js';
-import { requireAuth, requireAdmin } from '../middleware/auth.js';
-import { restoreStockForOrder } from './orders.js';
-import { creditPoints, loyaltyPhoneForOrder } from '../loyalty.js';
-import { pointsForSale, MAX_POINTS_PER_UNIT } from '../constants.js';
+import { requireAuth } from '../middleware/auth.js';
+import { accessTable, can, requireStaff } from '../permissions.js';
+import { changeOrderStatus } from '../order-status.js';
+import { notifyShipperAssigned } from '../push.js';
+import { MAX_POINTS_PER_UNIT } from '../constants.js';
 import {
-  ALLOWED_TRANSITIONS, ORDER_STATUSES, LIMITS, localDate, parseWeightKg, PRODUCT_CATEGORY_CODES,
+  ORDER_STATUSES, LIMITS, localDate, parseWeightKg, PRODUCT_CATEGORY_CODES,
 } from '../constants.js';
 import { HttpError, cleanImageUrl, cleanText, normalizePhone, toInteger } from '../validate.js';
 import { writeAdminAudit } from '../audit.js';
-import { STATUS_STAMP } from '../order-tracking.js';
 import { listAdminOrders } from '../order-lists.js';
 import { buildOrdersWorkbook } from '../orders-export.js';
 import { MAX_BANNERS, MAX_BRANCHES, readStorefront } from './settings.js';
@@ -20,9 +20,20 @@ import {
 
 const router = Router();
 
-// Mọi API trong tệp này đều bắt buộc đăng nhập và có vai trò admin,
-// kiểm tra tại máy chủ chứ không dựa vào việc ẩn nút ở giao diện.
-router.use(requireAuth, requireAdmin);
+// Mọi API trong tệp này đều bắt buộc đăng nhập và là chủ cửa hàng hoặc nhân viên có đúng quyền,
+// kiểm tra tại máy chủ chứ không dựa vào việc ẩn nút ở giao diện. Đường dẫn không có trong bảng
+// dưới đây (cài đặt cửa hàng, nhật ký…) chỉ chủ cửa hàng dùng được.
+router.use(requireAuth, requireStaff, accessTable([
+  ['GET', /^\/orders(\/latest)?\/?$/, ['orders.view']],
+  ['POST', /^\/orders\/?$/, ['orders.create']],
+  ['PATCH', /^\/orders\/[^/]+\/status\/?$/, ['orders.manage']],
+  ['PATCH', /^\/orders\/[^/]+\/shipper\/?$/, ['orders.manage']],
+  ['GET', /^\/shippers\/?$/, ['orders.manage', 'orders.create']],
+  ['GET', /^\/stats\/?$/, ['orders.view', 'products.manage']],
+  ['GET', /^\/export\/orders\/?$/, ['orders.export']],
+  ['GET', /^\/revenue\/?$/, ['revenue.view']],
+  ['*', /^\/(products|groups|stock-entries)(\/|$)/, ['products.manage']],
+]));
 router.use(validateRoutes('admin'));
 
 /** GET /api/admin/orders — Tất cả đơn hàng (lọc ?status=) */
@@ -58,63 +69,58 @@ router.get('/orders/latest', (req, res) => {
 router.patch('/orders/:id/status', (req, res, next) => {
   try {
     const orderId = toInteger(req.params.id, { min: 1 });
-    const { status } = req.body || {};
     if (!orderId) throw new HttpError(404, 'Không tìm thấy đơn hàng.');
-    if (!ORDER_STATUSES.includes(status)) {
-      throw new HttpError(400, `Trạng thái phải thuộc: ${ORDER_STATUSES.join(', ')}.`);
-    }
-
-    const update = db.transaction(() => {
-      const current = db.prepare('SELECT id, status FROM orders WHERE id = ?').get(orderId);
-      if (!current) throw new HttpError(404, 'Không tìm thấy đơn hàng.');
-      if (!ALLOWED_TRANSITIONS[current.status]?.includes(status)) {
-        throw new HttpError(400, `Không thể chuyển đơn từ “${current.status}” sang “${status}”.`);
-      }
-
-      // Chỉ đổi khi trạng thái vẫn đúng như lúc đọc — hai request cùng huỷ
-      // một đơn thì chỉ một request hoàn kho.
-      // Ghi lại giờ của từng bước để khách tra cứu tiến độ giao (tên cột lấy từ danh sách cố định).
-      const stampColumn = STATUS_STAMP[status];
-      const changed = db
-        .prepare(`UPDATE orders SET status = ?${stampColumn ? `, ${stampColumn} = datetime('now')` : ''} WHERE id = ? AND status = ?`)
-        .run(status, current.id, current.status).changes;
-      if (!changed) {
-        throw new HttpError(409, 'Đơn hàng vừa được cập nhật ở nơi khác. Vui lòng tải lại trang.');
-      }
-      if (status === 'cancelled') restoreStockForOrder(current.id);
-
-      // CHỈ đơn giao xong mới được cộng điểm. Đơn huỷ (ở bất kỳ bước nào trước đó)
-      // không bao giờ tới nhánh này, và ALLOWED_TRANSITIONS không cho huỷ đơn đã hoàn thành.
-      // Đơn giao xong thì cộng điểm vào hồ sơ theo SỐ ĐIỆN THOẠI CỦA TÀI KHOẢN
-      // đặt hàng — cùng hồ sơ với mua tại quầy. Nhờ câu UPDATE có điều kiện
-      // "WHERE status = ?" ở trên, mỗi đơn chỉ cộng điểm đúng một lần.
-      if (status === 'completed') {
-        const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(current.id);
-        const phone = loyaltyPhoneForOrder(order);
-        if (phone) {
-          // Điểm tính theo từng loại gạo, dùng quy tắc điểm đã lưu vào dòng hàng lúc đặt.
-          const items = db.prepare(
-            'SELECT price, quantity, points_per_unit, is_reward FROM order_items WHERE order_id = ?'
-          ).all(order.id);
-          const earned = creditPoints(phone, {
-            amountPaid: order.total,
-            points: pointsForSale(items, order.total),
-            fullName: order.receiver_name,
-          });
-          db.prepare('UPDATE orders SET points_earned = ? WHERE id = ?').run(earned, order.id);
-        }
-      }
-      return current;
-    });
-
-    const before = update();
-    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
-    order.items = db.prepare('SELECT * FROM order_items WHERE order_id = ? ORDER BY id').all(orderId);
+    const { before, order } = changeOrderStatus(orderId, req.body?.status);
     writeAdminAudit(req, {
       action: 'update_status', entityType: 'order', entityId: orderId,
       before: { status: before.status }, after: { status: order.status },
     });
     res.json({ order });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/admin/shippers — nhân viên giao hàng đang làm (để chọn người giao cho đơn). */
+router.get('/shippers', (req, res) => {
+  const shippers = db.prepare(`
+    SELECT id, full_name, phone, permissions FROM users WHERE role = 'staff' AND is_locked = 0 ORDER BY full_name
+  `).all().filter((u) => can({ role: 'staff', permissions: u.permissions }, 'delivery'))
+    .map(({ permissions, ...u }) => u);
+  res.json({ shippers });
+});
+
+/**
+ * PATCH /api/admin/orders/:id/shipper — phân công (hoặc bỏ phân công) nhân viên giao đơn.
+ *  body: { shipper_id: number | null }. Nhân viên được giao nhận thông báo đẩy trên điện thoại.
+ */
+router.patch('/orders/:id/shipper', async (req, res, next) => {
+  try {
+    const orderId = toInteger(req.params.id, { min: 1 });
+    const shipperId = req.body.shipper_id == null ? null : toInteger(req.body.shipper_id, { min: 1 });
+    const result = db.transaction(() => {
+      const order = orderId && db.prepare('SELECT id, code, status, shipper_id FROM orders WHERE id = ?').get(orderId);
+      if (!order) throw new HttpError(404, 'Không tìm thấy đơn hàng.');
+      if (['completed', 'cancelled'].includes(order.status)) {
+        throw new HttpError(400, 'Đơn đã kết thúc, không đổi người giao được.');
+      }
+      if (shipperId) {
+        const shipper = db.prepare("SELECT id, full_name, permissions, is_locked FROM users WHERE id = ? AND role = 'staff'").get(shipperId);
+        if (!shipper || shipper.is_locked || !can({ role: 'staff', permissions: shipper.permissions }, 'delivery')) {
+          throw new HttpError(400, 'Người này không phải nhân viên giao hàng đang làm.', { shipper_id: 'Chọn nhân viên giao hàng khác.' });
+        }
+      }
+      db.prepare('UPDATE orders SET shipper_id = ? WHERE id = ?').run(shipperId, order.id);
+      return order;
+    })();
+    writeAdminAudit(req, {
+      action: 'assign_shipper', entityType: 'order', entityId: orderId,
+      before: { shipper_id: result.shipper_id }, after: { shipper_id: shipperId },
+    });
+    if (shipperId && shipperId !== result.shipper_id) await notifyShipperAssigned(orderId, shipperId);
+    res.json({ order: db.prepare(`
+      SELECT o.id, o.shipper_id, s.full_name AS shipper_name FROM orders o LEFT JOIN users s ON s.id = o.shipper_id WHERE o.id = ?
+    `).get(orderId) });
   } catch (err) {
     next(err);
   }
@@ -674,7 +680,7 @@ router.put('/settings/storefront', (req, res, next) => {
 /** GET /api/admin/stats — Thống kê nhanh cho dashboard */
 router.get('/stats', (req, res) => {
   const countOrders = db.prepare('SELECT COUNT(*) c FROM orders WHERE status = ?');
-  res.json({
+  const payload = {
     stats: {
       users: db.prepare("SELECT COUNT(*) c FROM users WHERE role = 'customer'").get().c,
       products: db.prepare('SELECT COUNT(*) c FROM products WHERE is_active = 1').get().c,
@@ -688,7 +694,11 @@ router.get('/stats', (req, res) => {
       inventoryValue: db.prepare('SELECT COALESCE(SUM(cost_price * stock), 0) s FROM products WHERE is_active = 1').get().s,
       revenue: db.prepare("SELECT COALESCE(SUM(total),0) s FROM orders WHERE status = 'completed'").get().s,
     },
-  });
+  };
+  // Nhân viên chưa được xem doanh thu / giá nhập thì không nhận các con số tiền này.
+  if (!can(req.user, 'revenue.view')) delete payload.stats.revenue;
+  if (!can(req.user, 'products.manage')) { delete payload.stats.inventoryValue; delete payload.stats.missingCost; }
+  res.json(payload);
 });
 
 /** GET /api/admin/activity — nhật ký thay đổi và đăng nhập gần đây. */

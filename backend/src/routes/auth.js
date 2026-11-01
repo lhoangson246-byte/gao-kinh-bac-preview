@@ -8,6 +8,7 @@ import { LIMITS } from '../constants.js';
 import { HttpError, cleanText, isEmail, isPhone, normalizePhone } from '../validate.js';
 import { writeLoginHistory } from '../audit.js';
 import { deliverSession, COOKIE_NAME, COOKIE_OPTIONS } from '../security.js';
+import { permissionsOf } from '../permissions.js';
 
 const router = Router();
 router.use(validateRoutes('auth'));
@@ -125,6 +126,7 @@ router.post('/login', async (req, res, next) => {
     const user = {
       id: row.id, full_name: row.full_name, email: row.email,
       phone: row.phone, address: row.address, role: row.role,
+      permissions: permissionsOf(row), ...(row.role === 'staff' ? { staff_title: row.staff_title } : {}),
     };
     writeLoginHistory(req, row.id, raw.includes('@') ? 'email' : 'phone');
     deliverSession(req, res, user, signToken(user));

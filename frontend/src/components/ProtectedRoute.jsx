@@ -2,8 +2,8 @@ import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../i18n/index.jsx';
 
-export default function ProtectedRoute({ children, adminOnly = false }) {
-  const { user, loading, reconnecting, retryRestore, isAdmin } = useAuth();
+export default function ProtectedRoute({ children, adminOnly = false, staffOnly = false, permission = null }) {
+  const { user, loading, reconnecting, retryRestore, isAdmin, isStaff, can } = useAuth();
   const location = useLocation();
   const { t } = useI18n();
 
@@ -28,7 +28,7 @@ export default function ProtectedRoute({ children, adminOnly = false }) {
   }
 
   // Quyền cũng được máy chủ kiểm tra lại ở mọi API quản trị.
-  if (adminOnly && !isAdmin) {
+  if ((adminOnly && !isAdmin) || (staffOnly && !isStaff) || (permission && !can(permission))) {
     return (
       <div className="empty empty-page">
         <h1>{t('common.noAccess')}</h1>

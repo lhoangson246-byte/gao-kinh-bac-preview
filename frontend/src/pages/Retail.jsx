@@ -13,7 +13,7 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 
 export default function Retail() {
   const [tab, setTab] = useState('sell');
-  const { user, logout } = useAuth();
+  const { user, logout, can } = useAuth();
   const navigate = useNavigate();
 
   const [products, setProducts] = useState([]);
@@ -58,7 +58,7 @@ export default function Retail() {
           <div><strong>Gạo Kinh Bắc</strong><small>Bán hàng tại quầy</small></div>
         </div>
         <div className="admin-account">
-          <OrderAlerts onView={() => navigate('/quan-tri')} />
+          {can('orders.view') && <OrderAlerts onView={() => navigate('/quan-tri')} />}
           <span>Xin chào, <strong>{user?.full_name}</strong></span>
           <Link to="/quan-tri" className="btn btn-secondary">Quản trị</Link>
           <button className="btn btn-ghost" onClick={() => { logout(); navigate('/'); }}>Đăng xuất</button>

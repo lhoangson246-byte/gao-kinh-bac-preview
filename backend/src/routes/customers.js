@@ -2,13 +2,14 @@ import { validateRoutes } from '../schemas.js';
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import db from '../db.js';
-import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
+import { requirePermission } from '../permissions.js';
 import { CUSTOMER_SEGMENTS, CUSTOMER_SEGMENT_CODES, LIMITS } from '../constants.js';
 import { HttpError, cleanText, normalizePhone, toInteger } from '../validate.js';
 import { writeAdminAudit } from '../audit.js';
 
 const router = Router();
-router.use(requireAuth, requireAdmin);
+router.use(requireAuth, requirePermission('customers.manage'));
 router.use(validateRoutes('customers'));
 
 // Không bao giờ trả password_hash ra ngoài.

@@ -121,13 +121,17 @@ export function AuthProvider({ children }) {
     reconnecting,
     retryRestore: () => retryRestore.current(),
     sessionExpired,
+    // Chủ cửa hàng. Nhân viên (role 'staff') chỉ có các quyền được cấp; máy chủ kiểm tra lại mọi thao tác.
     isAdmin: user?.role === 'admin',
+    isStaff: user?.role === 'admin' || user?.role === 'staff',
+    can: (permission) => !!user?.permissions?.includes(permission),
     login: async (payload) => handleAuth(await api.login(payload)),
     register: async (payload) => handleAuth(await api.register(payload)),
     updateProfile: async (payload) => {
-      const { user } = await api.updateMe(payload);
-      setUser(user);
-      return user;
+      const { user: updated } = await api.updateMe(payload);
+      // Giữ quyền / chức vụ đang có (phản hồi sửa hồ sơ chỉ gồm thông tin cá nhân).
+      setUser((current) => ({ ...current, ...updated }));
+      return updated;
     },
     logout: async () => {
       try { await api.logout(); } catch (err) { if (err.status !== 401) throw err; }

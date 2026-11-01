@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import db from '../db.js';
-import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
+import { requirePermission } from '../permissions.js';
 import { validateRoutes } from '../schemas.js';
 import { HttpError } from '../validate.js';
 import {
@@ -12,7 +13,8 @@ import {
  * máy chủ cho mọi tuyến.
  */
 const router = Router();
-router.use(requireAuth, requireAdmin);
+// Ai nhận báo đơn (xem đơn) hoặc giao hàng thì bật được thông báo đẩy trên máy mình.
+router.use(requireAuth, requirePermission('orders.view', 'delivery'));
 router.use(validateRoutes('push'));
 
 /** GET /api/push/config — khoá VAPID công khai (để trình duyệt đăng ký) và Telegram đã bật chưa. */

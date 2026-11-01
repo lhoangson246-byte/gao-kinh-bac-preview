@@ -1518,3 +1518,44 @@ label b { color: var(--danger); }
 .code-state.on { background: var(--success-light); color: var(--success); }
 .code-state.soon { background: #fff3d6; color: #6b4a0c; }
 .code-state.ended, .code-state.off { background: #eeece6; color: var(--muted); }
+
+/* --- Nhân viên: quản lý tài khoản, phân công giao hàng --- */
+.staff-password { display: flex; gap: 8px; }
+.staff-password .input { flex: 1; min-width: 0; font-family: ui-monospace, Consolas, monospace; }
+.staff-permissions { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: white; }
+.staff-permissions legend { padding: 0 6px; font-weight: 800; }
+.staff-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px; color: var(--muted); font-size: .84rem; }
+.staff-presets .btn { min-height: 34px; padding: 5px 12px; font-size: .8rem; }
+.staff-perm-list { margin: 0; padding-left: 16px; font-size: .8rem; }
+.staff-reset { margin-top: 14px; }
+.row-muted td { color: var(--muted); }
+.shipper-select { display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; font-size: .8rem; color: var(--muted); }
+.shipper-select .input { min-height: 38px; padding: 6px 10px; font-size: .84rem; width: auto; }
+.shipper-tag { display: inline-flex; align-items: center; margin-right: 8px; padding: 4px 10px; border-radius: 99px; background: var(--green-100); color: var(--green-950); font-size: .8rem; font-weight: 750; }
+
+/* --- Trang giao hàng (điện thoại) --- */
+.delivery-main { max-width: 720px; margin: 0 auto; padding: 16px 14px 60px; }
+.delivery-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.delivery-summary div { display: flex; flex-direction: column; gap: 2px; padding: 12px 10px; border: 1px solid var(--border); border-radius: 12px; background: white; text-align: center; }
+.delivery-summary strong { color: var(--green-950); font-size: 1.15rem; }
+.delivery-summary span { color: var(--muted); font-size: .76rem; }
+.delivery-list { display: flex; flex-direction: column; gap: 14px; }
+.delivery-card { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 2px solid var(--border); border-radius: 16px; background: var(--paper); }
+.delivery-card.shipping { border-color: var(--gold); }
+.delivery-card header { display: flex; justify-content: space-between; align-items: center; }
+.delivery-card h2 { margin: 0; font-size: 1.35rem; }
+.delivery-call { min-height: 52px; font-size: 1.1rem; }
+.delivery-address { margin: 0; font-size: 1.05rem; line-height: 1.45; }
+.delivery-meta, .delivery-note { margin: 0; color: var(--muted); }
+.delivery-note { padding: 8px 10px; border-radius: 10px; background: #fff3d6; color: #6b4a0c; }
+.delivery-items { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--border); }
+.delivery-items li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.delivery-money { margin: 0; padding: 12px; border-radius: 12px; background: var(--green-100); color: var(--green-950); font-size: 1.05rem; }
+.delivery-money.bank { background: #e8f1ff; color: #1d3f78; }
+.delivery-done { background: var(--success); border-color: var(--success); color: white; }
+.delivery-finished { margin-top: 22px; }
+.delivery-finished ul { margin: 0; padding: 0; list-style: none; }
+.delivery-finished li { display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: .9rem; }
+@media (max-width: 560px) {
+  .delivery-app .admin-account .btn-secondary:not(.push-toggle) { display: none; }
+}

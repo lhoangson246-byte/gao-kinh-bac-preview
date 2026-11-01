@@ -933,5 +933,19 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(novemberCode)
   })();
 }
 
+// 01/11/2026: tài khoản nhân viên (role = 'staff') với quyền do chủ cửa hàng cấp, và đơn có người
+// giao / người tạo / nguồn tạo / cách nhận hàng.
+{
+  const userColumns = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+  if (!userColumns.includes('permissions')) db.exec('ALTER TABLE users ADD COLUMN permissions TEXT');
+  if (!userColumns.includes('staff_title')) db.exec('ALTER TABLE users ADD COLUMN staff_title TEXT');
+  const orderColumns = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
+  if (!orderColumns.includes('shipper_id')) db.exec('ALTER TABLE orders ADD COLUMN shipper_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+  if (!orderColumns.includes('created_by')) db.exec('ALTER TABLE orders ADD COLUMN created_by INTEGER REFERENCES users(id) ON DELETE SET NULL');
+  if (!orderColumns.includes('source')) db.exec("ALTER TABLE orders ADD COLUMN source TEXT NOT NULL DEFAULT 'online'");
+  if (!orderColumns.includes('fulfillment')) db.exec("ALTER TABLE orders ADD COLUMN fulfillment TEXT NOT NULL DEFAULT 'delivery'");
+  db.exec('CREATE INDEX IF NOT EXISTS idx_orders_shipper ON orders(shipper_id, status)');
+}
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

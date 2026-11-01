@@ -6,7 +6,7 @@ import InstallButton from './InstallButton.jsx';
 import LanguageSwitcher from './LanguageSwitcher.jsx';
 
 export default function Navbar() {
-  const { user, isAdmin, logout } = useAuth();
+  const { user, isStaff, logout } = useAuth();
   const { count } = useCart();
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -37,7 +37,7 @@ export default function Navbar() {
               <InstallButton />
               {user ? (
                 <>
-                  {isAdmin && <Link className="btn btn-admin" to="/quan-tri">{t('nav.admin')}</Link>}
+                  {isStaff && <Link className="btn btn-admin" to="/quan-tri">{t('nav.admin')}</Link>}
                   <Link to="/tai-khoan" className="hello">
                     {user.full_name.split(' ').pop()}
                   </Link>
@@ -67,7 +67,7 @@ export default function Navbar() {
         {/* Chưa đăng nhập thì "Đơn hàng" mở trang tra cứu bằng SĐT + mã đơn. */}
         <NavLink to={user ? '/don-hang' : '/tra-cuu-don'}><span aria-hidden="true">▤</span><small>{t('nav.tabOrders')}</small></NavLink>
         <NavLink to="/ve-chung-toi"><span aria-hidden="true">✦</span><small>{t('nav.tabAbout')}</small></NavLink>
-        {isAdmin ? (
+        {isStaff ? (
           <NavLink to="/quan-tri"><span aria-hidden="true">⚙</span><small>{t('nav.tabAdmin')}</small></NavLink>
         ) : (
           <NavLink to={user ? '/tai-khoan' : '/dang-nhap'}><span aria-hidden="true">○</span><small>{t('nav.tabAccount')}</small></NavLink>

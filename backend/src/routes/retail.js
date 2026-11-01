@@ -2,7 +2,8 @@ import { validateRoutes } from '../schemas.js';
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import db from '../db.js';
-import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
+import { requirePermission } from '../permissions.js';
 import {
   LIMITS, RETAIL_DISCOUNT_MIN_KG, RETAIL_DISCOUNT_MAX_PERCENT, RETAIL_PAYMENT_METHODS,
   RETAIL_POINTS_PER_REWARD, RETAIL_VND_PER_POINT, retailRewardsAffordable,
@@ -18,7 +19,7 @@ import { attachItems } from '../order-lists.js';
 const router = Router();
 
 // Bán lẻ tại quầy là việc của nhân viên cửa hàng — luôn kiểm tra quyền ở máy chủ.
-router.use(requireAuth, requireAdmin);
+router.use(requireAuth, requirePermission('retail.sell'));
 router.use(validateRoutes('retail'));
 
 const MAX_LINES = 60;

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 const ImagePicker = lazy(() => import('../components/ImagePicker.jsx'));
 const BannerSettings = lazy(() => import('../components/BannerSettings.jsx'));
 const GroupManager = lazy(() => import('../components/GroupManager.jsx'));
@@ -12,6 +12,7 @@ const StockReceive = lazy(() => import('../components/StockReceive.jsx'));
 const ActivityLog = lazy(() => import('../components/ActivityLog.jsx'));
 const AboutManager = lazy(() => import('../components/AboutManager.jsx'));
 const DiscountCodeManager = lazy(() => import('../components/DiscountCodeManager.jsx'));
+const StaffManager = lazy(() => import('../components/StaffManager.jsx'));
 import ProductImage from '../components/ProductImage.jsx';
 import OrdersExportButton from '../components/OrdersExportButton.jsx';
 import PageLoadBoundary from '../components/PageLoadBoundary.jsx';
@@ -49,8 +50,20 @@ const NEXT_STEP = {
   shipping: ['completed', 'Đánh dấu hoàn thành'],
 };
 
+/** Các mục của trang quản trị và quyền cần có. null = chỉ chủ cửa hàng. */
+const TAB_ACCESS = {
+  orders: 'orders.view', products: 'products.manage', customers: 'customers.manage', revenue: 'revenue.view',
+  activity: null, codes: null, about: null, staff: null,
+};
+
 export default function Admin() {
-  const [tab, setTab] = useState('orders');
+  const { user, logout, can, isAdmin } = useAuth();
+  const allowed = (key) => (TAB_ACCESS[key] ? can(TAB_ACCESS[key]) : isAdmin);
+  const firstTab = Object.keys(TAB_ACCESS).find(allowed) || null;
+  const canOrders = can('orders.view');
+  const canProducts = can('products.manage');
+  const canManageOrders = can('orders.manage');
+  const [tab, setTab] = useState(firstTab || 'orders');
   const [filter, setFilter] = useState('pending');
   const [stats, setStats] = useState(null);
   const [orders, setOrders] = useState([]);
@@ -72,9 +85,9 @@ export default function Admin() {
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
-  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [shippers, setShippers] = useState([]);   // nhân viên giao hàng (để phân công)
   const focusOrder = useRef(null);                 // { id, action } — mở từ thông báo đẩy
   const [highlightId, setHighlightId] = useState(null);
 
@@ -83,9 +96,11 @@ export default function Admin() {
     setLoading(true);
     setError('');
     try {
+      // Chỉ tải phần nhân viên được xem — máy chủ cũng chặn phần còn lại.
       const [statsResult, ordersResult, productsResult] = await Promise.all([
-        api.adminStats(), api.adminOrders(filter, { offset }),
-        refreshProducts || !productsLoaded.current
+        canOrders || canProducts ? api.adminStats() : Promise.resolve({ stats: null }),
+        canOrders ? api.adminOrders(filter, { offset }) : Promise.resolve({ orders: [], counts: {}, total: 0 }),
+        canProducts && (refreshProducts || !productsLoaded.current)
           ? Promise.all([api.adminProducts(), api.adminGroups()])
             .then(([productList, groupList]) => ({ ...productList, groups: groupList.groups }))
           : Promise.resolve(null),
@@ -110,7 +125,25 @@ export default function Admin() {
     } finally {
       if (id === requestId.current) setLoading(false);
     }
-  }, [filter, offset]);
+  }, [filter, offset, canOrders, canProducts]);
+
+  useEffect(() => {
+    if (canManageOrders) api.adminShippers().then((d) => setShippers(d.shippers)).catch(() => {});
+  }, [canManageOrders]);
+
+  const assignShipper = async (order, shipperId) => {
+    setBusyId(order.id);
+    setError('');
+    try {
+      const { order: updated } = await api.adminAssignShipper(order.id, shipperId ? Number(shipperId) : null);
+      setOrders((current) => current.map((o) => (o.id === order.id ? { ...o, ...updated } : o)));
+      notify(updated.shipper_name ? `Đã giao đơn ${order.code} cho ${updated.shipper_name}.` : `Đã bỏ người giao đơn ${order.code}.`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   useEffect(() => {
     reload({ refreshProducts: false });
@@ -331,16 +364,21 @@ export default function Admin() {
     }
   };
 
+  if (!firstTab) {
+    if (can('delivery')) return <Navigate to="/quan-tri/giao-hang" replace />;
+    if (can('retail.sell')) return <Navigate to="/quan-tri/ban-hang" replace />;
+  }
+
   return (
     <div className="admin-app">
       <header className="admin-topbar">
         <div className="admin-brand"><img src="/logo-mark.png" alt="" width="38" height="38" /><div><strong>Gạo Kinh Bắc</strong><small>Khu vực quản trị</small></div></div>
         <div className="admin-account">
-          <OrderAlerts
+          {canOrders && <OrderAlerts
             onNewOrder={() => reload({ refreshProducts: false })}
             onView={() => { setTab('orders'); setFilter('pending'); setOffset(0); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-          />
-          <span>Xin chào, <strong>{user?.full_name}</strong></span>
+          />}
+          <span>Xin chào, <strong>{user?.full_name}</strong>{user?.staff_title ? ` · ${user.staff_title}` : ''}</span>
           <Link to="/" className="btn btn-secondary">Xem cửa hàng</Link>
           <button className="btn btn-ghost" onClick={() => { logout(); navigate('/'); }}>Đăng xuất</button>
         </div>
@@ -349,33 +387,40 @@ export default function Admin() {
       <div className="admin-layout">
         <aside className="admin-sidebar">
           <p className="admin-nav-label">Công việc</p>
-          <button className={tab === 'orders' ? 'active' : ''} onClick={() => setTab('orders')}>
+          {allowed('orders') && <button className={tab === 'orders' ? 'active' : ''} onClick={() => setTab('orders')}>
             <span aria-hidden="true">▤</span><span>Đơn hàng<small>Xác nhận và giao hàng</small></span>
             {pendingCount > 0 && <b>{pendingCount}</b>}
-          </button>
-          <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>
+          </button>}
+          {allowed('products') && <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>
             <span aria-hidden="true">◇</span><span>Sản phẩm<small>Giá bán và tồn kho</small></span>
-          </button>
-          <button className={tab === 'customers' ? 'active' : ''} onClick={() => setTab('customers')}>
+          </button>}
+          {allowed('customers') && <button className={tab === 'customers' ? 'active' : ''} onClick={() => setTab('customers')}>
             <span aria-hidden="true">☺</span><span>Khách hàng<small>Tài khoản đăng nhập</small></span>
-          </button>
-          <button className={tab === 'revenue' ? 'active' : ''} onClick={() => setTab('revenue')}>
+          </button>}
+          {allowed('revenue') && <button className={tab === 'revenue' ? 'active' : ''} onClick={() => setTab('revenue')}>
             <span aria-hidden="true">◱</span><span>Doanh thu<small>Lọc theo ngày, tháng</small></span>
-          </button>
-          <button className={tab === 'activity' ? 'active' : ''} onClick={() => setTab('activity')}>
+          </button>}
+          {allowed('activity') && <button className={tab === 'activity' ? 'active' : ''} onClick={() => setTab('activity')}>
             <span aria-hidden="true">⌁</span><span>Nhật ký<small>Thay đổi và đăng nhập</small></span>
-          </button>
-          <button className={tab === 'codes' ? 'active' : ''} onClick={() => setTab('codes')}>
+          </button>}
+          {allowed('codes') && <button className={tab === 'codes' ? 'active' : ''} onClick={() => setTab('codes')}>
             <span aria-hidden="true">%</span><span>Mã giảm giá<small>Khuyến mãi theo mã</small></span>
-          </button>
-          <button className={tab === 'about' ? 'active' : ''} onClick={() => setTab('about')}>
+          </button>}
+          {allowed('about') && <button className={tab === 'about' ? 'active' : ''} onClick={() => setTab('about')}>
             <span aria-hidden="true">✦</span><span>Về chúng tôi<small>Giấy tờ và đánh giá</small></span>
-          </button>
-          <Link to="/quan-tri/ban-hang" className="admin-sidebar-link">
+          </button>}
+          {allowed('staff') && <button className={tab === 'staff' ? 'active' : ''} onClick={() => setTab('staff')}>
+            <span aria-hidden="true">☷</span><span>Nhân viên<small>Tài khoản và quyền</small></span>
+          </button>}
+          {can('retail.sell') && <Link to="/quan-tri/ban-hang" className="admin-sidebar-link">
             <span aria-hidden="true">◧</span>
             <span>Bán hàng tại quầy<small>Hoá đơn và tích điểm</small></span>
-          </Link>
-          <div className="admin-help"><strong>Cần làm gì trước?</strong><p>Ưu tiên các đơn “Chờ xác nhận”, gọi khách rồi bấm “Xác nhận đơn”.</p></div>
+          </Link>}
+          {!isAdmin && can('delivery') && <Link to="/quan-tri/giao-hang" className="admin-sidebar-link">
+            <span aria-hidden="true">🛵</span>
+            <span>Giao hàng<small>Đơn được giao cho tôi</small></span>
+          </Link>}
+          {canManageOrders && <div className="admin-help"><strong>Cần làm gì trước?</strong><p>Ưu tiên các đơn “Chờ xác nhận”, gọi khách rồi bấm “Xác nhận đơn”.</p></div>}
         </aside>
 
         <main className="admin-content">
@@ -383,7 +428,7 @@ export default function Admin() {
             <PageLoadBoundary key={tab}>
             <Suspense fallback={<div className="loading-state" role="status"><span></span>Đang mở chức năng…</div>}>
             <>
-              {!['revenue', 'customers', 'activity', 'about', 'codes'].includes(tab) && (
+              {!['revenue', 'customers', 'activity', 'about', 'codes', 'staff'].includes(tab) && (
               <div className="admin-page-heading">
                 <div>
                   <p className="eyebrow dark"><span></span>{tab === 'orders' ? 'Công việc hôm nay' : 'Quản lý gian hàng'}</p>
@@ -398,6 +443,15 @@ export default function Admin() {
               </div>
               )}
 
+              {tab === 'staff' && (
+              <div className="admin-page-heading">
+                <div>
+                  <p className="eyebrow dark"><span></span>Chỉ chủ cửa hàng</p>
+                  <h1>Nhân viên</h1>
+                  <p>Tạo tài khoản cho kế toán, nhân viên giao hàng, bán hàng và cấp đúng quyền cần dùng.</p>
+                </div>
+              </div>
+              )}
               {tab === 'codes' && (
               <div className="admin-page-heading">
                 <div>
@@ -416,16 +470,16 @@ export default function Admin() {
                 </div>
               </div>
               )}
-              {!['revenue', 'customers', 'activity', 'about', 'codes'].includes(tab) && stats && (
+              {!['revenue', 'customers', 'activity', 'about', 'codes', 'staff'].includes(tab) && stats && (
                 <section className="stats" aria-label="Thống kê cửa hàng">
                   <div className="stat urgent"><span>Đơn cần xác nhận</span><strong>{pendingCount}</strong><small>Nên xử lý trước</small></div>
                   <div className="stat"><span>Tổng đơn hàng</span><strong>{stats.orders}</strong><small>Tất cả thời gian</small></div>
                   <div className="stat"><span>Sản phẩm đang bán</span><strong>{stats.products}</strong><small>{stats.lowStock > 0 ? `${stats.lowStock} loại sắp hết hàng` : 'Loại gạo'}</small></div>
-                  <div className="stat"><span>Doanh thu hoàn thành</span><strong>{formatVND(stats.revenue)}</strong><small>Chỉ tính đơn đã giao xong</small></div>
+                  {stats.revenue != null && <div className="stat"><span>Doanh thu hoàn thành</span><strong>{formatVND(stats.revenue)}</strong><small>Chỉ tính đơn đã giao xong</small></div>}
                 </section>
               )}
 
-              {!['revenue', 'customers', 'activity', 'about', 'codes'].includes(tab) && stats?.missingPrice > 0 && (
+              {canProducts && !['revenue', 'customers', 'activity', 'about', 'codes', 'staff'].includes(tab) && stats?.missingPrice > 0 && (
                 <div className="alert warning" role="status">
                   <strong>{stats.missingPrice} loại gạo chưa có giá bán.</strong>{' '}
                   Khách nhìn thấy sản phẩm nhưng chưa đặt mua được.{' '}
@@ -446,6 +500,7 @@ export default function Admin() {
               {tab === 'activity' ? <ActivityLog />
                 : tab === 'about' ? <AboutManager />
                 : tab === 'codes' ? <DiscountCodeManager />
+                : tab === 'staff' ? <StaffManager />
                 : tab === 'revenue' ? <RevenueReport />
                 : tab === 'customers' ? <CustomerManager />
                 : tab === 'orders' ? (
@@ -525,10 +580,23 @@ export default function Admin() {
                               </section>
                             </div>
                             <footer>
-                              <span>{next ? 'Bước tiếp theo:' : `Đơn đã ${order.status === 'cancelled' ? 'huỷ' : 'kết thúc'}`}</span>
+                              <span>{next ? (canManageOrders ? 'Bước tiếp theo:' : `Trạng thái: ${STATUS_LABEL[order.status]}`) : `Đơn đã ${order.status === 'cancelled' ? 'huỷ' : 'kết thúc'}`}</span>
                               <div>
-                                {next && <button className="btn btn-primary" disabled={busyId === order.id} onClick={() => changeStatus(order.id, next[0])}>{busyId === order.id ? 'Đang lưu…' : next[1]}</button>}
-                                {!['completed', 'cancelled'].includes(order.status) && <button className="btn btn-danger-ghost" disabled={busyId === order.id} onClick={() => cancelOrder(order)}>Huỷ đơn</button>}
+                                {canManageOrders && !['completed', 'cancelled'].includes(order.status) && (
+                                  <label className="shipper-select">
+                                    <span>Người giao</span>
+                                    <select className="input" value={order.shipper_id || ''} disabled={busyId === order.id}
+                                            onChange={(e) => assignShipper(order, e.target.value)}>
+                                      <option value="">— Chưa giao cho ai —</option>
+                                      {shippers.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                                    </select>
+                                  </label>
+                                )}
+                                {(!canManageOrders || ['completed', 'cancelled'].includes(order.status)) && order.shipper_name && (
+                                  <span className="shipper-tag">🛵 {order.shipper_name}</span>
+                                )}
+                                {canManageOrders && next && <button className="btn btn-primary" disabled={busyId === order.id} onClick={() => changeStatus(order.id, next[0])}>{busyId === order.id ? 'Đang lưu…' : next[1]}</button>}
+                                {canManageOrders && !['completed', 'cancelled'].includes(order.status) && <button className="btn btn-danger-ghost" disabled={busyId === order.id} onClick={() => cancelOrder(order)}>Huỷ đơn</button>}
                               </div>
                             </footer>
                           </article>

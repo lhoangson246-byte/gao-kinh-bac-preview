@@ -25,8 +25,9 @@ export default function Login() {
     setError('');
     setBusy(true);
     try {
-      await login(form);
-      navigate(location.state?.from || '/', { replace: true });
+      const user = await login(form);
+      // Nhân viên vào thẳng khu làm việc (trang quản trị tự chuyển nhân viên giao hàng sang trang giao).
+      navigate(location.state?.from || (user?.role === 'staff' ? '/quan-tri' : '/'), { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {

@@ -2,7 +2,8 @@ import { Router } from 'express';
 import express from 'express';
 import { createHash, randomBytes } from 'node:crypto';
 import db from '../db.js';
-import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
+import { requirePermission } from '../permissions.js';
 import { HttpError } from '../validate.js';
 
 const router = Router();
@@ -34,7 +35,7 @@ function sniffImage(buf) {
 router.post(
   '/admin/images',
   requireAuth,
-  requireAdmin,
+  requirePermission('products.manage'),
   express.raw({ type: ACCEPTED, limit: MAX_IMAGE_BYTES }),
   (req, res, next) => {
     try {
@@ -82,7 +83,7 @@ router.post(
  * Gồm ảnh đã tải lên và ảnh các loại gạo khác đang dùng, nhờ vậy nhân viên
  * không phải nhớ tên tệp mới gán được ảnh cho một loại gạo.
  */
-router.get('/admin/images', requireAuth, requireAdmin, (req, res) => {
+router.get('/admin/images', requireAuth, requirePermission('products.manage'), (req, res) => {
   // Gộp những ảnh trùng nội dung lại làm một để thư viện không lặp.
   const uploaded = db
     .prepare(`

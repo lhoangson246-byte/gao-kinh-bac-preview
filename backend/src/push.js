@@ -8,6 +8,7 @@
 import webpush from 'web-push';
 import db from './db.js';
 import { DELIVERY_SLOTS } from './constants.js';
+import { permissionsOf } from './permissions.js';
 
 const env = process.env;
 const SEND_TIMEOUT_MS = 5000;
@@ -151,15 +152,19 @@ async function deliver(row, body, vapid) {
 export async function sendPushToAdmins(payload, { endpoint, userId } = {}) {
   const vapid = vapidConfig();
   if (!vapid) return { configured: false, sent: 0, failed: 0, removed: 0 };
-  // Chỉ gửi cho tài khoản còn là quản trị và chưa bị khoá — không phụ thuộc phiên đăng nhập.
-  const where = ["u.role = 'admin'", 'u.is_locked = 0'];
+  // Chỉ gửi cho tài khoản chưa bị khoá và còn quyền — không phụ thuộc phiên đăng nhập. Báo đơn mới
+  // (không chỉ định máy/người): chủ cửa hàng và nhân viên được xem đơn. Gửi riêng một người / một
+  // máy (nút thử, phân công giao hàng): nhân viên còn quyền xem đơn hoặc giao hàng.
+  const where = ["u.role IN ('admin', 'staff')", 'u.is_locked = 0'];
   const args = [];
   if (endpoint) { where.push('s.endpoint = ?'); args.push(endpoint); }
   if (userId) { where.push('s.user_id = ?'); args.push(userId); }
+  const allowed = endpoint || userId ? ['orders.view', 'delivery'] : ['orders.view'];
   const rows = db.prepare(`
-    SELECT s.id, s.endpoint, s.p256dh, s.auth FROM admin_push_subscriptions s
+    SELECT s.id, s.endpoint, s.p256dh, s.auth, u.role, u.permissions FROM admin_push_subscriptions s
     JOIN users u ON u.id = s.user_id WHERE ${where.join(' AND ')}
-  `).all(...args).filter((row) => pushEndpointAllowed(row.endpoint));
+  `).all(...args).filter((row) => pushEndpointAllowed(row.endpoint)
+    && permissionsOf(row).some((p) => allowed.includes(p)));
 
   const body = JSON.stringify(payload);
   const results = await Promise.allSettled(rows.map((row) => deliver(row, body, vapid)));
@@ -227,6 +232,25 @@ export async function notifyNewOrder(orderId, { origin } = {}) {
     return { push: push.value ?? null, telegram: telegram.value ?? null };
   } catch (err) {
     console.error({ event: 'notify_failed', name: err?.name, message: String(err?.message || '').slice(0, 160) });
+    return null;
+  }
+}
+
+/** Báo nhân viên giao hàng vừa được phân công một đơn. Không ném lỗi. */
+export async function notifyShipperAssigned(orderId, shipperId) {
+  try {
+    const order = orderForNotice(orderId);
+    if (!order) return null;
+    const payload = orderPushPayload(order);
+    return await sendPushToAdmins({
+      ...payload,
+      kind: 'order',
+      title: `🛵 GIAO ĐƠN #${order.code || order.id} - ${formatMoney(order.total)}đ`,
+      tag: `assign-${order.id}`,
+      url: '/quan-tri/giao-hang',
+    }, { userId: shipperId });
+  } catch (err) {
+    console.error({ event: 'notify_shipper_failed', name: err?.name, message: String(err?.message || '').slice(0, 160) });
     return null;
   }
 }

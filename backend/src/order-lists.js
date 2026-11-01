@@ -17,8 +17,8 @@ export function listAdminOrders({ status, limit = 30, offset = 0 } = {}) {
   const clause = status ? 'WHERE status = ?' : '';
   const args = status ? [status, limit, offset] : [limit, offset];
   const page = `SELECT id FROM orders ${clause} ORDER BY id DESC LIMIT ? OFFSET ?`;
-  const rows = db.prepare(`SELECT o.*, u.email AS user_email, u.full_name AS user_name
-    FROM orders o JOIN users u ON u.id = o.user_id
+  const rows = db.prepare(`SELECT o.*, u.email AS user_email, u.full_name AS user_name, s.full_name AS shipper_name
+    FROM orders o JOIN users u ON u.id = o.user_id LEFT JOIN users s ON s.id = o.shipper_id
     WHERE o.id IN (${page}) ORDER BY o.id DESC`).all(...args);
   // Mã băm bí mật của đơn mua nhanh không cần lộ ra, kể cả với quản trị.
   for (const row of rows) delete row.guest_token_hash;
