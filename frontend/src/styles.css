@@ -1705,3 +1705,10 @@ label b { color: var(--danger); }
   .closing-section { break-inside: avoid; border-color: #999; }
   .cash-count input { border: 0; background: none; }
 }
+
+/* --- Đóng ngày: công nợ chờ duyệt, nhắc việc người duyệt --- */
+.closing-pending { margin-bottom: 14px; padding: 12px 14px; border: 2px solid var(--danger); border-radius: 12px; background: var(--danger-light); color: var(--danger); }
+.closing-pending ul { margin: 6px 0; padding-left: 18px; color: var(--ink); }
+.alert.debt-todo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border: 2px solid var(--gold); background: #fff3d6; color: #6b4a0c; }
+.alert.debt-todo .btn { min-height: 36px; padding: 5px 14px; }
+.closing-saved.stale { color: var(--muted); text-decoration: line-through; }

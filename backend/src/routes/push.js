@@ -14,7 +14,7 @@ import {
  */
 const router = Router();
 // Ai nhận báo đơn (xem đơn) hoặc giao hàng thì bật được thông báo đẩy trên máy mình.
-router.use(requireAuth, requirePermission('orders.view', 'delivery'));
+router.use(requireAuth, requirePermission('orders.view', 'delivery', 'debt.accounting', 'debt.final'));
 router.use(validateRoutes('push'));
 
 /** GET /api/push/config — khoá VAPID công khai (để trình duyệt đăng ký) và Telegram đã bật chưa. */

@@ -256,6 +256,8 @@ add('debts', 'PUT', /^\/accounts\/[^/]+\/?$/, obj({
   term_days: integer(1, 365).optional(), contact_name: optionalText(120), company: optionalText(160), note: optionalText(300),
 }), obj({ scope: z.enum(['open', 'settled']).optional() }));
 add('closing', 'GET', /^\/?$/, empty, obj({ day: z.string().max(10).optional() }));
+add('closing', 'GET', /^\/history\/?$/);
+add('closing', 'GET', /^\/export\/?$/, empty, obj({ day: z.string().max(10) }));
 add('closing', 'POST', /^\/?$/, obj({ day: z.string().max(10), counts: z.record(z.string().max(7), z.union([z.number(), z.string().max(7)])).optional(), note: optionalText(1000) }));
 
 export function validateRoutes(group) {

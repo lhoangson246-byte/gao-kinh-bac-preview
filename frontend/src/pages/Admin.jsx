@@ -4,6 +4,7 @@ const ImagePicker = lazy(() => import('../components/ImagePicker.jsx'));
 const BannerSettings = lazy(() => import('../components/BannerSettings.jsx'));
 const GroupManager = lazy(() => import('../components/GroupManager.jsx'));
 import OrderAlerts from '../components/OrderAlerts.jsx';
+import PushSettings from '../components/PushSettings.jsx';
 import { api, salePercent, PRODUCT_CATEGORIES, formatDateTime, formatVND, pointsForLines, mapLink, STATUS_LABEL, DELIVERY_SLOT_LABEL, deliveryDateLabel, vietnamDate } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
 const RevenueReport = lazy(() => import('../components/RevenueReport.jsx'));
@@ -410,10 +411,10 @@ export default function Admin() {
       <header className="admin-topbar">
         <div className="admin-brand"><img src="/logo-mark.png" alt="" width="38" height="38" /><div><strong>Gạo Kinh Bắc</strong><small>Khu vực quản trị</small></div></div>
         <div className="admin-account">
-          {canOrders && <OrderAlerts
+          {canManageOrders ? <OrderAlerts
             onNewOrder={() => reload({ refreshProducts: false })}
             onView={() => { setTab('orders'); setFilter('pending'); setOffset(0); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-          />}
+          /> : (can('debt.final') || can('debt.accounting') || canOrders) && <PushSettings />}
           <span>Xin chào, <strong>{user?.full_name}</strong>{user?.staff_title ? ` · ${user.staff_title}` : ''}</span>
           <Link to="/" className="btn btn-secondary">Xem cửa hàng</Link>
           <button className="btn btn-ghost" onClick={() => { logout(); navigate('/'); }}>Đăng xuất</button>
@@ -584,6 +585,12 @@ export default function Admin() {
                       </Link>
                     )}
                   </div>
+                  {(can('debt.final') && debtSummary?.pending_final > 0) || (can('debt.accounting') && debtSummary?.pending_accounting > 0) ? (
+                    <div className="alert debt-todo" role="status">
+                      🔔 Có <strong>{(can('debt.final') ? debtSummary.pending_final : 0) + (can('debt.accounting') ? debtSummary.pending_accounting : 0)} đơn nợ chờ bạn duyệt</strong>.{' '}
+                      <Link to="/quan-tri/cong-no" className="btn btn-primary">Duyệt ngay</Link>
+                    </div>
+                  ) : null}
                   {debtSummary?.overdue_count > 0 && (
                     <div className="alert warning" role="status">
                       ⚠️ Có <strong>{debtSummary.overdue_count} khoản công nợ quá hạn</strong> ({formatVND(debtSummary.overdue)}) cần đòi tiền.{' '}

@@ -216,6 +216,25 @@ try {
   check('Gửi thử không chỉ định máy: gửi tới mọi máy của tài khoản', allDevices.status === 200
     && allDevices.data.sent === 1 && allDevices.data.failed === 1, JSON.stringify(allDevices.data));
 
+  /* Tài khoản chỉ xem (mẹ): bật được thông báo, nhận tin thử, nhưng KHÔNG bị báo mỗi đơn mới */
+  const presets = (await call('/admin/staff', { token: admin })).data.presets;
+  const momPhone = `08${String(suffix).padStart(8, '0')}`;
+  await call('/admin/staff', { method: 'POST', token: admin, body: { full_name: 'Mẹ', phone: momPhone, password: 'meduyet26', permissions: presets['duyet-cuoi'].permissions } });
+  const mom = (await call('/auth/login', { method: 'POST', body: { identifier: momPhone, password: 'meduyet26' } })).data.token;
+  const momDevice = browser('/ok/mom-phone');
+  check('Mẹ bật được thông báo đẩy', (await call('/push/subscribe', { method: 'POST', token: mom, body: momDevice.sub })).status === 200);
+  await call('/push/test', { method: 'POST', token: mom, body: { endpoint: momDevice.sub.endpoint } });
+  check('Mẹ nhận được tin thử', !!(await takeFor('/ok/mom-phone')));
+  received.length = 0;
+  await call('/orders/guest', {
+    method: 'POST',
+    body: {
+      receiver_name: 'Cô Đơn Mới', phone: `05${String(suffix).padStart(8, '0')}`, address: 'Số 2 đường Kinh Dương Vương, phường Vũ Ninh',
+      delivery_area: 'bac-ninh', payment_method: 'cod', items: [{ product_id: product.id, quantity: 1 }],
+    },
+  });
+  check('Đơn mới chỉ báo người xử lý đơn, không báo tài khoản chỉ xem', !!(await takeFor('/ok/phone-1')) && !(await takeFor('/ok/mom-phone', 1500)));
+
   /* Tắt trên máy này */
   const off = await call('/push/unsubscribe', { method: 'DELETE', token: admin, body: { endpoint: phone.sub.endpoint } });
   check('Tắt thông báo trên máy này', off.status === 200 && off.data.removed === 1, JSON.stringify(off.data));

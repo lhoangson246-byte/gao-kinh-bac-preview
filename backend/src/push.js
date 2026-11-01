@@ -149,7 +149,7 @@ async function deliver(row, body, vapid) {
  * Gửi một thông báo tới các máy quản trị. `endpoint` = chỉ gửi tới đúng máy đó (nút thử).
  * Máy đã huỷ đăng ký (404/410) bị xoá khỏi danh sách. Trả { configured, sent, failed, removed }.
  */
-export async function sendPushToAdmins(payload, { endpoint, userId } = {}) {
+export async function sendPushToAdmins(payload, { endpoint, userId, audience = null } = {}) {
   const vapid = vapidConfig();
   if (!vapid) return { configured: false, sent: 0, failed: 0, removed: 0 };
   // Chỉ gửi cho tài khoản chưa bị khoá và còn quyền — không phụ thuộc phiên đăng nhập. Báo đơn mới
@@ -159,7 +159,8 @@ export async function sendPushToAdmins(payload, { endpoint, userId } = {}) {
   const args = [];
   if (endpoint) { where.push('s.endpoint = ?'); args.push(endpoint); }
   if (userId) { where.push('s.user_id = ?'); args.push(userId); }
-  const allowed = endpoint || userId ? ['orders.view', 'delivery'] : ['orders.view'];
+  // Đơn mới: người xử lý đơn (chủ cửa hàng, bán hàng). Kế toán / mẹ chỉ xem nên không bị báo mỗi đơn.
+  const allowed = audience || (endpoint || userId ? ['orders.view', 'delivery', 'debt.accounting', 'debt.final'] : ['orders.manage']);
   const rows = db.prepare(`
     SELECT s.id, s.endpoint, s.p256dh, s.auth, u.role, u.permissions FROM admin_push_subscriptions s
     JOIN users u ON u.id = s.user_id WHERE ${where.join(' AND ')}
@@ -251,6 +252,34 @@ export async function notifyShipperAssigned(orderId, shipperId) {
     }, { userId: shipperId });
   } catch (err) {
     console.error({ event: 'notify_shipper_failed', name: err?.name, message: String(err?.message || '').slice(0, 160) });
+    return null;
+  }
+}
+
+/**
+ * Báo người duyệt công nợ: đơn nợ mới → kế toán; chờ duyệt cho nợ / tất toán → mẹ. Không ném lỗi.
+ * `stage`: 'pending_accounting' | 'pending_final' | 'paid_pending_final'.
+ */
+export async function notifyDebtStage(debtId, stage) {
+  try {
+    const row = db.prepare(`
+      SELECT r.id, r.amount, o.code, a.contact_name, a.company FROM debt_records r
+      JOIN orders o ON o.id = r.order_id JOIN debt_accounts a ON a.id = r.account_id WHERE r.id = ?
+    `).get(debtId);
+    if (!row) return null;
+    const who = `${row.contact_name}${row.company ? ` – ${row.company}` : ''}`;
+    const text = {
+      pending_accounting: ['📒 ĐƠN NỢ MỚI CHỜ KẾ TOÁN DUYỆT', ['debt.accounting']],
+      pending_final: ['📒 ĐƠN NỢ CHỜ MẸ DUYỆT', ['debt.final']],
+      paid_pending_final: ['💰 ĐÃ THU NỢ – CHỜ MẸ DUYỆT TẤT TOÁN', ['debt.final']],
+    }[stage];
+    if (!text) return null;
+    return await sendPushToAdmins({
+      kind: 'order', title: `${text[0]} #${row.code}`,
+      body: `${who} · ${formatMoney(row.amount)}đ`, tag: `debt-${row.id}-${stage}`, url: '/quan-tri/cong-no',
+    }, { audience: text[1] });
+  } catch (err) {
+    console.error({ event: 'notify_debt_failed', name: err?.name, message: String(err?.message || '').slice(0, 160) });
     return null;
   }
 }

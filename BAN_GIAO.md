@@ -1288,6 +1288,20 @@ Nút **🧾 Đóng ngày** ở tab Đơn hàng (người được xem doanh thu)
   được, chênh lệch thừa/thiếu), **Công nợ** (phát sinh, thu nợ, tổng đang mở), ghi chú.
 - **Lưu phiếu đóng ngày** (lưu lại người đóng, giờ; mở lại ngày cũ thấy phiếu) và **🖨️ In báo cáo**.
 - Quy ước: đơn online tính vào ngày **giao xong**; bán quầy / trả hàng theo ngày lập; thu nợ theo ngày kế toán ký.
+- **Điều kiện đóng ngày** (cập nhật): (1) mọi đơn nợ tính tới ngày đó phải duyệt xong (không còn khoản chờ
+  kế toán / chờ mẹ / bị trả lại / chờ duyệt tất toán) — mục "Tổng công nợ" liệt kê khoản còn chờ; (2) tiền mặt đếm
+  được phải khớp sổ sách, lệch thì phải ghi giải trình (≥ 10 ký tự). Đủ điều kiện mới bấm **✅ Đóng ngày**.
+- Đóng xong mới **In báo cáo** và **📥 Tải tệp Excel** (bản lưu trữ số). Mục "Các ngày đã đóng" xem lại / tải lại
+  ngày cũ. Nếu sau khi đóng lại phát sinh thêm giao dịch, trang báo số liệu đã đổi và phải đóng lại.
+- Quyền mới **Đóng ngày** (`closing.manage`, có trong mẫu Kế toán). Người chỉ được xem doanh thu (mẹ) xem được
+  báo cáo nhưng không đóng ngày.
+
+### Tài khoản "Duyệt cuối (mẹ)"
+
+Chỉ: xem đơn hàng (không xử lý), xem doanh thu, xem báo cáo đóng ngày, xem và **duyệt công nợ**. Trang quản trị
+hiện nhắc "🔔 Có N đơn nợ chờ bạn duyệt → Duyệt ngay". Bật **📲 Thông báo** để điện thoại báo khi có đơn nợ chờ
+mẹ duyệt (cho nợ hoặc tất toán). Thông báo theo bước: đơn nợ mới → kế toán; chờ duyệt → mẹ. Báo **đơn mới** chỉ gửi
+người xử lý đơn (chủ cửa hàng, nhân viên bán hàng), không gửi kế toán / mẹ.
 
 ## Mã giảm giá, tài khoản nhân viên, tạo đơn bằng tay (01/11/2026)
 

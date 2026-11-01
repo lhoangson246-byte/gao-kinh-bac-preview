@@ -24,7 +24,10 @@ export default function DayClosing() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [history, setHistory] = useState([]);
   const formRef = useRef(null);
+  const loadHistory = () => api.closingHistory().then((d) => setHistory(d.closings)).catch(() => {});
+  useEffect(() => { loadHistory(); }, []);
 
   useEffect(() => {
     setData(null);
@@ -50,6 +53,14 @@ export default function DayClosing() {
   const { lines, totals } = data.figures;
   const counted = data.denominations.reduce((sum, value) => sum + value * (Number(counts[value]) || 0), 0);
   const difference = counted - totals.cash;
+  const pending = data.pending_debts || [];
+  const canClose = data.can_close;
+  // Đóng được khi: duyệt hết công nợ, và tiền đếm khớp sổ sách (lệch thì phải ghi giải trình).
+  const needsNote = difference !== 0 && note.trim().length < 10;
+  const ready = canClose && pending.length === 0 && !needsNote;
+  // Đã đóng rồi mà sau đó phát sinh thêm (đơn giao muộn, đơn nợ mới…): phiếu đã lưu không còn khớp.
+  const stale = !!data.saved && JSON.stringify(data.saved.figures?.totals) !== JSON.stringify(totals);
+  const printable = !!data.saved && !stale;
 
   const save = async () => {
     setBusy(true);
@@ -57,7 +68,8 @@ export default function DayClosing() {
     try {
       const result = await api.saveClosing({ day, counts: Object.fromEntries(data.denominations.map((v) => [v, Number(counts[v]) || 0])), note: note.trim() || null });
       setData(result);
-      setMessage('Đã lưu phiếu đóng ngày.');
+      setMessage('Đã đóng ngày. Có thể in báo cáo và tải tệp Excel lưu trữ.');
+      loadHistory();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -79,13 +91,19 @@ export default function DayClosing() {
           <div>
             <p className="eyebrow dark"><span></span>Báo cáo cuối ngày · Gạo Kinh Bắc</p>
             <h1>Đóng ngày {formatDay(day)}</h1>
-            {data.saved && <p className="closing-saved">Đã đóng bởi {data.saved.closer_name} lúc {formatDateTime(data.saved.updated_at)}</p>}
+            {data.saved && <p className={`closing-saved${stale ? ' stale' : ''}`}>Đã đóng bởi {data.saved.closer_name} lúc {formatDateTime(data.saved.updated_at)}</p>}
           </div>
           <label className="no-print">Chọn ngày
             <input className="input" type="date" value={day} max={vietnamDate()} onChange={(e) => e.target.value && setDay(e.target.value)} />
           </label>
         </div>
 
+        {stale && (
+          <p className="alert warning" role="alert">
+            ⚠️ Số liệu đã thay đổi sau khi đóng ngày (doanh thu trên phiếu {formatVND(data.saved.figures.totals.revenue)}, hiện tại {formatVND(totals.revenue)}).
+            Kế toán cần kiểm lại và đóng lại ngày trước khi in / tải tệp.
+          </p>
+        )}
         <div className="closing-summary">
           <div><span>Doanh thu hôm nay</span><strong>{formatVND(totals.revenue)}</strong></div>
           <div><span>Chuyển khoản</span><strong>{formatVND(totals.transfer)}</strong></div>
@@ -135,7 +153,7 @@ export default function DayClosing() {
                 <tr key={value}>
                   <th scope="row">{formatVND(value)}</th>
                   <td className="num">
-                    <input className="input" type="number" min="0" inputMode="numeric" value={counts[value] ?? ''}
+                    <input className="input" type="number" min="0" inputMode="numeric" value={counts[value] ?? ''} disabled={!canClose}
                            onChange={(e) => setCounts((cur) => ({ ...cur, [value]: e.target.value.replace(/\D/g, '') }))} aria-label={`Số tờ ${value}`} />
                   </td>
                   <td className="num">{formatVND(value * (Number(counts[value]) || 0))}</td>
@@ -153,7 +171,14 @@ export default function DayClosing() {
         </details>
 
         <details open className="closing-section">
-          <summary>Công nợ</summary>
+          <summary>Tổng công nợ — {pending.length ? `còn ${pending.length} đơn chờ duyệt` : 'đã duyệt hết ✓'}</summary>
+          {pending.length > 0 && (
+            <div className="closing-pending" role="alert">
+              <strong>Phải duyệt hết công nợ mới đóng được ngày:</strong>
+              <ul>{pending.map((p) => <li key={p.id}>{p.code} · {p.contact_name}{p.company ? ` – ${p.company}` : ''} · {formatVND(p.amount)} · {p.status_label}</li>)}</ul>
+              <Link className="no-print" to="/quan-tri/cong-no">Mở trang công nợ để duyệt →</Link>
+            </div>
+          )}
           <table className="closing-table"><tbody>
             <Row label="Công nợ phát sinh trong ngày" line={lines.online_debt} />
             <Row label="Thu nợ trong ngày" line={{ n: lines.debt_collected_cash.n + lines.debt_collected_transfer.n, s: lines.debt_collected_cash.s + lines.debt_collected_transfer.s }} />
@@ -163,16 +188,46 @@ export default function DayClosing() {
         </details>
 
         <label className="closing-note">Ghi chú
-          <textarea className="input" rows={3} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: Đã nộp 5.000.000đ cho chị Linh lúc 18h" />
+          <textarea className="input" rows={3} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} disabled={!canClose}
+                    placeholder="VD: Đã nộp 5.000.000đ cho chị Linh lúc 18h" aria-invalid={needsNote} />
+          {needsNote && canClose && <small className="err">Tiền đếm {difference > 0 ? 'thừa' : 'thiếu'} {formatVND(Math.abs(difference))}: đếm lại, hoặc ghi giải trình (ít nhất 10 ký tự).</small>}
         </label>
         <p className="closing-sign print-only">Người lập: {user?.full_name} &nbsp;&nbsp;&nbsp;&nbsp; Ký tên: ______________________</p>
 
         {error && <p className="alert error" role="alert">{error}</p>}
         {message && <p className="alert success" role="status">{message}</p>}
         <div className="form-actions no-print">
-          <button type="button" className="btn btn-primary btn-large" disabled={busy} onClick={save}>{busy ? 'Đang lưu…' : data.saved ? 'Lưu lại phiếu đóng ngày' : 'Lưu phiếu đóng ngày'}</button>
-          <button type="button" className="btn btn-secondary btn-large" onClick={() => window.print()}>🖨️ In báo cáo</button>
+          {canClose && (
+            <button type="button" className="btn btn-primary btn-large" disabled={busy || !ready} onClick={save}>
+              {busy ? 'Đang lưu…' : data.saved ? 'Đóng lại ngày (cập nhật phiếu)' : '✅ Đóng ngày'}
+            </button>
+          )}
+          <button type="button" className="btn btn-secondary btn-large" disabled={!printable} onClick={() => window.print()}>🖨️ In báo cáo</button>
+          <button type="button" className="btn btn-secondary btn-large" disabled={!printable}
+                  onClick={() => api.downloadClosing(day).catch((err) => setError(err.message))}>📥 Tải tệp Excel</button>
         </div>
+        {!canClose && <p className="field-help no-print">Tài khoản của bạn chỉ xem báo cáo; kế toán là người đóng ngày.</p>}
+        {canClose && !data.saved && !ready && (
+          <p className="field-help no-print">
+            {pending.length ? 'Chưa đóng được: còn công nợ chờ duyệt. ' : ''}{needsNote ? 'Chưa đóng được: tiền đếm chưa khớp sổ sách. ' : ''}
+            In và tải tệp sau khi đóng ngày.
+          </p>
+        )}
+        {history.length > 0 && (
+          <details className="closing-section no-print">
+            <summary>Các ngày đã đóng ({history.length})</summary>
+            <table className="closing-table"><tbody>
+              {history.map((h) => (
+                <tr key={h.day}>
+                  <th scope="row"><button type="button" className="link-button" onClick={() => setDay(h.day)}>{formatDay(h.day)}</button><small> · {h.closer_name}</small></th>
+                  <td className="num">{formatVND(h.revenue)}</td>
+                  <td className="num">{h.difference === 0 ? 'Khớp ✓' : `Lệch ${formatVND(h.difference)}`}</td>
+                  <td className="num"><button type="button" className="link-button" onClick={() => api.downloadClosing(h.day).catch((err) => setError(err.message))}>Excel</button></td>
+                </tr>
+              ))}
+            </tbody></table>
+          </details>
+        )}
         <p className="field-help no-print">
           Đơn online tính vào ngày giao xong; bán quầy và trả hàng theo ngày lập phiếu; thu nợ theo ngày kế toán ký đã thu.
         </p>

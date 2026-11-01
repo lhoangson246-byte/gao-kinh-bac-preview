@@ -6,6 +6,7 @@ import { validateRoutes } from '../schemas.js';
 import { HttpError, cleanText, toInteger } from '../validate.js';
 import { writeAdminAudit } from '../audit.js';
 import { listDebts, logDebtEvent, moveDebt } from '../debts.js';
+import { notifyDebtStage } from '../push.js';
 
 /**
  * /api/debts — trang theo dõi công nợ. Xem: quyền debt.view. Kế toán (debt.accounting): duyệt bước 1,
@@ -29,15 +30,18 @@ const comment = (req, required = false) => {
   if (required && !text) throw new HttpError(400, 'Vui lòng ghi lý do.', { comment: 'Vui lòng ghi lý do.' });
   return text;
 };
-const reply = (req, res, action, id) => {
+const reply = async (req, res, action, id) => {
   writeAdminAudit(req, { action: `debt.${action}`, entityType: 'debt', entityId: id });
+  // Báo người duyệt bước kế tiếp (nếu có) trước khi trả lời — Vercel có thể dừng hàm sau khi trả lời.
+  const status = db.prepare('SELECT status FROM debt_records WHERE id = ?').get(id)?.status;
+  if (['pending_accounting', 'pending_final', 'paid_pending_final'].includes(status)) await notifyDebtStage(id, status);
   res.json(listDebts(req.query.scope === 'settled' ? 'settled' : 'open'));
 };
 
 router.get('/', (req, res) => res.json(listDebts(req.query.scope === 'settled' ? 'settled' : 'open')));
 
 /** POST /:id/approve — duyệt bước hiện tại: kế toán (bước 1), mẹ (bước 2 và tất toán). */
-router.post('/:id/approve', (req, res, next) => {
+router.post('/:id/approve', async (req, res, next) => {
   try {
     const id = debtId(req);
     const status = db.prepare('SELECT status FROM debt_records WHERE id = ?').get(id)?.status;
@@ -60,12 +64,12 @@ router.post('/:id/approve', (req, res, next) => {
     } else {
       throw new HttpError(409, 'Đơn nợ này không chờ duyệt.');
     }
-    reply(req, res, 'approve', id);
+    await reply(req, res, 'approve', id);
   } catch (err) { next(err); }
 });
 
 /** POST /:id/paid — kế toán ký đã thu tiền. body: { method: 'cash' | 'transfer', comment? } */
-router.post('/:id/paid', (req, res, next) => {
+router.post('/:id/paid', async (req, res, next) => {
   try {
     need(req, 'debt.accounting');
     const id = debtId(req);
@@ -74,12 +78,12 @@ router.post('/:id/paid', (req, res, next) => {
       comment: comment(req),
       fields: { paid_by: req.user.id, paid_at: new Date().toISOString().replace('T', ' ').slice(0, 19), paid_method: req.body.method },
     });
-    reply(req, res, 'paid', id);
+    await reply(req, res, 'paid', id);
   } catch (err) { next(err); }
 });
 
 /** POST /:id/reject — từ chối ở bước đang duyệt (bắt buộc ghi lý do). */
-router.post('/:id/reject', (req, res, next) => {
+router.post('/:id/reject', async (req, res, next) => {
   try {
     const id = debtId(req);
     const status = db.prepare('SELECT status FROM debt_records WHERE id = ?').get(id)?.status;
@@ -100,19 +104,19 @@ router.post('/:id/reject', (req, res, next) => {
     } else {
       throw new HttpError(409, 'Đơn nợ này không chờ duyệt.');
     }
-    reply(req, res, 'reject', id);
+    await reply(req, res, 'reject', id);
   } catch (err) { next(err); }
 });
 
 /** POST /:id/resubmit — kế toán gửi duyệt lại đơn bị trả lại (sau khi bổ sung / giải thích). */
-router.post('/:id/resubmit', (req, res, next) => {
+router.post('/:id/resubmit', async (req, res, next) => {
   try {
     need(req, 'debt.accounting');
     const id = debtId(req);
     moveDebt(id, ['rejected'], 'pending_accounting', req.user, {
       action: 'Gửi duyệt lại', comment: comment(req), fields: { accounting_by: null, accounting_at: null, final_by: null, final_at: null },
     });
-    reply(req, res, 'resubmit', id);
+    await reply(req, res, 'resubmit', id);
   } catch (err) { next(err); }
 });
 

@@ -74,6 +74,29 @@ async function uploadImage(blob, path = '/admin/images') {
   return data;
 }
 
+/** Tải một tệp (Excel) từ API rồi lưu về máy. */
+async function downloadFile(path, fallbackName) {
+  let response;
+  try {
+    response = await fetch(`${BASE}/api${path}`, {
+      credentials: 'include', headers: { 'X-Session-Mode': 'cookie', 'X-CSRF-Protection': '1' },
+    });
+  } catch { throw new Error('Không kết nối được tới cửa hàng. Vui lòng thử tải lại.'); }
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.message || 'Chưa tạo được tệp. Vui lòng thử lại.');
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = response.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1] || fallbackName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export const api = {
   register: (payload) => request('/auth/register', { method: 'POST', body: payload }),
   /** Gia hạn phiên đăng nhập (trang đang mở gọi khoảng 15 phút/lần). */
@@ -216,27 +239,9 @@ export const api = {
     const params = new URLSearchParams(filters);
     return request(`/admin/revenue?${params}`, { auth: true });
   },
-  adminExportOrders: async (filters = {}) => {
-    let response;
-    try {
-      response = await fetch(`${BASE}/api/admin/export/orders?${new URLSearchParams(filters)}`, {
-        credentials: 'include', headers: { 'X-Session-Mode': 'cookie', 'X-CSRF-Protection': '1' },
-      });
-    } catch { throw new Error('Không kết nối được tới cửa hàng. Vui lòng thử tải lại.'); }
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      throw new Error(data.message || 'Chưa tạo được tệp Excel. Vui lòng thử lại.');
-    }
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = response.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1] || 'don-hang.xlsx';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-  },
+  adminExportOrders: (filters = {}) => downloadFile(`/admin/export/orders?${new URLSearchParams(filters)}`, 'don-hang.xlsx'),
+  closingHistory: () => request('/admin/closing/history', { auth: true }),
+  downloadClosing: (day) => downloadFile(`/admin/closing/export?day=${day}`, `dong-ngay-${day}.xlsx`),
   adminActivity: (limit = 50) => request(`/admin/activity?limit=${limit}`, { auth: true }),
 
   /* --- Bán lẻ tại quầy --- */

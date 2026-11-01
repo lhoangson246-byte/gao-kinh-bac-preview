@@ -8,6 +8,7 @@ import { writeAdminAudit } from '../audit.js';
 import { localDate } from '../constants.js';
 import { changeOrderStatus } from '../order-status.js';
 import { debtAccountFor, logDebtEvent, todayVN } from '../debts.js';
+import { notifyDebtStage } from '../push.js';
 
 /**
  * /api/delivery — nhân viên giao hàng (quyền "delivery"). Chỉ thấy và chỉ cập nhật đơn được phân
@@ -80,7 +81,7 @@ router.patch('/orders/:id/status', (req, res, next) => {
  * và tạo đơn nợ chờ kế toán duyệt — cùng một transaction.
  *  body: { delivered_photo, invoice_photo, company?, comment? }
  */
-router.post('/orders/:id/debt', (req, res, next) => {
+router.post('/orders/:id/debt', async (req, res, next) => {
   try {
     const orderId = toInteger(req.params.id, { min: 1 });
     if (!orderId) throw new HttpError(404, 'Không tìm thấy đơn hàng.');
@@ -112,6 +113,7 @@ router.post('/orders/:id/debt', (req, res, next) => {
       action: 'delivery_debt', entityType: 'order', entityId: orderId,
       before: { status: before.status }, after: { status: order.status, debt_id: debtId },
     });
+    await notifyDebtStage(debtId, 'pending_accounting');
     res.status(201).json({ order: { id: order.id, status: order.status, payment_status: 'debt' }, debt_id: debtId });
   } catch (err) {
     next(err);

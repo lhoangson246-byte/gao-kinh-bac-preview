@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, formatDateTime, formatVND } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
+import PushSettings from '../components/PushSettings.jsx';
 
 const formatDay = (day) => (day ? day.split('-').reverse().join('/') : '');
 const formatPhone = (phone) => String(phone || '').replace(/^(\d{4})(\d{3})(\d{3})$/, '$1 $2 $3');
@@ -159,6 +160,7 @@ export default function Debts() {
       <header className="admin-topbar">
         <div className="admin-brand"><img src="/logo-mark.png" alt="" width="38" height="38" /><div><strong>Theo dõi công nợ</strong><small>{user?.full_name}</small></div></div>
         <div className="admin-account">
+          <PushSettings />
           <Link to="/quan-tri" className="btn btn-secondary">← Đơn hàng</Link>
           <button className="btn btn-ghost" onClick={() => { logout(); navigate('/'); }}>Đăng xuất</button>
         </div>

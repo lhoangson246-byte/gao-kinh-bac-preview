@@ -152,11 +152,30 @@ try {
   check('Đóng ngày: tiền thu nợ chuyển khoản tính vào chuyển khoản', L?.debt_collected_transfer.s === d1.total
     && closing.figures.totals.transfer >= d1.total, JSON.stringify(L?.debt_collected_transfer));
   check('Có danh sách mệnh giá để kê tiền', JSON.stringify(closing.denominations) === '[500000,200000,100000,50000,20000,10000,5000,2000,1000]');
-  const counts = { 500000: 1, 200000: 2, 1000: 3 };
-  const saved = (await call('/admin/closing', { method: 'POST', token: accountant, body: { day: vnToday, counts, note: 'Đủ tiền' } })).data.saved;
-  check('Lưu phiếu đóng ngày: tổng tiền đếm, chênh lệch với tiền mặt sổ sách', saved?.counted_cash === 903000
-    && saved.difference === 903000 - closing.figures.totals.cash && saved.closer_name === 'Chị Kế Toán', JSON.stringify(saved && { c: saved.counted_cash, d: saved.difference }));
-  check('Mở lại ngày đã đóng thấy phiếu đã lưu', (await call(`/admin/closing?day=${vnToday}`, { token: owner })).data.saved?.note === 'Đủ tiền');
+  check('Còn đơn nợ chờ duyệt: báo trong phiếu đóng ngày', closing.pending_debts?.some((p) => p.code === d2.code) && closing.can_close === true);
+  const blocked = await call('/admin/closing', { method: 'POST', token: accountant, body: { day: vnToday, counts: {}, note: 'Thử đóng khi còn nợ chưa duyệt' } });
+  check('Chưa duyệt hết công nợ thì chưa đóng ngày được (400)', blocked.status === 400 && blocked.data.message.includes(d2.code), blocked.data.message);
+  await call(`/debts/${r2}/approve`, { method: 'POST', token: accountant, body: {} });
+  await call(`/debts/${r2}/approve`, { method: 'POST', token: mom, body: {} });
+  // Kê tiền đúng bằng sổ sách (chia theo mệnh giá lớn trước).
+  const cashBook = (await call('/admin/closing', { token: accountant })).data.figures.totals.cash;
+  let rest = cashBook;
+  const exact = {};
+  for (const v of closing.denominations) { exact[v] = Math.floor(rest / v); rest -= exact[v] * v; }
+  const off = await call('/admin/closing', { method: 'POST', token: accountant, body: { day: vnToday, counts: { ...exact, 1000: exact[1000] + 2 }, note: 'thừa' } });
+  check('Tiền đếm lệch sổ sách mà không giải trình: chưa đóng được (400)', off.status === 400 && !!off.data.errors?.note, off.data.message);
+  const momSave = await call('/admin/closing', { method: 'POST', token: mom, body: { day: vnToday, counts: exact } });
+  check('Mẹ chỉ xem, không đóng ngày được (403)', momSave.status === 403 && (await call('/admin/closing', { token: mom })).data.can_close === false);
+  const saved = (await call('/admin/closing', { method: 'POST', token: accountant, body: { day: vnToday, counts: exact, note: 'Đủ tiền' } })).data.saved;
+  check('Duyệt hết công nợ + tiền khớp: đóng ngày được', saved?.counted_cash === cashBook && saved.difference === 0 && saved.closer_name === 'Chị Kế Toán',
+    JSON.stringify(saved && { c: saved.counted_cash, d: saved.difference }));
+  const explained = await call('/admin/closing', { method: 'POST', token: accountant, body: { day: vnToday, counts: { ...exact, 1000: exact[1000] + 2 }, note: 'Thừa 2.000đ do khách gửi lại tiền lẻ' } });
+  check('Lệch nhưng có giải trình thì lưu được', explained.status === 200 && explained.data.saved.difference === 2000);
+  check('Mở lại ngày đã đóng thấy phiếu đã lưu', /khách gửi lại/.test((await call(`/admin/closing?day=${vnToday}`, { token: owner })).data.saved?.note || ''));
+  const file = await fetch(`${app.base}/api/admin/closing/export?day=${vnToday}`, { headers: { Authorization: `Bearer ${mom}` } });
+  check('Tải bản Excel của phiếu đóng ngày (mẹ xem được)', file.status === 200 && /spreadsheetml/.test(file.headers.get('content-type') || '') && (await file.arrayBuffer()).byteLength > 1000);
+  check('Ngày chưa đóng thì chưa có tệp (404)', (await call(`/admin/closing/export?day=2020-01-01`, { token: accountant })).status === 404);
+  check('Lịch sử các ngày đã đóng', (await call('/admin/closing/history', { token: accountant })).data.closings?.[0]?.day === vnToday);
   check('Không đóng ngày trong tương lai (400)', (await call('/admin/closing', { method: 'POST', token: accountant, body: { day: plusDays(vnToday, 2), counts: {} } })).status === 400);
   check('Số tờ âm bị từ chối (400)', (await call('/admin/closing', { method: 'POST', token: accountant, body: { day: vnToday, counts: { 500000: -1 } } })).status === 400);
   check('Nhân viên giao không xem được đóng ngày (403)', (await call('/admin/closing', { token: shipper })).status === 403);
