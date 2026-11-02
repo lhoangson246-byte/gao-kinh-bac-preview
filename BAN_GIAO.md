@@ -1249,6 +1249,16 @@ Tạo cặp khoá VAPID một lần: `cd backend && npx web-push generate-vapid-
 Trên iPhone (iOS 16.4 trở lên): phải "Thêm vào MH chính" từ Safari rồi mở app từ biểu tượng đó mới
 bật được thông báo.
 
+## Ai cập nhật trạng thái đơn, cách xem đơn (02/11/2026)
+
+- **Chờ xác nhận → Đã xác nhận → Đang giao**: luôn hiện **dạng thẻ** (mọi ngày, không sót đơn cũ); **kế toán**
+  cập nhật (mẫu Kế toán có thêm quyền xử lý đơn: xác nhận, phân công người giao, chuyển đang giao, huỷ).
+- **Hoàn thành**: **nhân viên giao hàng** bấm trên tài khoản của mình, kèm ảnh. Thẻ "Đang giao" ở trang quản trị
+  không còn nút hoàn thành, chỉ báo "⏳ Chờ nhân viên giao bấm hoàn thành". Máy chủ chặn người khác hoàn thành
+  đơn giao tận nơi; ngoại lệ: đơn **khách lấy tại cửa hàng** (nút "Khách đã nhận hàng") và chủ cửa hàng
+  ("Hoàn thành thay", khi nhân viên giao không bấm được).
+- **Hoàn thành, Đã huỷ** (và **Tất cả**): luôn hiện **dạng bảng**, mở ra là hôm nay; đổi ngày hoặc "Mọi ngày".
+
 ## Ảnh giao hàng, công nợ duyệt nhiều cấp, đóng ngày (12/11/2026)
 
 ### Giao xong phải chụp ảnh

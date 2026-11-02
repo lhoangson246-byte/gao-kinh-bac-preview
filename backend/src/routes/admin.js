@@ -76,7 +76,17 @@ router.patch('/orders/:id/status', (req, res, next) => {
   try {
     const orderId = toInteger(req.params.id, { min: 1 });
     if (!orderId) throw new HttpError(404, 'Không tìm thấy đơn hàng.');
-    const { before, order } = changeOrderStatus(orderId, req.body?.status);
+    const { before, order } = changeOrderStatus(orderId, req.body?.status, {
+      guard: (current) => {
+        // Đơn giao tận nơi do nhân viên giao hàng bấm hoàn thành (kèm ảnh) trên tài khoản của mình
+        // (02/11/2026). Khách lấy tại cửa hàng thì người xử lý đơn bấm; chủ cửa hàng được hoàn thành thay.
+        if (req.body?.status !== 'completed' || req.user.role === 'admin') return;
+        const fulfillment = db.prepare('SELECT fulfillment FROM orders WHERE id = ?').get(current.id)?.fulfillment;
+        if (fulfillment !== 'pickup') {
+          throw new HttpError(403, 'Đơn giao tận nơi do nhân viên giao hàng bấm hoàn thành (kèm ảnh) trên tài khoản của mình.');
+        }
+      },
+    });
     writeAdminAudit(req, {
       action: 'update_status', entityType: 'order', entityId: orderId,
       before: { status: before.status }, after: { status: order.status },

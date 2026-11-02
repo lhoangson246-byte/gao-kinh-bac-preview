@@ -1712,3 +1712,4 @@ label b { color: var(--danger); }
 .alert.debt-todo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border: 2px solid var(--gold); background: #fff3d6; color: #6b4a0c; }
 .alert.debt-todo .btn { min-height: 36px; padding: 5px 14px; }
 .closing-saved.stale { color: var(--muted); text-decoration: line-through; }
+.await-shipper { display: inline-flex; align-items: center; margin-right: 8px; padding: 6px 12px; border-radius: 99px; background: #fff3d6; color: #6b4a0c; font-size: .82rem; font-weight: 750; }

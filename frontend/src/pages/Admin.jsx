@@ -47,6 +47,7 @@ const FILTERS = [
   ['all', 'Tất cả'], ['pending', 'Chờ xác nhận'], ['confirmed', 'Đã xác nhận'],
   ['shipping', 'Đang giao'], ['completed', 'Hoàn thành'], ['cancelled', 'Đã huỷ'],
 ];
+const ACTIVE_STATUSES = ['pending', 'confirmed', 'shipping'];
 const NEXT_STEP = {
   pending: ['confirmed', 'Xác nhận đơn'],
   confirmed: ['shipping', 'Bắt đầu giao'],
@@ -67,14 +68,16 @@ export default function Admin() {
   const canProducts = can('products.manage');
   const canManageOrders = can('orders.manage');
   const [tab, setTab] = useState(firstTab || 'orders');
-  // Xem đơn: dạng thẻ (xử lý từng đơn) hoặc bảng theo ngày. Người chỉ xem (kế toán) mặc định dạng bảng.
-  const [view, setView] = useState(canManageOrders ? 'cards' : 'table');
-  const [dateFrom, setDateFrom] = useState(canManageOrders ? '' : vietnamDate());
-  const [dateTo, setDateTo] = useState(canManageOrders ? '' : vietnamDate());
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  // Mở đơn từ thông báo: tạm xem dạng thẻ ở mục "Tất cả" để thấy đúng đơn đó.
+  const [focusCards, setFocusCards] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [debtSummary, setDebtSummary] = useState(null);   // cảnh báo công nợ quá hạn
-  // Người xử lý đơn mở ra là đơn chờ xác nhận; người chỉ xem (kế toán) thấy mọi đơn.
-  const [filter, setFilter] = useState(canManageOrders ? 'pending' : 'all');
+  const [filter, setFilter] = useState('pending');
+  // Cách xem cố định theo trạng thái (02/11/2026): Chờ xác nhận / Đã xác nhận / Đang giao là thẻ để xử lý
+  // từng đơn; Hoàn thành / Đã huỷ / Tất cả là bảng theo ngày.
+  const view = focusCards || ACTIVE_STATUSES.includes(filter) ? 'cards' : 'table';
   const [stats, setStats] = useState(null);
   const [orders, setOrders] = useState([]);
   const [offset, setOffset] = useState(0);
@@ -152,10 +155,14 @@ export default function Admin() {
   const today = vietnamDate();
   const yesterday = vietnamDate(new Date(Date.now() - 86400000));
   const pickDay = (day) => { setDateFrom(day); setDateTo(day); setOffset(0); };
-  const switchView = (next) => {
-    setView(next);
+  const pickFilter = (value) => {
+    setFilter(value);
     setOffset(0);
-    if (next === 'table' && !dateFrom) pickDay(today);
+    setFocusCards(false);
+    // Đơn đang xử lý (thẻ) luôn hiện mọi ngày để không sót đơn cũ; bảng đơn đã kết thúc mở ra là hôm
+    // nay — chọn "Mọi ngày" hoặc khoảng ngày khác nếu cần.
+    if (ACTIVE_STATUSES.includes(value)) { setDateFrom(''); setDateTo(''); }
+    else if (!dateFrom) pickDay(today);
   };
   // Xuất Excel đúng mục đang xem: trạng thái đang lọc + khoảng ngày (chưa chọn ngày thì hôm nay).
   const exportFrom = dateFrom || today;
@@ -195,7 +202,7 @@ export default function Admin() {
     focusOrder.current = { id, action: searchParams.get('action'), request: requestId.current + 2 };
     setSearchParams({}, { replace: true });
     setTab('orders');
-    setView('cards');
+    setFocusCards(true);
     setDateFrom('');
     setDateTo('');
     setFilter('all');
@@ -550,13 +557,9 @@ export default function Admin() {
                                             onChange={(e) => { setDateTo(e.target.value); if (!dateFrom) setDateFrom(e.target.value); setOffset(0); }} /></label>
                       <button type="button" className={`btn btn-secondary${dateFrom === today && dateTo === today ? ' active' : ''}`} onClick={() => pickDay(today)}>Hôm nay</button>
                       <button type="button" className={`btn btn-secondary${dateFrom === yesterday && dateTo === yesterday ? ' active' : ''}`} onClick={() => pickDay(yesterday)}>Hôm qua</button>
-                      {dateFrom && view === 'cards' && <button type="button" className="link-button" onClick={() => { setDateFrom(''); setDateTo(''); setOffset(0); }}>Mọi ngày</button>}
+                      {dateFrom && <button type="button" className="link-button" onClick={() => { setDateFrom(''); setDateTo(''); setOffset(0); }}>Mọi ngày</button>}
                     </div>
                     <div className="orders-actions">
-                      <div className="view-toggle" role="group" aria-label="Cách xem đơn">
-                        <button type="button" aria-pressed={view === 'cards'} onClick={() => switchView('cards')}>Dạng thẻ</button>
-                        <button type="button" aria-pressed={view === 'table'} onClick={() => switchView('table')}>Bảng theo ngày</button>
-                      </div>
                       {can('orders.export') && (
                         <OrdersExportButton filters={exportFilters}>
                           📥 Xuất Excel{filter !== 'all' ? ` (${FILTERS.find(([v]) => v === filter)?.[1].toLowerCase()})` : ''}
@@ -577,7 +580,7 @@ export default function Admin() {
                   <div className="filter-bar" aria-label="Lọc đơn theo trạng thái">
                     {FILTERS.map(([value, label]) => {
                       const count = counts[value] || 0;
-                      return <button key={value} className={filter === value ? 'active' : ''} onClick={() => { setFilter(value); setOffset(0); }}>{label} <span>{count}</span></button>;
+                      return <button key={value} className={filter === value ? 'active' : ''} onClick={() => pickFilter(value)}>{label} <span>{count}</span></button>;
                     })}
                     {can('debt.view') && (
                       <Link to="/quan-tri/cong-no" className={`debt-link${debtSummary?.overdue_count ? ' overdue' : ''}`}>
@@ -685,7 +688,20 @@ export default function Admin() {
                                 {(!canManageOrders || ['completed', 'cancelled'].includes(order.status)) && order.shipper_name && (
                                   <span className="shipper-tag">🛵 {order.shipper_name}</span>
                                 )}
-                                {canManageOrders && next && <button className="btn btn-primary" disabled={busyId === order.id} onClick={() => changeStatus(order.id, next[0])}>{busyId === order.id ? 'Đang lưu…' : next[1]}</button>}
+                                {canManageOrders && next && (next[0] !== 'completed' || order.fulfillment === 'pickup') && (
+                                  <button className="btn btn-primary" disabled={busyId === order.id} onClick={() => changeStatus(order.id, next[0])}>
+                                    {busyId === order.id ? 'Đang lưu…' : next[0] === 'completed' ? 'Khách đã nhận hàng' : next[1]}
+                                  </button>
+                                )}
+                                {next?.[0] === 'completed' && order.fulfillment !== 'pickup' && (
+                                  <span className="await-shipper">⏳ Chờ nhân viên giao bấm hoàn thành (kèm ảnh)</span>
+                                )}
+                                {isAdmin && next?.[0] === 'completed' && order.fulfillment !== 'pickup' && (
+                                  <button type="button" className="link-button" disabled={busyId === order.id}
+                                          onClick={() => window.confirm(`Hoàn thành thay đơn ${order.code}? Nên để nhân viên giao bấm kèm ảnh.`) && changeStatus(order.id, 'completed')}>
+                                    Hoàn thành thay
+                                  </button>
+                                )}
                                 {canManageOrders && !['completed', 'cancelled'].includes(order.status) && <button className="btn btn-danger-ghost" disabled={busyId === order.id} onClick={() => cancelOrder(order)}>Huỷ đơn</button>}
                               </div>
                             </footer>

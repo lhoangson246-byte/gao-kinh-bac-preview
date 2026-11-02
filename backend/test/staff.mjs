@@ -48,7 +48,6 @@ try {
   const stats = (await call('/admin/stats', { token: accountant })).data.stats;
   check('Kế toán: thống kê có doanh thu, không có giá trị vốn tồn kho', 'revenue' in stats && !('inventoryValue' in stats));
   for (const [label, path, opts] of [
-    ['đổi trạng thái đơn', '/admin/orders/1/status', { method: 'PATCH', body: { status: 'confirmed' } }],
     ['sửa sản phẩm', '/admin/products'],
     ['quản lý khách', '/admin/customers'],
     ['bán tại quầy', '/retail/invoices'],
@@ -76,8 +75,8 @@ try {
   const accId = (await call('/admin/staff', { token: owner })).data.staff.find((s) => s.full_name === 'Chị Kế Toán').id;
   check('Không giao đơn cho người không phải nhân viên giao hàng (400)',
     await status(sales, `/admin/orders/${order.id}/shipper`, { method: 'PATCH', body: { shipper_id: accId } }) === 400);
-  check('Kế toán không phân công giao được (403)',
-    await status(accountant, `/admin/orders/${order.id}/shipper`, { method: 'PATCH', body: { shipper_id: shipperId } }) === 403);
+  check('Kế toán phân công giao được (cập nhật các bước trước khi giao)',
+    await status(accountant, `/admin/orders/${order.id}/shipper`, { method: 'PATCH', body: { shipper_id: shipperId } }) === 200);
   const assigned = await call(`/admin/orders/${order.id}/shipper`, { method: 'PATCH', token: sales, body: { shipper_id: shipperId } });
   check('Bán hàng phân công đơn cho nhân viên giao', assigned.status === 200 && assigned.data.order.shipper_name === 'Anh Giao Hàng');
   const adminList = (await call('/admin/orders', { token: owner })).data.orders;
@@ -90,6 +89,8 @@ try {
     && !JSON.stringify(mine).includes('cost_price'), JSON.stringify(mine).slice(0, 200));
   check('Giao hàng không huỷ được đơn (400)', await status(shipper, `/delivery/orders/${order.id}/status`, { method: 'PATCH', body: { status: 'cancelled' } }) === 400);
   check('Giao hàng: bắt đầu giao', await status(shipper, `/delivery/orders/${order.id}/status`, { method: 'PATCH', body: { status: 'shipping' } }) === 200);
+  check('Kế toán không bấm hoàn thành đơn giao tận nơi (nhân viên giao bấm) (403)',
+    await status(accountant, `/admin/orders/${order.id}/status`, { method: 'PATCH', body: { status: 'completed' } }) === 403);
   // Giao xong phải kèm ảnh (12/11/2026).
   const proof = await (await fetch(`${app.base}/api/proofs`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', Authorization: `Bearer ${shipper}` },
     body: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('anh-giao-hang-thu'.padEnd(40, 'x'))]) })).json();
@@ -112,6 +113,14 @@ try {
     await status(shipper, `/delivery/orders/${other.id}/status`, { method: 'PATCH', body: { status: 'shipping' } }) === 404);
   check('Không đổi người giao cho đơn đã xong (400)',
     await status(owner, `/admin/orders/${order.id}/shipper`, { method: 'PATCH', body: { shipper_id: null } }) === 400);
+
+  // Khách lấy tại cửa hàng: kế toán xác nhận → đang giao → khách đã nhận (không cần nhân viên giao).
+  const pickup = (await call('/admin/orders', { method: 'POST', token: owner, body: {
+    receiver_name: 'Cô Lấy Tại Quầy', phone: phone('07'), home_delivery: false, items: [{ product_id: product.id, quantity: 1 }],
+  } })).data.order;
+  await call(`/admin/orders/${pickup.id}/status`, { method: 'PATCH', token: accountant, body: { status: 'shipping' } });
+  check('Đơn lấy tại cửa hàng: kế toán bấm hoàn thành được',
+    await status(accountant, `/admin/orders/${pickup.id}/status`, { method: 'PATCH', body: { status: 'completed' } }) === 200);
 
   /* Chủ cửa hàng đổi quyền / khoá: có hiệu lực ngay */
   await call(`/admin/staff/${accId}`, { method: 'PUT', token: owner, body: { permissions: ['orders.view'] } });

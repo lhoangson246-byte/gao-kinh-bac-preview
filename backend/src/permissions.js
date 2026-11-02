@@ -24,7 +24,8 @@ export const PERMISSION_CODES = Object.keys(PERMISSIONS);
 
 /** Mẫu quyền để chủ cửa hàng chọn nhanh khi tạo tài khoản; vẫn tick thêm / bỏ được. */
 export const PRESETS = {
-  'ke-toan': { title: 'Kế toán', permissions: ['orders.view', 'orders.export', 'revenue.view', 'debt.view', 'debt.accounting', 'closing.manage'] },
+  // Kế toán cập nhật các bước Chờ xác nhận → Đã xác nhận → Đang giao (02/11/2026).
+  'ke-toan': { title: 'Kế toán', permissions: ['orders.view', 'orders.manage', 'orders.export', 'revenue.view', 'debt.view', 'debt.accounting', 'closing.manage'] },
   'duyet-cuoi': { title: 'Duyệt cuối (mẹ)', permissions: ['orders.view', 'revenue.view', 'debt.view', 'debt.final'] },
   'giao-hang': { title: 'Nhân viên giao hàng', permissions: ['delivery'] },
   'ban-hang': { title: 'Nhân viên bán hàng', permissions: ['orders.view', 'orders.manage', 'orders.create', 'retail.sell'] },
