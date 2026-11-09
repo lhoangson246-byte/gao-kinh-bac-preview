@@ -561,8 +561,9 @@ export default function Admin() {
                     </div>
                     <div className="orders-actions">
                       {can('orders.export') && (
-                        <OrdersExportButton filters={exportFilters}>
-                          📥 Xuất Excel{filter !== 'all' ? ` (${FILTERS.find(([v]) => v === filter)?.[1].toLowerCase()})` : ''}
+                        <OrdersExportButton filters={exportFilters}
+                                            title={`Xuất Excel các đơn đang xem: ${FILTERS.find(([v]) => v === filter)?.[1].toLowerCase()}`}>
+                          📥 Xuất Excel
                         </OrdersExportButton>
                       )}
                       {can('revenue.view') && (
@@ -719,7 +720,7 @@ export default function Admin() {
               ) : (
                 <section>
                   <GroupManager groups={groups} products={products} notify={notify}
-                                onChanged={() => reload({ refreshProducts: true })} />
+                                onChanged={() => reload({ refreshProducts: true })} onReordered={setGroups} />
                   <BannerSettings notify={notify} />
                   {showForm && (
                     <div className="product-form-wrap">

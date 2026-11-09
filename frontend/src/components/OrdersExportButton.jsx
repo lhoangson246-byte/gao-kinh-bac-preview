@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '../api';
-export default function OrdersExportButton({ filters, children = 'Tải Excel' }) {
+export default function OrdersExportButton({ filters, title, children = 'Tải Excel' }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const download = async () => {
@@ -10,7 +10,7 @@ export default function OrdersExportButton({ filters, children = 'Tải Excel' }
     finally { setBusy(false); }
   };
   return <div>
-    <button className="btn btn-outline" type="button" disabled={busy} onClick={download}>
+    <button className="btn btn-secondary" title={title} type="button" disabled={busy} onClick={download}>
       {busy ? 'Đang tạo tệp…' : children}
     </button>
     {error && <p className="alert error" role="alert">{error}</p>}

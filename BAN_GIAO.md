@@ -971,7 +971,7 @@ Lần triển khai này tự tạo 7 nhóm và gắn sản phẩm theo tên/quy 
 | Thực phẩm khô | nhóm hàng "Thực phẩm khô" | Kê vàng, Mì Chũ |
 
 **Quản trị → Sản phẩm → khung "Nhóm gạo (bộ lọc trang chủ)"** (đầu tab):
-- **+ Thêm nhóm**; **↑ ↓** xếp thứ tự hiện trên trang chủ; **Đổi tên** (đường dẫn bộ lọc giữ nguyên);
+- **+ Thêm nhóm**; **nắm biểu tượng ⠿ rồi kéo lên, xuống** để xếp thứ tự hiện trên trang chủ (chuột và điện thoại đều kéo được; bàn phím: đặt vào ⠿ rồi bấm mũi tên); **Đổi tên** (đường dẫn bộ lọc giữ nguyên);
   **Ẩn/Hiện** khỏi trang chủ; **Xoá** (sản phẩm vẫn còn, chỉ bỏ khỏi nhóm).
 - **Chọn sản phẩm**: tick các sản phẩm thuộc nhóm rồi Lưu.
 - Hoặc trong **form Sửa sản phẩm**, mục "Thuộc nhóm gạo" tick các nhóm của sản phẩm đó.

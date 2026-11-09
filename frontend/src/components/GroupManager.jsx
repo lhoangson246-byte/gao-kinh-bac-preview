@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 
 /**
- * Nhóm gạo hiện trên bộ lọc trang chủ: thêm, đổi tên, ẩn/hiện, xếp thứ tự, xoá. Gắn sản phẩm vào
- * nhóm ở form sửa sản phẩm (một sản phẩm thuộc được nhiều nhóm), hoặc chọn nhanh tại đây.
+ * Nhóm gạo hiện trên bộ lọc trang chủ: thêm, đổi tên, ẩn/hiện, kéo thả để xếp thứ tự, xoá. Gắn sản
+ * phẩm vào nhóm ở form sửa sản phẩm (một sản phẩm thuộc được nhiều nhóm), hoặc chọn nhanh tại đây.
  */
-export default function GroupManager({ groups, products, onChanged, notify }) {
+export default function GroupManager({ groups, products, onChanged, onReordered, notify }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -13,6 +13,14 @@ export default function GroupManager({ groups, products, onChanged, notify }) {
   const [picking, setPicking] = useState(null);     // id nhóm đang chọn sản phẩm
   const [picked, setPicked] = useState([]);
   const [open, setOpen] = useState(true);
+  const [draft, setDraft] = useState(null);         // thứ tự id đang kéo / đang lưu
+  const [dragId, setDragId] = useState(null);
+  const listRef = useRef(null);
+  const drag = useRef(null);                        // { id, ids } trong lúc kéo
+
+  useEffect(() => () => drag.current?.stop(), []);   // rời trang giữa lúc kéo
+
+  const shown = draft ? draft.map((id) => groups.find((g) => g.id === id)).filter(Boolean) : groups;
 
   const run = async (action, message) => {
     setBusy(true);
@@ -36,12 +44,97 @@ export default function GroupManager({ groups, products, onChanged, notify }) {
     if (await run(() => api.adminCreateGroup(name.trim()), `Đã thêm nhóm “${name.trim()}”.`)) setName('');
   };
 
-  const move = (index, step) => {
+  /** Lưu thứ tự mới mà không tải lại cả trang, để danh sách đứng yên sau khi thả. */
+  const saveOrder = async (ids) => {
+    if (ids.every((id, i) => id === groups[i].id)) { setDraft(null); return; }
+    setDraft(ids);
+    setBusy(true);
+    setError('');
+    try {
+      const result = await api.adminReorderGroups(ids);
+      onReordered(result.groups);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDraft(null);
+      setBusy(false);
+    }
+  };
+
+  // Đưa dòng đang kéo về đúng vị trí theo toạ độ ngón tay / con trỏ hiện tại.
+  const placeDrag = () => {
+    const { id, ids, y } = drag.current;
+    const rows = [...listRef.current.children];
+    const from = ids.indexOf(id);
+    let to = rows.findIndex((row) => y < row.getBoundingClientRect().bottom);
+    if (to === -1) to = rows.length - 1;
+    if (to === from) return;
+    // Chỉ đổi chỗ khi đã qua giữa dòng đích, để dòng không giật qua lại ở ranh giới.
+    const rect = rows[to].getBoundingClientRect();
+    const middle = rect.top + rect.height / 2;
+    if (to > from ? y < middle : y > middle) return;
+    const next = ids.filter((x) => x !== id);
+    next.splice(to, 0, id);
+    drag.current.ids = next;
+    setDraft(next);
+  };
+
+  // Kéo bằng Pointer Events: cùng một đoạn mã chạy cho chuột và ngón tay trên điện thoại. Nghe ở window
+  // chứ không dùng setPointerCapture, vì React di chuyển dòng trong DOM khi đổi chỗ làm mất capture.
+  const startDrag = (event, group) => {
+    if (busy || event.button > 0) return;
+    event.preventDefault();
+    const { pointerId } = event;
     const ids = groups.map((g) => g.id);
+
+    const onMove = (e) => {
+      if (e.pointerId !== pointerId) return;
+      drag.current.y = e.clientY;
+      placeDrag();
+    };
+    const onEnd = (e) => {
+      if (e.pointerId !== pointerId) return;
+      const finalIds = drag.current.ids;
+      stop();
+      setDragId(null);
+      saveOrder(finalIds);
+    };
+    const stop = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onEnd);
+      window.removeEventListener('pointercancel', onEnd);
+      drag.current = null;
+    };
+    // Giữ tay gần mép màn hình thì tự cuộn tiếp (chừa thanh trên cùng cố định của trang quản trị).
+    const autoScroll = () => {
+      if (!drag.current) return;
+      const { y } = drag.current;
+      const topEdge = window.innerWidth < 900 ? 170 : 110;   // điện thoại có thêm hàng tab cố định
+      const step = y < topEdge ? -10 : y > window.innerHeight - 60 ? 10 : 0;
+      if (step) { window.scrollBy({ top: step, behavior: 'instant' }); placeDrag(); }
+      requestAnimationFrame(autoScroll);
+    };
+
+    drag.current = { id: group.id, ids, y: event.clientY, stop };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onEnd);
+    window.addEventListener('pointercancel', onEnd);
+    requestAnimationFrame(autoScroll);
+    setPicking(null);
+    setEditing(null);
+    setDraft(ids);
+    setDragId(group.id);
+  };
+
+  // Bàn phím: đặt con trỏ vào tay nắm rồi bấm mũi tên lên / xuống.
+  const keyMove = (event, index) => {
+    const step = event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0;
     const target = index + step;
-    if (target < 0 || target >= ids.length) return;
+    if (!step || busy || target < 0 || target >= groups.length) return;
+    event.preventDefault();
+    const ids = groups.map((g) => g.id);
     [ids[index], ids[target]] = [ids[target], ids[index]];
-    run(() => api.adminReorderGroups(ids));
+    saveOrder(ids);
   };
 
   const rename = async (event) => {
@@ -68,9 +161,8 @@ export default function GroupManager({ groups, products, onChanged, notify }) {
         <div>
           <h2 id="group-manager-title">Nhóm gạo (bộ lọc trang chủ)</h2>
           <p>
-            Khách thấy các nhóm này ngay đầu danh mục, theo đúng thứ tự dưới đây. Một sản phẩm thuộc được
-            nhiều nhóm: gắn ở nút “Chọn sản phẩm” hoặc trong form sửa từng sản phẩm. Nhóm chưa có sản phẩm
-            nào thì khách không thấy.
+            Khách thấy các nhóm này theo đúng thứ tự dưới đây. <strong>Nắm biểu tượng ⠿ rồi kéo lên, xuống</strong> để
+            đổi thứ tự. Một sản phẩm thuộc được nhiều nhóm. Nhóm chưa có sản phẩm thì khách không thấy.
           </p>
         </div>
         <button type="button" className="btn btn-secondary" onClick={() => setOpen(!open)} aria-expanded={open}>
@@ -82,10 +174,13 @@ export default function GroupManager({ groups, products, onChanged, notify }) {
 
       {open && (
         <>
-          <ol className="group-list">
-            {groups.map((group, index) => (
-              <li key={group.id} className={group.is_active ? '' : 'hidden-group'}>
+          <ol className={`group-list${dragId ? ' sorting' : ''}`} ref={listRef}>
+            {shown.map((group, index) => (
+              <li key={group.id} className={`${group.is_active ? '' : 'hidden-group'}${dragId === group.id ? ' dragging' : ''}`}>
                 <div className="group-row">
+                  <button type="button" className="group-grip" disabled={busy && !dragId}
+                          title="Kéo để đổi thứ tự" aria-label={`Kéo để đổi thứ tự nhóm ${group.name}. Hoặc bấm mũi tên lên, xuống.`}
+                          onPointerDown={(event) => startDrag(event, group)} onKeyDown={(event) => keyMove(event, index)}>⠿</button>
                   <span className="banner-order">{index + 1}</span>
                   {editing?.id === group.id ? (
                     <form className="group-rename" onSubmit={rename}>
@@ -101,10 +196,6 @@ export default function GroupManager({ groups, products, onChanged, notify }) {
                     </span>
                   )}
                   <span className="group-actions">
-                    <button type="button" className="btn btn-secondary" disabled={busy || index === 0}
-                            onClick={() => move(index, -1)} aria-label={`Đưa nhóm ${group.name} lên`}>↑</button>
-                    <button type="button" className="btn btn-secondary" disabled={busy || index === groups.length - 1}
-                            onClick={() => move(index, 1)} aria-label={`Đưa nhóm ${group.name} xuống`}>↓</button>
                     <button type="button" className="btn btn-secondary" disabled={busy}
                             onClick={() => (picking === group.id ? setPicking(null) : startPick(group))}>
                       {picking === group.id ? 'Đóng' : 'Chọn sản phẩm'}
@@ -116,7 +207,7 @@ export default function GroupManager({ groups, products, onChanged, notify }) {
                               group.is_active ? `Đã ẩn nhóm “${group.name}” khỏi trang chủ.` : `Đã hiện lại nhóm “${group.name}”.`)}>
                       {group.is_active ? 'Ẩn' : 'Hiện'}
                     </button>
-                    <button type="button" className="btn btn-danger" disabled={busy} onClick={() => remove(group)}>Xoá</button>
+                    <button type="button" className="btn btn-danger-ghost" disabled={busy} onClick={() => remove(group)}>Xoá</button>
                   </span>
                 </div>
                 {picking === group.id && (
