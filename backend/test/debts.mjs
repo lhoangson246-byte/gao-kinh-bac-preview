@@ -99,11 +99,12 @@ try {
   const act = (token, path, body = {}) => call(`/debts/${rec.id}/${path}`, { method: 'POST', token, body });
   check('Mẹ chưa duyệt được trước kế toán (403)', (await act(mom, 'approve')).status === 403);
   check('Nhân viên giao không vào được trang công nợ (403)', (await call('/debts', { token: shipper })).status === 403);
-  check('Kế toán duyệt', (await act(accountant, 'approve', { comment: 'Đã kiểm hoá đơn' })).data.accounts?.find((a) => a.phone === companyPhone).records[0].status === 'pending_final');
-  check('Kế toán không duyệt thay mẹ (403)', (await act(accountant, 'approve')).status === 403);
-  data = (await act(mom, 'approve', { comment: 'Đồng ý cho nợ' })).data;
+  check('Kế toán duyệt', (await act(accountant, 'approve', { comment: 'Đã kiểm hoá đơn' })).data.accounts?.find((a) => a.phone === companyPhone).records[0].status === 'open');
+  check('Kế toán duyệt xong là đang nợ: không còn bước mẹ duyệt ở giữa (409)', (await act(mom, 'approve')).status === 409);
+  data = await list(accountant);
   let r = data.accounts.find((a) => a.phone === companyPhone).records[0];
-  check('Mẹ duyệt: khoản nợ "Đang nợ", ghi người duyệt từng bước', r.status === 'open' && r.steps.accounting.by === 'Chị Kế Toán' && r.steps.final.by === 'Mẹ');
+  check('Khoản nợ "Đang nợ", ghi người duyệt; không có bước mẹ ở giữa', r.status === 'open' && r.steps.accounting.by === 'Chị Kế Toán' && !('final' in r.steps));
+  check('Dòng lịch sử có tên từng bước', r.events.some((e) => e.action === 'Kế toán duyệt'), JSON.stringify(r.events));
   check('Bình luận trống bị từ chối (400)', (await act(mom, 'comments', { comment: '' })).status === 400);
   data = (await act(mom, 'comments', { comment: 'Nhắc khách trước ngày 25' })).data;
   r = data.accounts.find((a) => a.phone === companyPhone).records[0];
@@ -123,6 +124,7 @@ try {
   r = data.accounts.find((a) => a.phone === companyPhone).records[0];
   check('Mẹ chưa duyệt tất toán: quay lại "Đang nợ", bỏ chữ ký thu tiền', r.status === 'open' && r.steps.paid === null);
   await act(accountant, 'paid', { method: 'transfer', comment: 'Khách chuyển khoản' });
+  check('Kế toán không duyệt tất toán thay mẹ (403)', (await act(accountant, 'approve')).status === 403);
   data = (await act(mom, 'approve')).data;
   check('Mẹ duyệt tất toán: khoản nợ rời trang đang nợ', !data.accounts.some((a) => a.records.some((x) => x.id === rec.id)));
   const settled = await list(owner, 'settled');
@@ -156,7 +158,6 @@ try {
   const blocked = await call('/admin/closing', { method: 'POST', token: accountant, body: { day: vnToday, counts: {}, note: 'Thử đóng khi còn nợ chưa duyệt' } });
   check('Chưa duyệt hết công nợ thì chưa đóng ngày được (400)', blocked.status === 400 && blocked.data.message.includes(d2.code), blocked.data.message);
   await call(`/debts/${r2}/approve`, { method: 'POST', token: accountant, body: {} });
-  await call(`/debts/${r2}/approve`, { method: 'POST', token: mom, body: {} });
   // Kê tiền đúng bằng sổ sách (chia theo mệnh giá lớn trước).
   const cashBook = (await call('/admin/closing', { token: accountant })).data.figures.totals.cash;
   let rest = cashBook;

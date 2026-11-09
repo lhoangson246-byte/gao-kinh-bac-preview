@@ -54,19 +54,19 @@ export function closingFigures(day) {
   const transfer = lines.online_transfer.s + lines.retail_transfer.s - lines.refund_transfer.s + lines.debt_collected_transfer.s;
   const revenue = lines.online_cash.s + lines.online_transfer.s + lines.online_debt.s
     + lines.retail_cash.s + lines.retail_transfer.s - lines.refund_cash.s - lines.refund_transfer.s;
-  const debtOpen = sum("SELECT COALESCE(SUM(amount), 0) AS s FROM debt_records WHERE status IN ('pending_accounting', 'pending_final', 'open', 'paid_pending_final')").s;
+  const debtOpen = sum("SELECT COALESCE(SUM(amount), 0) AS s FROM debt_records WHERE status IN ('pending_accounting', 'open', 'paid_pending_final')").s;
   return { day, lines, totals: { revenue, cash, transfer, debt_new: lines.online_debt.s, debt_open: debtOpen } };
 }
 
 /**
- * Đơn nợ còn chờ duyệt tính tới hết ngày `day`: chưa duyệt cho nợ (hoặc bị trả lại) với ngày giao ≤ day,
+ * Đơn nợ còn chờ duyệt tính tới hết ngày `day`: kế toán chưa duyệt (hoặc bị trả lại) với ngày giao ≤ day,
  * hoặc đã ký thu tiền ≤ day mà mẹ chưa duyệt tất toán. Còn khoản nào thì chưa đóng ngày được.
  */
 export function pendingDebts(day) {
   return db.prepare(`
     SELECT r.id, r.status, r.amount, o.code, a.contact_name, a.company FROM debt_records r
     JOIN orders o ON o.id = r.order_id JOIN debt_accounts a ON a.id = r.account_id
-    WHERE (r.status IN ('pending_accounting', 'pending_final', 'rejected') AND r.delivered_on <= ?)
+    WHERE (r.status IN ('pending_accounting', 'rejected') AND r.delivered_on <= ?)
        OR (r.status = 'paid_pending_final' AND ${localDate('r.paid_at')} <= ?)
     ORDER BY r.id
   `).all(day, day).map((r) => ({ ...r, status_label: DEBT_STATUS_LABEL[r.status] }));

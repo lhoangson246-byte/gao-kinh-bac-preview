@@ -257,8 +257,8 @@ export async function notifyShipperAssigned(orderId, shipperId) {
 }
 
 /**
- * Báo người duyệt công nợ: đơn nợ mới → kế toán; chờ duyệt cho nợ / tất toán → mẹ. Không ném lỗi.
- * `stage`: 'pending_accounting' | 'pending_final' | 'paid_pending_final'.
+ * Báo người duyệt công nợ: đơn nợ mới → kế toán; đã thu tiền, chờ tất toán → mẹ. Không ném lỗi.
+ * `stage`: 'pending_accounting' | 'paid_pending_final'.
  */
 export async function notifyDebtStage(debtId, stage) {
   try {
@@ -270,7 +270,6 @@ export async function notifyDebtStage(debtId, stage) {
     const who = `${row.contact_name}${row.company ? ` – ${row.company}` : ''}`;
     const text = {
       pending_accounting: ['📒 ĐƠN NỢ MỚI CHỜ KẾ TOÁN DUYỆT', ['debt.accounting']],
-      pending_final: ['📒 ĐƠN NỢ CHỜ MẸ DUYỆT', ['debt.final']],
       paid_pending_final: ['💰 ĐÃ THU NỢ – CHỜ MẸ DUYỆT TẤT TOÁN', ['debt.final']],
     }[stage];
     if (!text) return null;

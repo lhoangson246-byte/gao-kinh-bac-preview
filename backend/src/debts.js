@@ -2,8 +2,7 @@
  * Công nợ (12/11/2026). Đơn của khách lấy hàng trước, trả sau (thường công ty lớn, 14 – 30 ngày):
  *
  *   Nhân viên giao bấm "Khách nợ" + ảnh gạo đã giao + ảnh hoá đơn nợ   → pending_accounting
- *   Kế toán duyệt                                                         → pending_final
- *   Mẹ duyệt                                                              → open (đang nợ)
+ *   Kế toán duyệt                                                         → open (đang nợ)
  *   Kế toán ký "đã thu tiền" (tiền mặt / chuyển khoản)                   → paid_pending_final
  *   Mẹ duyệt tất toán                                                     → settled
  *
@@ -18,14 +17,13 @@ import { promoToday } from './promotions.js';
 
 export const DEBT_STATUS_LABEL = {
   pending_accounting: 'Chờ kế toán duyệt',
-  pending_final: 'Chờ mẹ duyệt',
   open: 'Đang nợ',
   paid_pending_final: 'Đã thu tiền – chờ mẹ duyệt tất toán',
   settled: 'Đã tất toán',
   rejected: 'Bị trả lại',
 };
 export const DEFAULT_TERM_DAYS = 15;
-export const UNSETTLED = ['pending_accounting', 'pending_final', 'open', 'paid_pending_final', 'rejected'];
+export const UNSETTLED = ['pending_accounting', 'open', 'paid_pending_final', 'rejected'];
 
 export const todayVN = () => db.prepare(`SELECT date('now', '${REPORT_TIME_SHIFT}') AS d`).get().d;
 export const addDays = (day, n) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
@@ -57,14 +55,13 @@ export function listDebts(scope = 'open') {
   const rows = db.prepare(`
     SELECT r.*, a.contact_name, a.company, a.phone AS account_phone, a.term_days, a.note AS account_note,
            o.code, o.receiver_name, o.address, o.total AS order_total, o.completed_at,
-           cu.full_name AS created_name, ac.full_name AS accounting_name, fi.full_name AS final_name,
+           cu.full_name AS created_name, ac.full_name AS accounting_name,
            pa.full_name AS paid_name, se.full_name AS settled_name
     FROM debt_records r
     JOIN debt_accounts a ON a.id = r.account_id
     JOIN orders o ON o.id = r.order_id
     LEFT JOIN users cu ON cu.id = r.created_by
     LEFT JOIN users ac ON ac.id = r.accounting_by
-    LEFT JOIN users fi ON fi.id = r.final_by
     LEFT JOIN users pa ON pa.id = r.paid_by
     LEFT JOIN users se ON se.id = r.settled_by
     WHERE ${statusClause}
@@ -72,8 +69,9 @@ export function listDebts(scope = 'open') {
     LIMIT 2000
   `).all();
   const ids = rows.map((r) => r.id);
+  // Đọc tên bước qua bí danh: trên trang thật (Turso) dòng lịch sử từng hiện thiếu cột "action".
   const events = ids.length ? db.prepare(`
-    SELECT debt_id, user_name, action, comment, created_at FROM debt_events
+    SELECT debt_id, user_name, action AS step_name, comment, created_at FROM debt_events
     WHERE debt_id IN (${ids.map(() => '?').join(',')}) ORDER BY id
   `).all(...ids) : [];
   const items = rows.length ? db.prepare(`
@@ -95,11 +93,10 @@ export function listDebts(scope = 'open') {
       steps: {
         created: { by: r.created_name, at: r.created_at },
         accounting: r.accounting_at ? { by: r.accounting_name, at: r.accounting_at } : null,
-        final: r.final_at ? { by: r.final_name, at: r.final_at } : null,
         paid: r.paid_at ? { by: r.paid_name, at: r.paid_at, method: r.paid_method } : null,
         settled: r.settled_at ? { by: r.settled_name, at: r.settled_at } : null,
       },
-      events: events.filter((e) => e.debt_id === r.id).map(({ debt_id, ...e }) => e),
+      events: events.filter((e) => e.debt_id === r.id).map(({ debt_id, step_name, ...e }) => ({ ...e, action: step_name })),
     };
     if (!accounts.has(r.account_id)) {
       accounts.set(r.account_id, {
@@ -123,7 +120,7 @@ export function listDebts(scope = 'open') {
       overdue: list.reduce((s, a) => s + a.overdue, 0),
       overdue_count: all.filter((r) => r.overdue_days > 0 && r.status !== 'rejected').length,
       pending_accounting: all.filter((r) => r.status === 'pending_accounting').length,
-      pending_final: all.filter((r) => ['pending_final', 'paid_pending_final'].includes(r.status)).length,
+      pending_settle: all.filter((r) => r.status === 'paid_pending_final').length,
       rejected: all.filter((r) => r.status === 'rejected').length,
     },
   };

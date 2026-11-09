@@ -1273,9 +1273,9 @@ Quy trình (mỗi bước ghi tên người, giờ; bước nào cũng bình lu�
 1. Nhân viên giao bấm **📝 Khách nợ (công nợ)** → chụp **gạo đã giao tới nơi** + **hoá đơn nợ**, ghi tên công
    ty, ghi chú → **Gửi kế toán duyệt**. Đơn chuyển "đã giao" và đánh dấu **Công nợ** (không tính vào tiền mặt).
 2. **Kế toán duyệt** (hoặc trả lại kèm lý do).
-3. **Mẹ duyệt cho nợ** → khoản nợ "Đang nợ".
-4. Đòi được tiền: **kế toán ký đã thu tiền** (tiền mặt / chuyển khoản).
-5. **Mẹ duyệt tất toán** → khoản nợ chuyển sang mục "Đã tất toán". Mẹ chưa đồng ý thì quay lại "Đang nợ".
+   Duyệt xong là "Đang nợ" (từ 09/11/2026 bỏ bước mẹ duyệt ở giữa).
+3. Đòi được tiền: **kế toán ký đã thu tiền** (tiền mặt / chuyển khoản).
+4. **Mẹ duyệt tất toán** → khoản nợ chuyển sang mục "Đã tất toán". Mẹ chưa đồng ý thì quay lại "Đang nợ".
 Khoản bị trả lại: kế toán bấm **Gửi duyệt lại** sau khi xử lý.
 
 Trang **📒 Theo dõi công nợ** (`/quan-tri/cong-no`, link ở tab Đơn hàng ngay sau nút "Đã huỷ"):
@@ -1310,7 +1310,7 @@ Nút **🧾 Đóng ngày** ở tab Đơn hàng (người được xem doanh thu)
 
 Chỉ: xem đơn hàng (không xử lý), xem doanh thu, xem báo cáo đóng ngày, xem và **duyệt công nợ**. Trang quản trị
 hiện nhắc "🔔 Có N đơn nợ chờ bạn duyệt → Duyệt ngay". Bật **📲 Thông báo** để điện thoại báo khi có đơn nợ chờ
-mẹ duyệt (cho nợ hoặc tất toán). Thông báo theo bước: đơn nợ mới → kế toán; chờ duyệt → mẹ. Báo **đơn mới** chỉ gửi
+mẹ duyệt tất toán. Thông báo theo bước: đơn nợ mới → kế toán; đã thu tiền, chờ tất toán → mẹ. Báo **đơn mới** chỉ gửi
 người xử lý đơn (chủ cửa hàng, nhân viên bán hàng), không gửi kế toán / mẹ.
 
 ## Mã giảm giá, tài khoản nhân viên, tạo đơn bằng tay (01/11/2026)

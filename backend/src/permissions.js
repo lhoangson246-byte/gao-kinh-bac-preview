@@ -17,7 +17,7 @@ export const PERMISSIONS = {
   delivery: 'Giao hàng: xem và cập nhật đơn được phân công',
   'debt.view': 'Xem trang theo dõi công nợ',
   'debt.accounting': 'Kế toán: duyệt đơn nợ, xác nhận đã thu tiền, đặt hạn công nợ',
-  'debt.final': 'Duyệt cuối đơn nợ và tất toán (mẹ)',
+  'debt.final': 'Mẹ duyệt tất toán đơn nợ',
   'closing.manage': 'Đóng ngày: kê tiền, lưu và xuất báo cáo cuối ngày',
 };
 export const PERMISSION_CODES = Object.keys(PERMISSIONS);

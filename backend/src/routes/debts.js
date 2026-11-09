@@ -10,7 +10,7 @@ import { notifyDebtStage } from '../push.js';
 
 /**
  * /api/debts — trang theo dõi công nợ. Xem: quyền debt.view. Kế toán (debt.accounting): duyệt bước 1,
- * ký đã thu tiền, đặt hạn công nợ từng khách, gửi duyệt lại. Mẹ (debt.final): duyệt bước 2 và tất toán.
+ * ký đã thu tiền, đặt hạn công nợ từng khách, gửi duyệt lại. Mẹ (debt.final): chỉ duyệt tất toán.
  * Chủ cửa hàng có mọi quyền. Máy chủ kiểm tra quyền ở từng thao tác.
  */
 const router = Router();
@@ -34,13 +34,13 @@ const reply = async (req, res, action, id) => {
   writeAdminAudit(req, { action: `debt.${action}`, entityType: 'debt', entityId: id });
   // Báo người duyệt bước kế tiếp (nếu có) trước khi trả lời — Vercel có thể dừng hàm sau khi trả lời.
   const status = db.prepare('SELECT status FROM debt_records WHERE id = ?').get(id)?.status;
-  if (['pending_accounting', 'pending_final', 'paid_pending_final'].includes(status)) await notifyDebtStage(id, status);
+  if (['pending_accounting', 'paid_pending_final'].includes(status)) await notifyDebtStage(id, status);
   res.json(listDebts(req.query.scope === 'settled' ? 'settled' : 'open'));
 };
 
 router.get('/', (req, res) => res.json(listDebts(req.query.scope === 'settled' ? 'settled' : 'open')));
 
-/** POST /:id/approve — duyệt bước hiện tại: kế toán (bước 1), mẹ (bước 2 và tất toán). */
+/** POST /:id/approve — duyệt bước hiện tại: kế toán duyệt đơn nợ, mẹ duyệt tất toán. */
 router.post('/:id/approve', async (req, res, next) => {
   try {
     const id = debtId(req);
@@ -48,13 +48,8 @@ router.post('/:id/approve', async (req, res, next) => {
     if (!status) throw new HttpError(404, 'Không tìm thấy đơn nợ.');
     if (status === 'pending_accounting') {
       need(req, 'debt.accounting');
-      moveDebt(id, ['pending_accounting'], 'pending_final', req.user, {
+      moveDebt(id, ['pending_accounting'], 'open', req.user, {
         action: 'Kế toán duyệt', comment: comment(req), fields: { accounting_by: req.user.id, accounting_at: new Date().toISOString().replace('T', ' ').slice(0, 19) },
-      });
-    } else if (status === 'pending_final') {
-      need(req, 'debt.final');
-      moveDebt(id, ['pending_final'], 'open', req.user, {
-        action: 'Mẹ duyệt — ghi nhận công nợ', comment: comment(req), fields: { final_by: req.user.id, final_at: new Date().toISOString().replace('T', ' ').slice(0, 19) },
       });
     } else if (status === 'paid_pending_final') {
       need(req, 'debt.final');
@@ -92,9 +87,6 @@ router.post('/:id/reject', async (req, res, next) => {
     if (status === 'pending_accounting') {
       need(req, 'debt.accounting');
       moveDebt(id, ['pending_accounting'], 'rejected', req.user, { action: 'Kế toán trả lại', comment: text });
-    } else if (status === 'pending_final') {
-      need(req, 'debt.final');
-      moveDebt(id, ['pending_final'], 'rejected', req.user, { action: 'Mẹ trả lại', comment: text });
     } else if (status === 'paid_pending_final') {
       // Mẹ chưa đồng ý tất toán: khoản nợ quay lại "đang nợ", xoá chữ ký đã thu.
       need(req, 'debt.final');
@@ -114,7 +106,7 @@ router.post('/:id/resubmit', async (req, res, next) => {
     need(req, 'debt.accounting');
     const id = debtId(req);
     moveDebt(id, ['rejected'], 'pending_accounting', req.user, {
-      action: 'Gửi duyệt lại', comment: comment(req), fields: { accounting_by: null, accounting_at: null, final_by: null, final_at: null },
+      action: 'Gửi duyệt lại', comment: comment(req), fields: { accounting_by: null, accounting_at: null },
     });
     await reply(req, res, 'resubmit', id);
   } catch (err) { next(err); }

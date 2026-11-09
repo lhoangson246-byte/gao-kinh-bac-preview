@@ -1017,5 +1017,56 @@ CREATE TABLE IF NOT EXISTS day_closings (
   if (!columns.includes('payment_status')) db.exec("ALTER TABLE orders ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'normal'");
 }
 
+// 09/11/2026: bỏ bước mẹ duyệt ở giữa (mẹ chỉ duyệt tất toán). Khoản đang chờ bước đó đã được kế
+// toán duyệt nên chuyển sang "Đang nợ" để không bị kẹt.
+const dropMiddleApproval = '2026-11-09-debt-drop-middle-approval';
+if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(dropMiddleApproval)) {
+  db.transaction(() => {
+    const moved = db.prepare("UPDATE debt_records SET status = 'open', updated_at = datetime('now') WHERE status = 'pending_final'").run().changes;
+    db.prepare('INSERT INTO app_migrations (name) VALUES (?)').run(dropMiddleApproval);
+    console.log(`✅ Công nợ: chuyển ${moved} khoản chờ mẹ duyệt sang đang nợ.`);
+  })();
+}
+
+// 09/11/2026: cửa hàng yêu cầu xoá đơn thử DH000257 (tên "testing"). Chỉ khớp đúng đơn đó; hoàn lại tồn
+// kho và điểm đơn đã cộng, xoá đơn nợ, ảnh chứng từ và khách nợ không còn đơn nào. Chạy một lần.
+const deleteTestOrder = '2026-11-09-delete-test-order-dh000257';
+if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(deleteTestOrder)) {
+  db.transaction(() => {
+    const order = db.prepare(`
+      SELECT * FROM orders WHERE code = 'DH000257' AND receiver_name = 'testing' AND phone = '0398196786'
+        AND total = 480000 AND payment_status = 'debt'
+    `).get();
+    if (order) {
+      const restock = db.prepare('UPDATE products SET stock = stock + ? WHERE id = ?');
+      for (const item of db.prepare('SELECT product_id, quantity FROM order_items WHERE order_id = ? AND product_id IS NOT NULL').all(order.id)) {
+        restock.run(item.quantity, item.product_id);
+      }
+      const loyaltyPhone = order.is_guest ? order.phone : db.prepare('SELECT phone FROM users WHERE id = ?').get(order.user_id)?.phone;
+      if (loyaltyPhone && order.points_earned > 0) {
+        db.prepare(`
+          UPDATE retail_customers SET points = MAX(0, points - ?), total_spent = MAX(0, total_spent - ?),
+            visit_count = MAX(0, visit_count - 1), updated_at = datetime('now') WHERE phone = ?
+        `).run(order.points_earned, order.total, loyaltyPhone);
+      }
+      const debt = db.prepare('SELECT id, account_id, delivered_photo, invoice_photo FROM debt_records WHERE order_id = ?').get(order.id);
+      if (debt) {
+        db.prepare('DELETE FROM debt_events WHERE debt_id = ?').run(debt.id);
+        db.prepare('DELETE FROM debt_records WHERE id = ?').run(debt.id);
+        db.prepare('DELETE FROM proof_photos WHERE id IN (?, ?)').run(debt.delivered_photo, debt.invoice_photo);
+        db.prepare('DELETE FROM debt_accounts WHERE id = ? AND NOT EXISTS (SELECT 1 FROM debt_records WHERE account_id = ?)').run(debt.account_id, debt.account_id);
+      }
+      db.prepare('DELETE FROM order_items WHERE order_id = ?').run(order.id);
+      db.prepare('DELETE FROM orders WHERE id = ?').run(order.id);
+      db.prepare(`
+        INSERT INTO admin_audit_logs (actor_name, action, entity_type, entity_id, before_json)
+        VALUES ('Theo yêu cầu cửa hàng', 'delete_test_order', 'order', ?, ?)
+      `).run(String(order.id), JSON.stringify({ code: order.code, total: order.total, points_earned: order.points_earned }));
+      console.log('✅ Đã xoá đơn thử DH000257, hoàn kho và điểm.');
+    }
+    db.prepare('INSERT INTO app_migrations (name) VALUES (?)').run(deleteTestOrder);
+  })();
+}
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

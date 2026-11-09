@@ -9,7 +9,6 @@ const formatPhone = (phone) => String(phone || '').replace(/^(\d{4})(\d{3})(\d{3
 const STEP_LABELS = [
   ['created', 'Nhân viên giao gửi'],
   ['accounting', 'Kế toán duyệt'],
-  ['final', 'Mẹ duyệt'],
   ['paid', 'Kế toán ký đã thu'],
   ['settled', 'Mẹ duyệt tất toán'],
 ];
@@ -73,10 +72,6 @@ function DebtRecord({ record, can, busy, onAction, onView }) {
         <div className="debt-buttons">
           {s === 'pending_accounting' && can('debt.accounting') && <>
             <button type="button" className="btn btn-primary" disabled={busy} onClick={() => act('approve')}>✅ Kế toán duyệt</button>
-            <button type="button" className="btn btn-danger-ghost" disabled={busy} onClick={() => act('reject', {}, true)}>Trả lại</button>
-          </>}
-          {s === 'pending_final' && can('debt.final') && <>
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => act('approve')}>✅ Mẹ duyệt cho nợ</button>
             <button type="button" className="btn btn-danger-ghost" disabled={busy} onClick={() => act('reject', {}, true)}>Trả lại</button>
           </>}
           {s === 'open' && can('debt.accounting') && <>
@@ -172,7 +167,7 @@ export default function Debts() {
             <div className="stat"><span>Tổng công nợ đang mở</span><strong>{formatVND(data.summary.total)}</strong><small>{data.accounts.length} khách</small></div>
             <div className={`stat${data.summary.overdue_count ? ' urgent' : ''}`}><span>Quá hạn</span><strong>{formatVND(data.summary.overdue)}</strong><small>{data.summary.overdue_count} khoản cần đòi</small></div>
             <div className="stat"><span>Chờ kế toán duyệt</span><strong>{data.summary.pending_accounting}</strong><small>đơn nợ mới</small></div>
-            <div className="stat"><span>Chờ mẹ duyệt</span><strong>{data.summary.pending_final}</strong><small>{data.summary.rejected ? `${data.summary.rejected} khoản bị trả lại` : 'cho nợ / tất toán'}</small></div>
+            <div className="stat"><span>Chờ mẹ tất toán</span><strong>{data.summary.pending_settle}</strong><small>{data.summary.rejected ? `${data.summary.rejected} khoản bị trả lại` : 'đã thu tiền'}</small></div>
           </section>
         )}
 

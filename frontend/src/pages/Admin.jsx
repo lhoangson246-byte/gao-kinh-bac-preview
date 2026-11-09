@@ -588,9 +588,9 @@ export default function Admin() {
                       </Link>
                     )}
                   </div>
-                  {(can('debt.final') && debtSummary?.pending_final > 0) || (can('debt.accounting') && debtSummary?.pending_accounting > 0) ? (
+                  {(can('debt.final') && debtSummary?.pending_settle > 0) || (can('debt.accounting') && debtSummary?.pending_accounting > 0) ? (
                     <div className="alert debt-todo" role="status">
-                      🔔 Có <strong>{(can('debt.final') ? debtSummary.pending_final : 0) + (can('debt.accounting') ? debtSummary.pending_accounting : 0)} đơn nợ chờ bạn duyệt</strong>.{' '}
+                      🔔 Có <strong>{(can('debt.final') ? debtSummary.pending_settle : 0) + (can('debt.accounting') ? debtSummary.pending_accounting : 0)} đơn nợ chờ bạn duyệt</strong>.{' '}
                       <Link to="/quan-tri/cong-no" className="btn btn-primary">Duyệt ngay</Link>
                     </div>
                   ) : null}
