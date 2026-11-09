@@ -1558,3 +1558,9 @@ Xem phần “Triển khai Vercel và migration (09/2026)” trong README trư�
 - Áp dụng cả đơn nhân viên nhập tay có tích giao tận nơi.
 
 Nhãn **HOT** đỏ tự hiện ở ô nhóm có tên chứa "Đi Chợ Hộ" (đổi phần đuôi tên vẫn giữ nhãn).
+
+### Cô bé đi chợ hộ ở góc màn hình (09/11/2026)
+
+- Hiện ở các trang khách hàng, ẩn ở giỏ hàng, đặt hàng, đăng nhập, đăng ký và khu quản trị (danh sách `MASCOT_HIDDEN` trong `frontend/src/App.jsx`).
+- Ảnh gồm 3 lớp trong `frontend/public/mascot/` (thân, đầu, mắt nhắm); chu kỳ chớp mắt và gập đầu 8 giây trong `styles.css` (`mascot-nod`, `mascot-eyes`).
+- Lời chào tự hiện một lần mỗi lượt vào, sửa chữ ở khoá `mascot.greeting` trong `frontend/src/i18n/messages.js`. Bấm vào cô bé để xem lại.
