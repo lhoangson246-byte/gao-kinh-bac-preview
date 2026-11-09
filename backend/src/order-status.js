@@ -52,7 +52,7 @@ export function changeOrderStatus(orderId, status, { guard, within } = {}) {
         ).all(order.id);
         const earned = creditPoints(phone, {
           amountPaid: order.total,
-          points: pointsForSale(items, order.total),
+          points: pointsForSale(items, order.total - (order.shipping_fee || 0)),   // phí giao không tích điểm
           fullName: order.receiver_name,
         });
         db.prepare('UPDATE orders SET points_earned = ? WHERE id = ?').run(earned, order.id);

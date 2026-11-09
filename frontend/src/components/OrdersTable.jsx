@@ -25,7 +25,7 @@ export default function OrdersTable({ orders }) {
               <td><a href={`tel:${o.phone}`}>{o.phone}</a></td>
               <td>{o.fulfillment === 'pickup' ? 'Lấy tại cửa hàng' : o.address}</td>
               <td>{o.items.map((i) => `${i.product_name} × ${i.quantity}`).join(', ')}</td>
-              <td className="num">{formatVND(o.total)}{o.discount > 0 && <small className="cell-note">giảm {formatVND(o.discount)}</small>}</td>
+              <td className="num">{formatVND(o.total)}{o.discount > 0 && <small className="cell-note">giảm {formatVND(o.discount)}</small>}{o.shipping_fee > 0 && <small className="cell-note">gồm ship {formatVND(o.shipping_fee)}</small>}</td>
               <td>{o.payment_method === 'bank' ? 'Chuyển khoản' : 'Tiền mặt'}</td>
               <td><span className={`status ${o.status}`}>{STATUS_LABEL[o.status]}</span></td>
               <td>{o.source === 'staff' ? 'Nhân viên tạo' : o.is_guest ? 'Mua nhanh' : 'Tài khoản'}</td>

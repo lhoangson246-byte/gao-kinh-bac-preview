@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { api, formatVND, pointsForLines, FIRST_ORDER_DISCOUNT } from '../api';
+import { api, formatVND, pointsForLines, shippingFeeFor, FIRST_ORDER_DISCOUNT, FREE_SHIPPING_MIN, SHIPPING_FEE } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 import { PromoGiftRow, PromoProgress } from '../components/Promotion.jsx';
+import ShippingNotice from '../components/ShippingNotice.jsx';
 
 export default function Cart() {
   const { items, total, count, hasUnavailable, setQuantity, remove, clear, syncWithProducts } = useCart();
@@ -16,6 +17,7 @@ export default function Cart() {
   // Chỉ để xem trước; máy chủ vẫn tự quyết khi tạo đơn.
   const [firstOrder, setFirstOrder] = useState(null);
   const discount = firstOrder?.available ? Math.min(firstOrder.amount, total) : 0;
+  const shippingFee = shippingFeeFor(total);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -122,13 +124,14 @@ export default function Cart() {
               <strong className="free-tag">− {formatVND(discount)}</strong>
             </div>
           )}
-          <div className="summary-row"><span>{t('cart.shipping')}</span><strong className="free-tag">{t('common.free')}</strong></div>
+          <div className="summary-row"><span>{t('cart.shipping')}</span>{shippingFee > 0 ? <strong>{formatVND(shippingFee)}</strong> : <strong className="free-tag">{t('common.free')}</strong>}</div>
           <div className="summary-note">
             <strong>{t('cart.deliveryTitle')}</strong>
-            <p>{t('cart.deliveryBody')}</p>
+            <p>{t('cart.deliveryBody', { min: formatVND(FREE_SHIPPING_MIN), fee: formatVND(SHIPPING_FEE) })}</p>
           </div>
           <PromoGiftRow items={items} />
-          <div className="summary-row grand-total"><span>{t('cart.total')}</span><strong>{formatVND(total - discount)}</strong></div>
+          <div className="summary-row grand-total"><span>{t('cart.total')}</span><strong>{formatVND(total - discount + shippingFee)}</strong></div>
+          <ShippingNotice subtotal={total} />
           <PromoProgress items={items} />
           <p className="pos-hint">{t('cart.points', { n: pointsForLines(items.filter((item) => item.stock > 0), total - discount) })}</p>
           {user ? (

@@ -63,10 +63,10 @@ export async function buildOrdersWorkbook(period, { status = null } = {}) {
   const orders = sheet('Đơn hàng', [
     ['Mã', 15], ['Ngày', 13], ['Giờ', 11], ['Kênh', 12], ['Trạng thái', 19],
     ['Khách', 26], ['SĐT', 16], ['Địa chỉ', 45], ['Khung giờ giao', 28], ['Thanh toán', 28],
-    ['Tiền hàng', 17], ['Giảm giá', 16], ['Khách trả', 17], ['Điểm cộng', 14],
+    ['Tiền hàng', 17], ['Giảm giá', 16], ['Phí giao', 13], ['Khách trả', 17], ['Điểm cộng', 14],
     ['Điểm đã đổi', 14], ['Vị trí giao hàng', 46], ['Mã giảm giá', 16], ['Nguồn đơn', 22],
     ['Cách nhận', 20], ['Người giao', 22], ['Giao xong lúc', 16],
-  ], [11, 12, 13, 14, 15]);
+  ], [11, 12, 13, 14, 15, 16]);
   const items = sheet('Chi tiết mặt hàng', [
     ['Mã đơn', 15], ['Ngày', 13], ['Kênh', 12], ['Tên gạo', 38], ['Đơn vị', 16],
     ['Số lượng', 13], ['Đơn giá', 17], ['Thành tiền', 17], ['Giá nhập', 17],
@@ -96,7 +96,7 @@ export async function buildOrdersWorkbook(period, { status = null } = {}) {
         String((online ? order.phone : order.customer_phone) || ''),
         online ? order.address : (order.customer_address || ''),
         online ? (slotNames[order.delivery_slot] || '') : '', paymentNames[order.payment_method] || order.payment_method,
-        order.subtotal, discount, order.total, order.points_earned, order.points_used || 0, mapLink,
+        order.subtotal, discount, online ? (order.shipping_fee || 0) : 0, order.total, order.points_earned, order.points_used || 0, mapLink,
         online ? (order.discount_code || '') : '',
         online ? (order.source === 'staff' ? `Nhân viên tạo${order.creator_name ? ` (${order.creator_name})` : ''}` : order.is_guest ? 'Khách mua nhanh' : 'Khách có tài khoản') : 'Tại quầy',
         online ? (order.fulfillment === 'pickup' ? 'Lấy tại cửa hàng' : 'Giao tận nơi') : '',

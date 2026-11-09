@@ -160,6 +160,7 @@ export default function Orders() {
                       ? t('orders.codeDiscounted', { amount: formatVND(order.discount), code: order.discount_code })
                       : t('orders.discounted', { amount: formatVND(order.discount) })}</small>
                   )}
+                  {order.shipping_fee > 0 && <small className="order-discount ship">{t('orders.shippingFee', { amount: formatVND(order.shipping_fee) })}</small>}
                   {t('orders.total')} <strong>{formatVND(order.total)}</strong>
                 </div>
               </footer>

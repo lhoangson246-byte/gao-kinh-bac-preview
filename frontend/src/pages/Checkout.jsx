@@ -5,10 +5,11 @@ import AddressBook from '../components/AddressBook.jsx';
 import DeliveryHours, { useNow } from '../components/DeliveryHours.jsx';
 import { PromoGiftChoice, PromoGiftRow, PromoProgress } from '../components/Promotion.jsx';
 import {
-  api, formatNumber, formatVND, pointsForLines, DELIVERY_AREA_CODE, DELIVERY_SLOTS, deliveryPlan, slotDay,
+  api, formatNumber, formatVND, pointsForLines, shippingFeeFor, DELIVERY_AREA_CODE, DELIVERY_SLOTS, deliveryPlan, slotDay,
 } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 import DiscountCodeField from '../components/DiscountCodeField.jsx';
+import ShippingNotice from '../components/ShippingNotice.jsx';
 
 export default function Checkout() {
   const { items, total, hasUnavailable, clear } = useCart();
@@ -41,8 +42,9 @@ export default function Checkout() {
   const voucherDiscount = vouchers * voucherAmount;
   // Voucher không được vượt số tiền còn phải trả (máy chủ cũng chặn như vậy).
   const maxVouchers = Math.floor(Math.max(0, total - discount) / voucherAmount);
-  const payable = total - discount - voucherDiscount;
-  const earnPoints = pointsForLines(orderable, payable);
+  const shippingFee = shippingFeeFor(total);
+  const payable = total - discount - voucherDiscount + shippingFee;
+  const earnPoints = pointsForLines(orderable, payable - shippingFee);   // phí giao không tích điểm
   const setGift = (id, quantity) => setGifts((current) => {
     const next = { ...current };
     if (quantity > 0) next[id] = quantity; else delete next[id];
@@ -290,9 +292,10 @@ export default function Checkout() {
               <strong className="free-tag">0₫</strong>
             </div>
           ))}
-          <div className="summary-row"><span>{t('cart.shipping')}</span><strong className="free-tag">{t('common.free')}</strong></div>
+          <div className="summary-row"><span>{t('cart.shipping')}</span>{shippingFee > 0 ? <strong>{formatVND(shippingFee)}</strong> : <strong className="free-tag">{t('common.free')}</strong>}</div>
           <PromoGiftRow items={orderable} choice={promoGift} />
           <div className="summary-row grand-total"><span>{t('cart.total')}</span><strong>{formatVND(payable)}</strong></div>
+          <ShippingNotice subtotal={total} />
           <PromoProgress items={orderable} />
           <PromoGiftChoice items={orderable} value={promoGift} onChange={setPromoGift} />
           <p className="pos-hint">{t('cart.points', { n: earnPoints })}</p>

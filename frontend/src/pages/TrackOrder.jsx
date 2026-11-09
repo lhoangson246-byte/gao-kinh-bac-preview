@@ -128,6 +128,7 @@ export default function TrackOrder() {
                   <li key={index}><span>{item.product_name}</span><small>{item.quantity} {unit(item.unit)}</small></li>
                 ))}
               </ul>
+              {order.shipping_fee > 0 && <div className="track-total ship"><span>{t('cart.shipping')}</span><b>{formatVND(order.shipping_fee)}</b></div>}
               <div className="track-total"><span>{t('track.total')}</span><b>{formatVND(order.total)}</b></div>
             </div>
 

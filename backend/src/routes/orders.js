@@ -6,6 +6,7 @@ import {
   DELIVERY_AREA_CODE, DELIVERY_AREA_LABEL, DELIVERY_SLOT_CODES, LIMITS,
   mentionsOtherProvince, normalizeBacNinhAddress, FIRST_ORDER_DISCOUNT,
   RETAIL_POINTS_PER_REWARD, REWARD_VOUCHER_AMOUNT, MAX_REWARDS_PER_SALE, GUEST_MAX_QTY_PER_LINE,
+  shippingFeeFor,
 } from '../constants.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../validate.js';
@@ -86,9 +87,9 @@ export function placeOrder({
     const getProduct = db.prepare('SELECT * FROM products WHERE id = ? AND is_active = 1');
     const insOrder = db.prepare(
       `INSERT INTO orders (user_id, receiver_name, phone, address, note, payment_method,
-                           subtotal, discount, total, delivery_slot, delivery_lat, delivery_lng,
+                           subtotal, discount, shipping_fee, total, delivery_slot, delivery_lat, delivery_lng,
                            voucher_discount, points_used, points_phone, is_guest, guest_token_hash)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     const insItem = db.prepare(
       `INSERT INTO order_items (order_id, product_id, product_name, unit, price, quantity, cost_price,
@@ -153,13 +154,15 @@ export function placeOrder({
     // orders.discount là TỔNG tiền giảm (đơn đầu hoặc mã + voucher); voucher_discount là phần
     // voucher, code_discount là phần mã giảm giá.
     const discount = promoDiscount + voucherDiscount;
-    const total = subtotal - discount;
+    // Phí giao xét theo tiền hàng trước giảm giá, nên dùng mã giảm giá không làm khách mất freeship.
+    const shippingFee = shippingFeeFor(subtotal, staff?.fulfillment);
+    const total = subtotal - discount + shippingFee;
     const pointsUsed = rewardCount * RETAIL_POINTS_PER_REWARD;
     if (pointsUsed > 0) spendPoints(pointsPhone, pointsUsed);
 
     const orderId = insOrder.run(
       userId, receiverName, customerPhone, deliveryAddress,
-      customerNote, paymentMethod, subtotal, discount, total, deliverySlot, lat, lng,
+      customerNote, paymentMethod, subtotal, discount, shippingFee, total, deliverySlot, lat, lng,
       voucherDiscount, pointsUsed, pointsUsed > 0 ? pointsPhone : null, guest ? 1 : 0, guestTokenHash
     ).lastInsertRowid;
     // Mã đơn tự tạo từ số thứ tự: DH000123, cùng kiểu mã hoá đơn quầy HD000123.

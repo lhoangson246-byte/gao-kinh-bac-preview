@@ -428,7 +428,7 @@ const posPhone = phoneOf(8);
         body: { ...order, phone: cheapPhone, items: [{ product_id: cheap.id, quantity: 1 }] },
       });
       check('Đơn rẻ hơn 20.000₫ thì chỉ giảm bằng đúng tiền hàng',
-        tiny.data.order?.discount === cheap.price && tiny.data.order?.total === 0,
+        tiny.data.order?.discount === cheap.price && tiny.data.order?.total === tiny.data.order?.shipping_fee,
         JSON.stringify({ p: cheap.price, d: tiny.data.order?.discount, t: tiny.data.order?.total }));
     } else {
       check('Đơn rẻ hơn 20.000₫ thì chỉ giảm bằng đúng tiền hàng', true, 'không có loại gạo dưới 20.000₫');

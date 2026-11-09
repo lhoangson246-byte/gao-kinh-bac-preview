@@ -322,7 +322,12 @@ export function mapLink(lat, lng) {
 export const DELIVERY_AREA_CODE = 'bac-ninh';
 export const DELIVERY_AREA_LABEL = 'Bắc Ninh';
 
-/** Khung giờ giao hoả tốc trong ngày. Cửa hàng không thu phí giao hàng. */
+/** Phí giao hàng, chỉ để xem trước; số tiền thật do máy chủ tính (backend/src/constants.js). */
+export const SHIPPING_FEE = 15000;
+export const FREE_SHIPPING_MIN = 100000;
+export const shippingFeeFor = (subtotal) => (subtotal >= FREE_SHIPPING_MIN ? 0 : SHIPPING_FEE);
+
+/** Khung giờ giao hoả tốc trong ngày. */
 export const DELIVERY_SLOTS = [
   ['sang', 'Buổi sáng', '07h00 – 11h30'],
   ['chieu', 'Buổi chiều', '13h30 – 18h00'],

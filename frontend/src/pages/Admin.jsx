@@ -637,9 +637,10 @@ export default function Admin() {
                                 <ul className="admin-order-items">
                                   {order.items.map((item) => <li key={item.id}><span>{item.product_name}{!!item.is_reward && <span className="gift-tag">Quà đổi điểm</span>}{item.promo && <span className="gift-tag promo">Quà khuyến mãi{item.product_id ? '' : ' · giao tay'}</span>}<small>{item.quantity} {item.unit}</small></span><strong>{formatVND(item.price * item.quantity)}</strong></li>)}
                                 </ul>
-                                {order.discount > 0 && (
+                                {(order.discount > 0 || order.shipping_fee > 0) && (
                                   <>
                                     <div className="admin-order-line"><span>Tiền hàng</span><span>{formatVND(order.subtotal || order.total + order.discount)}</span></div>
+                                    {order.shipping_fee > 0 && <div className="admin-order-line"><span>Phí giao hàng</span><span>{formatVND(order.shipping_fee)}</span></div>}
                                     {order.discount - (order.voucher_discount || 0) > 0 && (
                                       <div className="admin-order-line discount">
                                         <span>Giảm giá <small>{order.discount_code ? `mã ${order.discount_code}` : 'đơn đầu tiên của khách'}</small></span>
@@ -666,7 +667,7 @@ export default function Admin() {
                                   : order.status === 'cancelled'
                                     ? <small className="payment-label points muted">Đơn huỷ không được cộng điểm tích luỹ</small>
                                     : (
-                                    <small className="payment-label points muted">Sẽ cộng {pointsForLines(order.items.filter((item) => !item.is_reward), order.total)} điểm khi bấm Hoàn thành</small>
+                                    <small className="payment-label points muted">Sẽ cộng {pointsForLines(order.items.filter((item) => !item.is_reward), order.total - (order.shipping_fee || 0))} điểm khi bấm Hoàn thành</small>
                                   )}
                               </section>
                             </div>

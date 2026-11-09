@@ -17,6 +17,8 @@ const QUICK_FILTERS = [
 
 /** Bộ lọc tự tính ở máy chủ; các nhóm còn lại do cửa hàng tự tạo trong trang quản trị. */
 const SALE_GROUP = 'giam-gia';
+// Ô Đi Chợ Hộ có nhãn HOT. Nhận theo tên (bỏ dấu) vì cửa hàng hay đổi tên hiển thị của nhóm.
+const isHotGroup = (name) => /di\s*cho\s*ho/i.test(name.normalize('NFD').replace(/\p{M}/gu, '').replace(/[đĐ]/g, 'd'));
 
 /**
  * Điểm khách được cộng cho mỗi túi/bao khi đơn giao xong: điểm riêng cửa hàng đặt cho loại
@@ -177,9 +179,10 @@ export default function Home() {
           <button type="button" className={group === '' ? 'active' : ''} aria-pressed={group === ''}
                   onClick={() => pickGroup('')}>{t('group.all')}</button>
           {groups.map((g) => (
-            <button key={g.slug} type="button" className={group === g.slug ? 'active' : ''}
+            <button key={g.slug} type="button" className={`${group === g.slug ? 'active' : ''}${isHotGroup(g.name) ? ' hot-chip' : ''}`}
                     aria-pressed={group === g.slug} onClick={() => pickGroup(g.slug)}>
               {g.name} <span>{g.count}</span>
+              {isHotGroup(g.name) && <i className="hot-badge">HOT</i>}
             </button>
           ))}
           <button type="button" className={`sale-chip${group === SALE_GROUP ? ' active' : ''}`}

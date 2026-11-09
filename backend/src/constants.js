@@ -6,7 +6,16 @@ export const DELIVERY_AREA_LABEL = 'Bắc Ninh';
 
 export const ORDER_STATUSES = ['pending', 'confirmed', 'shipping', 'completed', 'cancelled'];
 
-/** Khung giờ giao hoả tốc trong ngày. Cửa hàng không thu phí giao hàng. */
+/**
+ * Phí giao hàng: đơn có tiền hàng (trước giảm giá) từ 100.000đ được freeship, dưới đó thu 15.000đ.
+ * Khách tự đến lấy tại cửa hàng không mất phí.
+ */
+export const SHIPPING_FEE = 15000;
+export const FREE_SHIPPING_MIN = 100000;
+export const shippingFeeFor = (subtotal, fulfillment = 'delivery') =>
+  (fulfillment === 'pickup' || subtotal >= FREE_SHIPPING_MIN ? 0 : SHIPPING_FEE);
+
+/** Khung giờ giao hoả tốc trong ngày. */
 export const DELIVERY_SLOTS = {
   sang: 'Sáng: 07h00 – 11h30',
   chieu: 'Chiều: 13h30 – 18h00',

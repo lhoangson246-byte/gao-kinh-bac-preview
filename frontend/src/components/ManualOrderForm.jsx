@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, DELIVERY_SLOTS, formatVND } from '../api';
+import { api, DELIVERY_SLOTS, formatVND, shippingFeeFor } from '../api';
 
 const EMPTY = {
   receiver_name: '', phone: '', home_delivery: true, address: '', delivery_slot: '', payment_method: 'cod',
@@ -100,7 +100,9 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
         ))}
         <button type="button" className="link-button" onClick={() => setLines((cur) => [...cur, { product_id: '', quantity: 1 }])}>+ Thêm loại gạo</button>
         {errors.items && <small className="err">{errors.items}</small>}
-        <p className="manual-subtotal">Tiền hàng: <strong>{formatVND(subtotal)}</strong> <small>(đơn đầu của số điện thoại tự giảm 20.000đ, hoặc nhập mã)</small></p>
+        <p className="manual-subtotal">Tiền hàng: <strong>{formatVND(subtotal)}</strong>
+          {form.home_delivery && subtotal > 0 && <> · Phí giao: <strong>{shippingFeeFor(subtotal) ? formatVND(shippingFeeFor(subtotal)) : 'Freeship'}</strong></>}
+          {' '}<small>(đơn đầu của số điện thoại tự giảm 20.000đ, hoặc nhập mã)</small></p>
       </fieldset>
 
       <div className="about-admin-row">

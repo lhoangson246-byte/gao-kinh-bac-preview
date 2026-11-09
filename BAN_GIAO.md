@@ -1548,3 +1548,13 @@ Không còn tài khoản mặc định. Đặt `ADMIN_EMAIL` và `ADMIN_PASSWORD
 # Bổ sung triển khai 14/09/2026
 
 Xem phần “Triển khai Vercel và migration (09/2026)” trong README trước khi deploy. Migration đã tách khỏi boot, Production build chạy migrate có kiểm tra môi trường; Preview thiếu DB riêng sẽ không phục vụ API. Không seed lại dữ liệu thật. Đã thêm xuất Excel có giới hạn, phân trang đơn quản trị và tải ảnh WebP/chunk Admin-POS riêng. Các thay đổi xoá hẳn và sửa ghi 403 trong working tree được giữ lại và bổ sung transaction, kiểm thử hồi quy.
+
+### Phí giao hàng và freeship (09/11/2026)
+
+- Tiền hàng **dưới 100.000đ** thu phí giao **15.000đ**; **từ 100.000đ** được freeship. Khách tự đến lấy tại cửa hàng không mất phí.
+- Mức xét là tiền hàng **trước giảm giá**, nên dùng mã giảm giá không làm khách mất freeship.
+- Máy chủ tự tính và lưu ở `orders.shipping_fee` (đã cộng trong `orders.total`). Đổi mức phí: sửa `SHIPPING_FEE`, `FREE_SHIPPING_MIN` ở cả `backend/src/constants.js` và `frontend/src/api.js`.
+- Phí giao tính vào doanh thu và tiền cần thu, **không** tích điểm. Đơn cũ giữ phí 0đ.
+- Áp dụng cả đơn nhân viên nhập tay có tích giao tận nơi.
+
+Nhãn **HOT** đỏ tự hiện ở ô nhóm có tên chứa "Đi Chợ Hộ" (đổi phần đuôi tên vẫn giữ nhãn).

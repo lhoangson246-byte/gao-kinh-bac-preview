@@ -273,7 +273,7 @@ let orderId;
     `nhận ${r.data.order?.subtotal}, cần ${product.price * 2}`);
   // Đây là đơn đầu tiên của tài khoản vừa đăng ký nên được giảm 20.000đ.
   check('Đơn đầu tiên của tài khoản được giảm 20.000₫',
-    r.data.order?.discount === 20000 && r.data.order?.total === product.price * 2 - 20000,
+    r.data.order?.discount === 20000 && r.data.order?.total === product.price * 2 - 20000 + r.data.order?.shipping_fee,
     JSON.stringify({ d: r.data.order?.discount, t: r.data.order?.total }));
   check('Địa chỉ được chuẩn hoá kèm "Bắc Ninh"', /Bắc Ninh$/.test(r.data.order?.address || ''), r.data.order?.address);
   check('Khung giờ giao được lưu vào đơn', r.data.order?.delivery_slot === 'sang',

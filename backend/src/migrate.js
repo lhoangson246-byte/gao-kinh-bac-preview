@@ -918,6 +918,8 @@ CREATE TABLE IF NOT EXISTS discount_codes (
   const columns = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
   if (!columns.includes('discount_code')) db.exec('ALTER TABLE orders ADD COLUMN discount_code TEXT');
   if (!columns.includes('code_discount')) db.exec('ALTER TABLE orders ADD COLUMN code_discount INTEGER NOT NULL DEFAULT 0');
+  // Phí giao hàng (09/11/2026): đã tính trong orders.total. Đơn cũ giữ 0 vì trước đây giao miễn phí.
+  if (!columns.includes('shipping_fee')) db.exec('ALTER TABLE orders ADD COLUMN shipping_fee INTEGER NOT NULL DEFAULT 0');
 }
 // Mã tháng 11/2026 theo yêu cầu cửa hàng: GAOKINHBAC11 giảm 10.000đ, 01/11 – 30/11/2026. Chạy một lần;
 // sau đó cửa hàng tự sửa / tắt trong trang quản trị.

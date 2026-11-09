@@ -22,7 +22,7 @@ export function trackOrder(phone, code) {
   const normalizedCode = normalizeOrderCode(code);
   if (!normalizedPhone || !normalizedCode) return null;
   const order = db.prepare(`
-    SELECT id, code, status, receiver_name, phone, delivery_slot, payment_method, total, created_at,
+    SELECT id, code, status, receiver_name, phone, delivery_slot, payment_method, shipping_fee, total, created_at,
            confirmed_at, shipping_at, completed_at, cancelled_at
     FROM orders WHERE code = ?
   `).get(normalizedCode);
