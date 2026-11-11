@@ -1564,3 +1564,12 @@ Nhãn **HOT** đỏ tự hiện ở ô nhóm có tên chứa "Đi Chợ Hộ" (�
 - Hiện ở các trang khách hàng, ẩn ở giỏ hàng, đặt hàng, đăng nhập, đăng ký và khu quản trị (danh sách `MASCOT_HIDDEN` trong `frontend/src/App.jsx`).
 - Ảnh gồm 3 lớp trong `frontend/public/mascot/` (thân, đầu, mắt nhắm); chu kỳ chớp mắt và gập đầu 8 giây trong `styles.css` (`mascot-nod`, `mascot-eyes`).
 - Lời chào tự hiện một lần mỗi lượt vào, sửa chữ ở khoá `mascot.greeting` trong `frontend/src/i18n/messages.js`. Bấm vào cô bé để xem lại.
+
+### Chấm công (11/11/2026)
+
+- Trang **/quan-tri/cham-cong** cho mọi tài khoản nhân viên và chủ cửa hàng: bấm **Chấm công vào** đầu ca, **Chấm công ra** cuối ca. Giờ lấy theo máy chủ, điện thoại không gửi giờ được. Mỗi người mỗi ngày một lần.
+- Quy đổi số công: làm **từ 7 tiếng trở lên = 1 công**, **dưới 7 tiếng = 0,5 công**, chưa chấm ra = chưa tính công. Đổi ngưỡng ở `FULL_DAY_MINUTES` trong `backend/src/routes/attendance.js`.
+- Nhân viên xem lịch sử của mình theo tháng (cột Số giờ, Số công).
+- Quyền mới **Chấm công** (`attendance.manage`, có sẵn trong mẫu Kế toán): xem bảng công cả tháng của mọi người, bấm vào ô để sửa / bổ sung giờ cho người quên chấm (bắt buộc ghi lý do, có nhật ký). Không tự sửa công của chính mình, trừ chủ cửa hàng.
+- **Tài khoản kế toán tạo trước ngày này chưa có quyền Chấm công**: vào Quản trị → Nhân viên, tick "Chấm công" cho kế toán / quản lý.
+- Trang giao hàng, công nợ, chấm công có hàng tab dưới thanh trên cùng để chuyển qua lại, hiện cả trên điện thoại.

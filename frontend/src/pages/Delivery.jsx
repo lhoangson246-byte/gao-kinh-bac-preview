@@ -4,6 +4,7 @@ import { api, DELIVERY_SLOT_LABEL, formatDateTime, formatVND, mapLink } from '..
 import { useAuth } from '../context/AuthContext.jsx';
 import PushSettings from '../components/PushSettings.jsx';
 import ProofPhoto from '../components/ProofPhoto.jsx';
+import StaffNav from '../components/StaffNav.jsx';
 
 const REFRESH_MS = 30_000;
 const formatPhone = (phone) => String(phone || '').replace(/^(\d{4})(\d{3})(\d{3})$/, '$1 $2 $3');
@@ -94,6 +95,7 @@ export default function Delivery() {
           <button className="btn btn-ghost" onClick={() => { logout(); navigate('/'); }}>Đăng xuất</button>
         </div>
       </header>
+      <StaffNav />
 
       <main className="delivery-main">
         <div className="delivery-summary">

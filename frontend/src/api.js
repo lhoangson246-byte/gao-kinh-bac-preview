@@ -142,6 +142,11 @@ export const api = {
   adminCreateOrder: (body) => request('/admin/orders', { method: 'POST', auth: true, body }),
   adminAssignShipper: (orderId, shipperId) => request(`/admin/orders/${orderId}/shipper`, { method: 'PATCH', auth: true, body: { shipper_id: shipperId } }),
   deliveryOrders: () => request('/delivery/orders', { auth: true }),
+  attendanceMe: (month) => request(`/attendance/me${month ? `?month=${encodeURIComponent(month)}` : ''}`, { auth: true }),
+  attendanceClockIn: () => request('/attendance/clock-in', { method: 'POST', auth: true }),
+  attendanceClockOut: () => request('/attendance/clock-out', { method: 'POST', auth: true }),
+  attendanceMonth: (month) => request(`/attendance/month?month=${encodeURIComponent(month)}`, { auth: true }),
+  attendanceSaveEntry: (payload) => request('/attendance/entry', { method: 'PUT', body: payload, auth: true }),
   deliverySetStatus: (orderId, status, photo) => request(`/delivery/orders/${orderId}/status`, { method: 'PATCH', auth: true, body: { status, ...(photo ? { photo } : {}) } }),
   deliveryDebt: (orderId, body) => request(`/delivery/orders/${orderId}/debt`, { method: 'POST', auth: true, body }),
   // Ảnh chứng từ (giao hàng, hoá đơn nợ): riêng tư, chỉ người trong cửa hàng xem được.

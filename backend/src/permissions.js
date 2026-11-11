@@ -19,13 +19,14 @@ export const PERMISSIONS = {
   'debt.accounting': 'Kế toán: duyệt đơn nợ, xác nhận đã thu tiền, đặt hạn công nợ',
   'debt.final': 'Mẹ duyệt tất toán đơn nợ',
   'closing.manage': 'Đóng ngày: kê tiền, lưu và xuất báo cáo cuối ngày',
+  'attendance.manage': 'Chấm công: xem bảng công tháng của mọi người và sửa giờ cho người quên chấm',
 };
 export const PERMISSION_CODES = Object.keys(PERMISSIONS);
 
 /** Mẫu quyền để chủ cửa hàng chọn nhanh khi tạo tài khoản; vẫn tick thêm / bỏ được. */
 export const PRESETS = {
   // Kế toán cập nhật các bước Chờ xác nhận → Đã xác nhận → Đang giao (02/11/2026).
-  'ke-toan': { title: 'Kế toán', permissions: ['orders.view', 'orders.manage', 'orders.export', 'revenue.view', 'debt.view', 'debt.accounting', 'closing.manage'] },
+  'ke-toan': { title: 'Kế toán', permissions: ['orders.view', 'orders.manage', 'orders.export', 'revenue.view', 'debt.view', 'debt.accounting', 'closing.manage', 'attendance.manage'] },
   'duyet-cuoi': { title: 'Duyệt cuối (mẹ)', permissions: ['orders.view', 'revenue.view', 'debt.view', 'debt.final'] },
   'giao-hang': { title: 'Nhân viên giao hàng', permissions: ['delivery'] },
   'ban-hang': { title: 'Nhân viên bán hàng', permissions: ['orders.view', 'orders.manage', 'orders.create', 'retail.sell'] },

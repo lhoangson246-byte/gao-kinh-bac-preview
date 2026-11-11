@@ -145,6 +145,9 @@ export default function Home() {
       {/* Chỉ hiện khi cửa hàng đã nhập số trong trang quản trị — không dùng số giả. */}
       <PromoBanner />
 
+      {(contactPhone || zaloPhone) && (
+      <div className={`contact-strips${contactPhone && zaloPhone ? ' two' : ''}`}>
+        <p className="contact-strips-title">{t('contact.compact')}</p>
       {contactPhone && (
         <aside className="contact-strip" aria-label={t('contact.label')}>
           <span className="contact-icon" aria-hidden="true">☏</span>
@@ -170,6 +173,8 @@ export default function Home() {
             {t('zalo.button', { phone: formatPhone(zaloPhone) })}
           </a>
         </aside>
+      )}
+      </div>
       )}
 
       {/* Nhóm gạo: hàng riêng, đặt trước ô tìm kiếm và các bộ lọc khác để khách thấy ngay. */}

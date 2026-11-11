@@ -256,6 +256,13 @@ add('debts', 'PUT', /^\/accounts\/[^/]+\/?$/, obj({
   term_days: integer(1, 365).optional(), contact_name: optionalText(120), company: optionalText(160), note: optionalText(300),
 }), obj({ scope: z.enum(['open', 'settled']).optional() }));
 add('closing', 'GET', /^\/?$/, empty, obj({ day: z.string().max(10).optional() }));
+// Chấm công: giờ vào / ra do máy chủ ghi, nên chấm vào / ra không nhận dữ liệu nào.
+const monthQuery = obj({ month: z.string().max(7).optional() });
+add('attendance', 'GET', /^\/(me|month)\/?$/, empty, monthQuery);
+add('attendance', 'POST', /^\/clock-(in|out)\/?$/);
+add('attendance', 'PUT', /^\/entry\/?$/, obj({
+  user_id: integer(1), work_date: z.string().max(10), in_time: z.string().max(5), out_time: z.string().max(5).optional(), note: optionalText(300),
+}));
 add('closing', 'GET', /^\/history\/?$/);
 add('closing', 'GET', /^\/export\/?$/, empty, obj({ day: z.string().max(10) }));
 add('closing', 'POST', /^\/?$/, obj({ day: z.string().max(10), counts: z.record(z.string().max(7), z.union([z.number(), z.string().max(7)])).optional(), note: optionalText(1000) }));

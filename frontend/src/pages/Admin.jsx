@@ -464,6 +464,10 @@ export default function Admin() {
             <span aria-hidden="true">🛵</span>
             <span>Giao hàng<small>Đơn được giao cho tôi</small></span>
           </Link>}
+          <Link to="/quan-tri/cham-cong" className="admin-sidebar-link">
+            <span aria-hidden="true">⏱</span>
+            <span>Chấm công<small>{can('attendance.manage') ? 'Vào ca, ra ca, bảng công tháng' : 'Vào ca, ra ca, lịch sử'}</small></span>
+          </Link>
           {canManageOrders && <div className="admin-help"><strong>Cần làm gì trước?</strong><p>Ưu tiên các đơn “Chờ xác nhận”, gọi khách rồi bấm “Xác nhận đơn”.</p></div>}
         </aside>
 

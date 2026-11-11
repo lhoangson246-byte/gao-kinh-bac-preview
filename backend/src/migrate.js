@@ -1070,5 +1070,22 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(deleteTestOrd
   })();
 }
 
+  // Chấm công (11/11/2026): mỗi người một dòng mỗi ngày; giờ lưu UTC, ngày công theo giờ Việt Nam.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS attendance (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL REFERENCES users(id),
+      work_date  TEXT NOT NULL,
+      clock_in   TEXT NOT NULL,
+      clock_out  TEXT,
+      note       TEXT,
+      edited_by  INTEGER REFERENCES users(id),
+      edited_at  TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE (user_id, work_date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(work_date);
+  `);
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }
