@@ -42,7 +42,7 @@ async function request(path, { method = 'GET', body, auth = false, signal } = {}
  * Tải ảnh sản phẩm lên. Gửi thẳng nội dung tệp (không phải JSON) nên không
  * dùng chung hàm request() ở trên.
  */
-async function uploadImage(blob, path = '/admin/images') {
+async function uploadImage(blob, path = '/admin/images', extraHeaders = {}) {
   let res;
   try {
     res = await fetch(`${BASE}/api${path}`, {
@@ -52,6 +52,7 @@ async function uploadImage(blob, path = '/admin/images') {
         'Content-Type': blob.type || 'image/jpeg',
         'X-Session-Mode': 'cookie',
         'X-CSRF-Protection': '1',
+        ...extraHeaders,
       },
       credentials: 'include',
       body: blob,
@@ -156,6 +157,10 @@ export const api = {
   deliveryDebt: (orderId, body) => request(`/delivery/orders/${orderId}/debt`, { method: 'POST', auth: true, body }),
   // Ảnh chứng từ (giao hàng, hoá đơn nợ): riêng tư, chỉ người trong cửa hàng xem được.
   uploadProof: (blob) => uploadImage(blob, '/proofs'),
+  /** Khách gửi ảnh đã chuyển khoản; đơn mua nhanh kèm mã bí mật nhận lúc đặt. */
+  uploadTransferProof: (orderId, blob, guestToken) =>
+    uploadImage(blob, `/orders/${orderId}/transfer-proof`, guestToken ? { 'X-Guest-Token': guestToken } : {}),
+  adminConfirmTransfer: (id) => request(`/admin/orders/${id}/transfer`, { method: 'PATCH', body: { confirmed: true }, auth: true }),
   // Công nợ và đóng ngày.
   debts: (scope = 'open') => request(`/debts?scope=${scope}`, { auth: true }),
   debtAction: (id, action, body = {}, scope = 'open') => request(`/debts/${id}/${action}?scope=${scope}`, { method: 'POST', auth: true, body }),
@@ -192,8 +197,9 @@ export const api = {
   adminAboutCreateReview: (review) => request('/admin/about/reviews', { method: 'POST', auth: true, body: review }),
   adminAboutUpdateReview: (id, review) => request(`/admin/about/reviews/${id}`, { method: 'PUT', auth: true, body: review }),
   adminAboutDeleteReview: (id) => request(`/admin/about/reviews/${id}`, { method: 'DELETE', auth: true }),
-  adminOrders: (status, { limit = 30, offset = 0, from = '', to = '' } = {}) => {
+  adminOrders: (status, { limit = 30, offset = 0, from = '', to = '', transfer = '' } = {}) => {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (transfer) params.set('transfer', transfer);
     if (status && status !== 'all') params.set('status', status);
     if (from) params.set('from', from);
     if (to) params.set('to', to);

@@ -20,6 +20,7 @@ export default function BannerSettings({ notify }) {
   const [saved, setSaved] = useState(null);     // null = đang tải
   const [images, setImages] = useState([]);
   const [phone, setPhone] = useState('');
+  const [qr, setQr] = useState('');
   const [zalo, setZalo] = useState('');
   const [branches, setBranches] = useState([]);
   const [editing, setEditing] = useState(null); // vị trí ảnh đang mở ô chọn ảnh
@@ -33,12 +34,14 @@ export default function BannerSettings({ notify }) {
       images: list,
       phone: settings?.contact_phone || '',
       zalo: settings?.zalo_phone || '',
+      qr: settings?.bank_qr_url || '',
       branches: (settings?.branches || []).map((b) => ({ name: b.name || '', address: b.address || '', phone: b.phone || '' })),
     };
     setSaved(next);
     setImages(next.images);
     setPhone(next.phone);
     setZalo(next.zalo);
+    setQr(next.qr);
     setBranches(next.branches);
     setEditing(null);
   };
@@ -54,7 +57,7 @@ export default function BannerSettings({ notify }) {
   const cleanImages = images.filter(Boolean);
   const dirty = saved !== null && (!sameList(cleanImages, saved.images) || normalizePhone(phone) !== saved.phone
     || (phone.trim() !== '' && !isPhone(phone))
-    || normalizePhone(zalo) !== saved.zalo || (zalo.trim() !== '' && !isPhone(zalo))
+    || normalizePhone(zalo) !== saved.zalo || (zalo.trim() !== '' && !isPhone(zalo)) || qr !== saved.qr
     || JSON.stringify(cleanBranches(branches)) !== JSON.stringify(cleanBranches(saved.branches)));
   const setBranch = (index, field, value) => {
     setBranches((list) => list.map((b, i) => (i === index ? { ...b, [field]: value } : b)));
@@ -109,6 +112,7 @@ export default function BannerSettings({ notify }) {
         banner_images: cleanImages,
         contact_phone: normalizePhone(phone),
         zalo_phone: normalizePhone(zalo),
+        bank_qr_url: qr || null,
         branches: branchList.map((b) => ({ name: b.name, address: b.address, phone: normalizePhone(b.phone) })),
       });
       load(settings);
@@ -225,6 +229,15 @@ export default function BannerSettings({ notify }) {
               Để trống thì dùng số tư vấn; cả hai đều trống thì khung Zalo được ẩn.
             </small>}
       </label>
+
+      <div className="contact-phone-field bank-qr-field">
+        <ImagePicker label="Mã QR chuyển khoản" subject="mã QR tài khoản ngân hàng" maxEdge={1200}
+                     value={qr} error={fieldErrors.bank_qr_url} onChange={(url) => setQr(url || '')} />
+        <small className="field-help">
+          Khách chọn “Chuyển khoản ngân hàng” sẽ thấy mã QR này kèm số tiền, rồi gửi ảnh đã chuyển khoản để cửa hàng xác nhận.
+          Nên dùng ảnh QR rõ nét (tải từ ứng dụng ngân hàng, cạnh từ 500px trở lên).
+        </small>
+      </div>
 
       <fieldset className="branches-field">
         <legend>Các cơ sở cửa hàng (hiện ở chân trang)</legend>

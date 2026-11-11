@@ -15,7 +15,9 @@ export const MAX_BANNERS = 6;
 export const MAX_BRANCHES = 5;
 
 /** Các khoá đọc từ app_settings. Khoá không nằm ở đây thì không bao giờ trả ra ngoài. */
-const STORED_KEYS = ['banner_images', 'banner_image_url', 'contact_phone', 'zalo_phone', 'store_branches'];
+const STORED_KEYS = ['banner_images', 'banner_image_url', 'contact_phone', 'zalo_phone', 'store_branches', 'bank_qr_url'];
+/** Mã QR tài khoản ngân hàng cửa hàng gửi ngày 12/11/2026; đổi được trong Quản trị → Sản phẩm → Cài đặt trang chủ. */
+export const DEFAULT_BANK_QR = '/bank-qr.png';
 
 /** Danh sách ảnh lưu dạng JSON; bỏ mọi phần tử không còn là đường dẫn ảnh an toàn. */
 function parseBanners(raw) {
@@ -65,6 +67,8 @@ export function readStorefront() {
     // Số Zalo riêng; để trống thì trang khách dùng số tư vấn ở trên.
     zalo_phone: normalizePhone(stored.zalo_phone || ''),
     branches: parseBranches(stored.store_branches),
+    // Mã QR chuyển khoản hiện khi khách chọn "Chuyển khoản ngân hàng".
+    bank_qr_url: cleanImageUrl(stored.bank_qr_url || '') || DEFAULT_BANK_QR,
     // Đợt khuyến mãi đang hoặc sắp diễn ra, để trang chủ và giỏ hàng báo cho khách.
     promotion: publicPromotion(),
   };

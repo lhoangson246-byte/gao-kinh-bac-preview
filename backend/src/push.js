@@ -237,6 +237,23 @@ export async function notifyNewOrder(orderId, { origin } = {}) {
   }
 }
 
+/** Báo người xử lý đơn: khách vừa gửi ảnh đã chuyển khoản, cần kiểm tra tài khoản. Không ném lỗi. */
+export async function notifyTransferReported(orderId) {
+  try {
+    const order = orderForNotice(orderId);
+    if (!order) return null;
+    return await sendPushToAdmins({
+      ...orderPushPayload(order),
+      title: `💳 KHÁCH BÁO ĐÃ CHUYỂN KHOẢN #${order.code || order.id} - ${formatMoney(order.total)}đ`,
+      body: `${order.receiver_name} gửi ảnh chuyển khoản. Kiểm tra tài khoản rồi bấm "Xác nhận đã nhận tiền".`,
+      tag: `transfer-${order.id}`,
+    });
+  } catch (err) {
+    console.error({ event: 'notify_transfer_failed', name: err?.name, message: String(err?.message || '').slice(0, 160) });
+    return null;
+  }
+}
+
 /** Báo nhân viên giao hàng vừa được phân công một đơn. Không ném lỗi. */
 export async function notifyShipperAssigned(orderId, shipperId) {
   try {

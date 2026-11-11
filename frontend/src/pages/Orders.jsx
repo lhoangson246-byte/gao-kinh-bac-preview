@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import DeliveryPromise from '../components/DeliveryPromise.jsx';
+import TransferBox from '../components/TransferBox.jsx';
 import { api, formatDateTime, formatNumber, formatVND, DELIVERY_SLOTS, deliveryDateLabel } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 
@@ -133,6 +134,9 @@ export default function Orders() {
                   {order.note && <small>{t('orders.note', { note: order.note })}</small>}
                 </div>
               </div>
+              {order.payment_method === 'bank' && order.status !== 'cancelled' && (order.status !== 'completed' || order.transfer_confirmed_at) && (
+                <TransferBox amount={order.total} order={order} />
+              )}
               <footer>
                 <div>
                   {order.status === 'pending' ? (

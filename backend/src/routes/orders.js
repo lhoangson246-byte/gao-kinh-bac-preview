@@ -1,5 +1,5 @@
 import { validateRoutes } from '../schemas.js';
-import { Router } from 'express';
+import express, { Router } from 'express';
 import db from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
@@ -8,13 +8,14 @@ import {
   RETAIL_POINTS_PER_REWARD, REWARD_VOUCHER_AMOUNT, MAX_REWARDS_PER_SALE, GUEST_MAX_QTY_PER_LINE,
   shippingFeeFor,
 } from '../constants.js';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { MAX_IMAGE_BYTES, sniffImage } from './images.js';
 import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../validate.js';
 import { readLocation } from './addresses.js';
 import { promoGiftFor } from '../promotions.js';
 import { attachItems } from '../order-lists.js';
 import { loyaltyProfile, refundPoints, spendPoints } from '../loyalty.js';
-import { notifyNewOrder, siteOrigin } from '../push.js';
+import { notifyNewOrder, notifyTransferReported, siteOrigin } from '../push.js';
 import { trackOrder } from '../order-tracking.js';
 import { findUsableCode, normalizeCode, publicCode } from '../discount-codes.js';
 import { wholesaleOfUser } from '../wholesale.js';
@@ -346,6 +347,54 @@ router.post('/discount-code', validateRoutes('guest-orders'), (req, res, next) =
 });
 
 // Mọi tuyến bên dưới cần đăng nhập.
+/**
+ * POST /api/orders/:id/transfer-proof — khách gửi ảnh đã chuyển khoản (thân yêu cầu là tệp ảnh).
+ * Đơn có tài khoản: đăng nhập đúng chủ đơn. Đơn mua nhanh: kèm X-Guest-Token nhận được lúc đặt.
+ * Ảnh lưu riêng tư (chỉ người trong cửa hàng xem được); cửa hàng kiểm tra tài khoản rồi xác nhận sau.
+ */
+const transferUpload = express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: MAX_IMAGE_BYTES });
+const sameHash = (token, hash) => {
+  if (typeof token !== 'string' || !token || token.length > 200 || typeof hash !== 'string' || hash.length !== 64) return false;
+  return timingSafeEqual(Buffer.from(createHash('sha256').update(token).digest('hex')), Buffer.from(hash));
+};
+async function receiveTransferProof(req, res, next) {
+  try {
+    const id = toInteger(req.params.id, { min: 1 });
+    const order = id && db.prepare(`
+      SELECT id, user_id, is_guest, guest_token_hash, payment_method, status, transfer_proof, transfer_confirmed_at FROM orders WHERE id = ?
+    `).get(id);
+    const token = req.get('X-Guest-Token');
+    const owns = order && (token
+      ? order.is_guest === 1 && sameHash(token, order.guest_token_hash)
+      : !!req.user && order.user_id === req.user.id && order.is_guest !== 1);
+    // Cùng một câu trả lời cho "không có đơn" và "không phải đơn của bạn".
+    if (!owns) throw new HttpError(404, 'Không tìm thấy đơn hàng.');
+    if (order.payment_method !== 'bank') throw new HttpError(400, 'Đơn này thanh toán khi nhận hàng, không cần gửi ảnh chuyển khoản.');
+    if (order.status === 'cancelled') throw new HttpError(400, 'Đơn đã huỷ.');
+    if (order.transfer_confirmed_at) throw new HttpError(409, 'Cửa hàng đã xác nhận nhận được tiền của đơn này.');
+    const buf = req.body;
+    if (!Buffer.isBuffer(buf) || buf.length === 0) throw new HttpError(400, 'Chưa chọn được ảnh. Vui lòng chọn ảnh JPG, PNG hoặc WEBP.');
+    const mime = sniffImage(buf);
+    if (!mime) throw new HttpError(400, 'Tệp này không phải ảnh JPG, PNG hay WEBP.');
+    const photoId = randomBytes(16).toString('hex');
+    db.transaction(() => {
+      db.prepare('INSERT INTO proof_photos (id, mime, bytes, size, uploaded_by) VALUES (?, ?, ?, ?, ?)')
+        .run(photoId, mime, buf, buf.length, req.user?.id ?? null);
+      db.prepare("UPDATE orders SET transfer_proof = ?, transfer_reported_at = datetime('now') WHERE id = ?").run(photoId, id);
+      // Gửi lại ảnh khác thì bỏ ảnh cũ.
+      if (order.transfer_proof) db.prepare('DELETE FROM proof_photos WHERE id = ?').run(order.transfer_proof);
+    })();
+    await notifyTransferReported(id);
+    const saved = db.prepare('SELECT transfer_reported_at FROM orders WHERE id = ?').get(id);
+    res.status(201).json({ order: { id, transfer_reported_at: saved.transfer_reported_at } });
+  } catch (err) {
+    next(err);
+  }
+}
+router.post('/:id/transfer-proof', transferUpload, (req, res, next) => (
+  req.get('X-Guest-Token') ? receiveTransferProof(req, res, next) : requireAuth(req, res, () => receiveTransferProof(req, res, next))
+));
+
 router.use(requireAuth);
 router.use(validateRoutes('orders'));
 
@@ -454,7 +503,7 @@ router.get('/', requireAuth, (req, res) => {
   const items = db.prepare(`SELECT ${ORDER_ITEM_COLUMNS} FROM order_items
     WHERE order_id IN (SELECT id FROM orders WHERE user_id = ?)
     ORDER BY order_id, id`).all(req.user.id);
-  for (const order of orders) delete order.guest_token_hash;
+  for (const order of orders) stripPrivate(order);
   res.json({ orders: attachItems(orders, items, 'order_id') });
 });
 
@@ -519,10 +568,18 @@ export function restoreStockForOrder(orderId) {
   if (order?.points_used > 0) refundPoints(order.points_phone, order.points_used);
 }
 
+/** Bỏ các cột nội bộ trước khi trả đơn cho khách (mã băm đơn mua nhanh, mã ảnh chứng từ riêng tư). */
+function stripPrivate(order) {
+  delete order.guest_token_hash;
+  delete order.transfer_proof;
+  delete order.transfer_confirmed_by;
+  return order;
+}
+
 function getOrderForUser(orderId, userId) {
   const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(orderId, userId);
   if (!order) return null;
-  delete order.guest_token_hash;
+  stripPrivate(order);
   order.items = db
     .prepare(`SELECT ${ORDER_ITEM_COLUMNS} FROM order_items WHERE order_id = ? ORDER BY id`)
     .all(order.id);

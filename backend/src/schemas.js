@@ -125,7 +125,7 @@ add('customers', 'PATCH', /^\/[^/]+\/lock\/?$/, obj({ is_locked: flag }));
 add('customers', 'PUT', /^\/[^/]+\/?$/, obj({ full_name: name }));
 add('customers', 'DELETE', /^\/[^/]+\/?$/);
 add('admin', 'GET', /^\/orders\/?$/, empty, obj({
-  limit: integer(1, 300).optional(), offset: page.offset, status: z.enum(ORDER_STATUSES).optional(),
+  limit: integer(1, 300).optional(), offset: page.offset, status: z.enum(ORDER_STATUSES).optional(), transfer: z.enum(['pending']).optional(),
   from: day.optional(), to: day.optional(),
 }));
 add('admin', 'POST', /^\/orders\/?$/, obj({
@@ -148,6 +148,7 @@ add('wholesale', 'PUT', /^\/[^/]+\/prices\/?$/, obj({
 add('wholesale', 'PUT', /^\/[^/]+\/?$/, obj(wholesaleBody));
 add('admin', 'PATCH', /^\/orders\/[^/]+\/status\/?$/, obj({ status: z.enum(ORDER_STATUSES) }));
 add('admin', 'PATCH', /^\/orders\/[^/]+\/shipper\/?$/, obj({ shipper_id: id.nullable() }));
+add('admin', 'PATCH', /^\/orders\/[^/]+\/transfer\/?$/, obj({ confirmed: z.literal(true) }));
 add('admin', 'GET', /^\/shippers\/?$/);
 add('admin', 'GET', /^\/(products|stats)\/?$/);
 add('admin', 'GET', /^\/orders\/latest\/?$/);
@@ -165,6 +166,7 @@ add('admin', 'PUT', /^\/settings\/storefront\/?$/, obj({
   banner_image_url: bannerUrl.nullable().optional(),
   contact_phone: optionalText(LIMITS.phone),
   zalo_phone: optionalText(LIMITS.phone),
+  bank_qr_url: bannerUrl.nullable().optional(),
   branches: z.array(obj({
     name: optionalText(80), address: optionalText(LIMITS.address), phone: optionalText(LIMITS.phone),
   })).max(5).optional(),

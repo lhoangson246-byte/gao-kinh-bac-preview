@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import DeliveryPromise from '../components/DeliveryPromise.jsx';
 import DiscountCodeField from '../components/DiscountCodeField.jsx';
 import ShippingNotice from '../components/ShippingNotice.jsx';
+import TransferBox from '../components/TransferBox.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useCart } from '../context/CartContext.jsx';
 import { useI18n } from '../i18n/index.jsx';
@@ -260,6 +261,7 @@ export default function QuickCheckout() {
               ))}
             </div>
             {form.payment_method === 'bank' && <small className="field-help">{t('checkout.bankHint')}</small>}
+            {form.payment_method === 'bank' && <TransferBox amount={payable} />}
           </fieldset>
 
           {showNote ? (
@@ -364,6 +366,7 @@ function QuickSuccess({ order, token }) {
         <h1>{t('quick.successTitle')}</h1>
         <p className="quick-code">{t('orders.yourCode')} <b>{order.code}</b></p>
         <p>{t('quick.successCall', { phone: formatPhone(order.phone) })}</p>
+        {order.payment_method === 'bank' && <TransferBox amount={order.total} order={order} guestToken={token} />}
         <DeliveryPromise order={order} />
         {order.shipping_fee > 0 && (
           <div className="quick-total-row"><span>{t('cart.shipping')}</span><b>{formatVND(order.shipping_fee)}</b></div>

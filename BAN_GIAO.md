@@ -1598,3 +1598,10 @@ Nhãn **HOT** đỏ tự hiện ở ô nhóm có tên chứa "Đi Chợ Hộ" (�
 - Thay quy tắc cũ "hàng giảm giá tự lên đầu": lần chuyển đổi đầu tiên giữ nguyên thứ tự khách đang thấy (giảm giá trước), sau đó cửa hàng tự sắp; hàng mới giảm giá không tự nhảy lên đầu nữa.
 - Giỏ hàng hiện ảnh sản phẩm, mỗi dòng gọn hơn trên điện thoại (nút "Xoá khỏi giỏ" nằm cạnh giá).
 - Phí giao đơn dưới 100.000đ: **10.000đ** (`SHIPPING_FEE` ở `backend/src/constants.js` và `frontend/src/api.js`). Đơn cũ giữ phí đã tính lúc đặt.
+
+### Chuyển khoản bằng mã QR, khách gửi ảnh đã chuyển (12/11/2026)
+
+- Khách chọn **Chuyển khoản ngân hàng**: thấy mã QR tài khoản cửa hàng và số tiền. Đặt xong, màn hình thành công (và trang Đơn hàng của khách có tài khoản) hiện QR, **mã đơn để ghi nội dung chuyển khoản** (có nút Sao chép) và nút **Gửi ảnh đã chuyển khoản**.
+- Ảnh lưu riêng tư (chỉ người trong cửa hàng xem được). Đơn mua nhanh gửi ảnh bằng mã bí mật nhận lúc đặt; đơn có tài khoản phải đúng chủ đơn.
+- Quản trị: khung xanh "Có N đơn khách báo đã chuyển khoản" → **Xem ngay** lọc đúng các đơn đó; mỗi đơn có **Xem ảnh** và **Xác nhận đã nhận tiền** (quyền xử lý đơn). Người xử lý đơn nhận thông báo đẩy khi khách gửi ảnh.
+- Ảnh QR: mặc định `frontend/public/bank-qr.png` (ảnh cửa hàng gửi, khoảng 100px nên hơi mờ). Đổi ảnh rõ hơn ở Quản trị → Sản phẩm → khung cài đặt trang chủ → "Mã QR chuyển khoản".

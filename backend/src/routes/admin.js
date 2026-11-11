@@ -31,6 +31,7 @@ router.use(requireAuth, requireStaff, accessTable([
   ['POST', /^\/orders\/?$/, ['orders.create']],
   ['PATCH', /^\/orders\/[^/]+\/status\/?$/, ['orders.manage']],
   ['PATCH', /^\/orders\/[^/]+\/shipper\/?$/, ['orders.manage']],
+  ['PATCH', /^\/orders\/[^/]+\/transfer\/?$/, ['orders.manage']],
   ['GET', /^\/shippers\/?$/, ['orders.manage', 'orders.create']],
   ['GET', /^\/stats\/?$/, ['orders.view', 'products.manage']],
   ['GET', /^\/export\/orders\/?$/, ['orders.export']],
@@ -53,7 +54,33 @@ router.get('/orders', (req, res, next) => {
     const from = req.query.from || null;
     const to = req.query.to || req.query.from || null;
     if (from && to && from > to) throw new HttpError(400, '"Từ ngày" phải trước hoặc bằng "đến ngày".');
-    res.json(listAdminOrders({ status, from, to, limit, offset }));
+    res.json(listAdminOrders({ status, from, to, limit, offset, transferPending: req.query.transfer === 'pending' }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PATCH /api/admin/orders/:id/transfer { confirmed: true } — cửa hàng đã kiểm tra tài khoản và nhận
+ * được tiền khách chuyển khoản (có hoặc không có ảnh khách gửi).
+ */
+router.patch('/orders/:id/transfer', (req, res, next) => {
+  try {
+    const id = toInteger(req.params.id, { min: 1 });
+    const order = id && db.prepare('SELECT id, code, payment_method, status, transfer_confirmed_at FROM orders WHERE id = ?').get(id);
+    if (!order) throw new HttpError(404, 'Không tìm thấy đơn hàng.');
+    if (order.payment_method !== 'bank') throw new HttpError(400, 'Đơn này khách trả tiền mặt, không phải chuyển khoản.');
+    if (order.status === 'cancelled') throw new HttpError(400, 'Đơn đã huỷ.');
+    if (!order.transfer_confirmed_at) {
+      db.prepare("UPDATE orders SET transfer_confirmed_at = datetime('now'), transfer_confirmed_by = ? WHERE id = ? AND transfer_confirmed_at IS NULL")
+        .run(req.user.id, id);
+      writeAdminAudit(req, { action: 'confirm_transfer', entityType: 'order', entityId: id, after: { code: order.code } });
+    }
+    const row = db.prepare(`
+      SELECT o.transfer_confirmed_at, u.full_name AS transfer_confirmed_name FROM orders o
+      LEFT JOIN users u ON u.id = o.transfer_confirmed_by WHERE o.id = ?
+    `).get(id);
+    res.json({ order: { id, transfer_confirmed_at: row.transfer_confirmed_at, transfer_confirmed_name: row.transfer_confirmed_name } });
   } catch (err) {
     next(err);
   }
@@ -791,6 +818,13 @@ router.put('/settings/storefront', (req, res, next) => {
       const phone = raw ? normalizePhone(raw) : '';
       if (raw && !phone) errors.contact_phone = 'Số điện thoại không hợp lệ (10 số, ví dụ 0912345678).';
       else updates.push(['contact_phone', phone]);
+    }
+
+    if (body.bank_qr_url !== undefined) {
+      const raw = cleanText(body.bank_qr_url || '', LIMITS.imageUrl) || '';
+      const url = raw ? cleanImageUrl(raw) : '';
+      if (raw && !url) errors.bank_qr_url = 'Đường dẫn ảnh QR phải bắt đầu bằng https:// hoặc / (ảnh tải lên cửa hàng).';
+      else updates.push(['bank_qr_url', url]);
     }
 
     if (body.zalo_phone !== undefined && body.zalo_phone !== null) {

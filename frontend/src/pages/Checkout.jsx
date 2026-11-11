@@ -10,6 +10,7 @@ import {
 import { useI18n } from '../i18n/index.jsx';
 import DiscountCodeField from '../components/DiscountCodeField.jsx';
 import ShippingNotice from '../components/ShippingNotice.jsx';
+import TransferBox from '../components/TransferBox.jsx';
 
 export default function Checkout() {
   const { items, total, hasUnavailable, clear } = useCart();
@@ -209,9 +210,10 @@ export default function Checkout() {
           </div>
 
           {form.payment_method === 'bank' && (
-            <p className="payment-hint" role="status">
-              {t('checkout.bankNotice')}
-            </p>
+            <>
+              <p className="payment-hint" role="status">{t('checkout.bankNotice')}</p>
+              <TransferBox amount={payable} />
+            </>
           )}
 
           {points > 0 && (

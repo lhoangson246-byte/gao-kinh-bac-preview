@@ -79,7 +79,10 @@ export default function Admin() {
   const [filter, setFilter] = useState('pending');
   // Cách xem cố định theo trạng thái (02/11/2026): Chờ xác nhận / Đã xác nhận / Đang giao là thẻ để xử lý
   // từng đơn; Hoàn thành / Đã huỷ / Tất cả là bảng theo ngày.
-  const view = focusCards || ACTIVE_STATUSES.includes(filter) ? 'cards' : 'table';
+  // Lọc riêng các đơn khách đã gửi ảnh chuyển khoản, chờ cửa hàng xác nhận nhận tiền.
+  const [transferOnly, setTransferOnly] = useState(false);
+  const [transferPending, setTransferPending] = useState(0);
+  const view = focusCards || transferOnly || ACTIVE_STATUSES.includes(filter) ? 'cards' : 'table';
   const [stats, setStats] = useState(null);
   const [orders, setOrders] = useState([]);
   const [offset, setOffset] = useState(0);
@@ -115,9 +118,11 @@ export default function Admin() {
       const [statsResult, ordersResult, productsResult] = await Promise.all([
         canOrders || canProducts ? api.adminStats() : Promise.resolve({ stats: null }),
         canOrders
-          ? api.adminOrders(filter, view === 'table'
-            ? { offset: 0, limit: 300, from: dateFrom, to: dateTo || dateFrom }
-            : { offset, from: dateFrom, to: dateTo || dateFrom })
+          ? api.adminOrders(transferOnly ? 'all' : filter, transferOnly
+            ? { offset: 0, limit: 100, transfer: 'pending' }
+            : view === 'table'
+              ? { offset: 0, limit: 300, from: dateFrom, to: dateTo || dateFrom }
+              : { offset, from: dateFrom, to: dateTo || dateFrom })
           : Promise.resolve({ orders: [], counts: {}, total: 0 }),
         canProducts && (refreshProducts || !productsLoaded.current)
           ? Promise.all([api.adminProducts(), api.adminGroups()])
@@ -134,6 +139,7 @@ export default function Admin() {
       setOrders(ordersResult.orders);
       setCounts(ordersResult.counts);
       setOrderTotal(ordersResult.total);
+      setTransferPending(ordersResult.transfer_pending || 0);
       if (productsResult) {
         setProducts(productsResult.products);
         setGroups(productsResult.groups || []);
@@ -144,7 +150,7 @@ export default function Admin() {
     } finally {
       if (id === requestId.current) setLoading(false);
     }
-  }, [filter, offset, canOrders, canProducts, view, dateFrom, dateTo]);
+  }, [filter, offset, canOrders, canProducts, view, dateFrom, dateTo, transferOnly]);
 
   useEffect(() => {
     if (can('debt.view')) api.debts().then((d) => setDebtSummary(d.summary)).catch(() => {});
@@ -237,6 +243,21 @@ export default function Admin() {
   const notify = (message) => {
     setMsg(message);
     window.setTimeout(() => setMsg(''), 2400);
+  };
+
+  const confirmTransfer = async (order) => {
+    if (!window.confirm(`Đã kiểm tra tài khoản và nhận đủ ${formatVND(order.total)} cho đơn ${order.code}?`)) return;
+    setBusyId(order.id);
+    try {
+      const result = await api.adminConfirmTransfer(order.id);
+      setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, ...result.order } : o)));
+      if (order.transfer_reported_at) setTransferPending((n) => Math.max(0, n - 1));
+      notify(`Đã xác nhận nhận tiền chuyển khoản đơn ${order.code}.`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const changeStatus = async (id, status) => {
@@ -652,10 +673,20 @@ export default function Admin() {
                     <ManualOrderForm shippers={shippers} onClose={() => setShowCreate(false)}
                                      onCreated={(order) => { setShowCreate(false); notify(`Đã tạo đơn ${order.code}.`); reload({ refreshProducts: false }); }} />
                   )}
+                  {(transferPending > 0 || transferOnly) && (
+                    <div className={`alert transfer-alert${transferOnly ? ' active' : ''}`} role="status">
+                      💳 {transferOnly
+                        ? <>Đang xem <strong>{transferPending} đơn khách báo đã chuyển khoản</strong>, chờ xác nhận.</>
+                        : <>Có <strong>{transferPending} đơn khách báo đã chuyển khoản</strong>, kiểm tra tài khoản rồi xác nhận.</>}
+                      <button type="button" className="btn btn-primary" onClick={() => { setTransferOnly((v) => !v); setOffset(0); }}>
+                        {transferOnly ? 'Xem tất cả đơn' : 'Xem ngay'}
+                      </button>
+                    </div>
+                  )}
                   <div className="filter-bar" aria-label="Lọc đơn theo trạng thái">
                     {FILTERS.map(([value, label]) => {
                       const count = counts[value] || 0;
-                      return <button key={value} className={filter === value ? 'active' : ''} onClick={() => pickFilter(value)}>{label} <span>{count}</span></button>;
+                      return <button key={value} className={filter === value && !transferOnly ? 'active' : ''} onClick={() => { setTransferOnly(false); pickFilter(value); }}>{label} <span>{count}</span></button>;
                     })}
                     {can('debt.view') && (
                       <Link to="/quan-tri/cong-no" className={`debt-link${debtSummary?.overdue_count ? ' overdue' : ''}`}>
@@ -737,6 +768,23 @@ export default function Admin() {
                                 )}
                                 <div className="admin-order-total"><span>Khách trả</span><strong>{formatVND(order.total)}</strong></div>
                                 <small className="payment-label">{order.payment_method === 'bank' ? 'Khách chọn chuyển khoản' : 'Thanh toán khi nhận hàng'}</small>
+                                {order.payment_method === 'bank' && order.status !== 'cancelled' && (order.transfer_confirmed_at ? (
+                                  <small className="transfer-tag ok">✓ Đã nhận tiền chuyển khoản · {formatDateTime(order.transfer_confirmed_at)}{order.transfer_confirmed_name ? ` · ${order.transfer_confirmed_name}` : ''}</small>
+                                ) : (
+                                  <div className={`transfer-tag${order.transfer_reported_at ? ' reported' : ''}`}>
+                                    <span>
+                                      {order.transfer_reported_at
+                                        ? <>💳 Khách báo đã chuyển khoản · {formatDateTime(order.transfer_reported_at)}</>
+                                        : 'Chưa có ảnh chuyển khoản'}
+                                      {order.transfer_proof && <> · <a href={order.transfer_proof} target="_blank" rel="noopener noreferrer">Xem ảnh</a></>}
+                                    </span>
+                                    {canManageOrders && (
+                                      <button type="button" className="btn btn-secondary" disabled={busyId === order.id} onClick={() => confirmTransfer(order)}>
+                                        Xác nhận đã nhận tiền
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
                                 {order.status === 'completed'
                                   ? <small className="payment-label points">Đã cộng {order.points_earned || 0} điểm cho {order.phone}</small>
                                   : order.status === 'cancelled'

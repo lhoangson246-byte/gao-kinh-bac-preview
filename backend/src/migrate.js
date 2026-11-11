@@ -1070,6 +1070,15 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(deleteTestOrd
   })();
 }
 
+  // Chuyển khoản (12/11/2026): khách gửi ảnh đã chuyển khoản, cửa hàng xác nhận đã nhận tiền sau.
+  {
+    const cols = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
+    if (!cols.includes('transfer_proof')) db.exec('ALTER TABLE orders ADD COLUMN transfer_proof TEXT');
+    if (!cols.includes('transfer_reported_at')) db.exec('ALTER TABLE orders ADD COLUMN transfer_reported_at TEXT');
+    if (!cols.includes('transfer_confirmed_at')) db.exec('ALTER TABLE orders ADD COLUMN transfer_confirmed_at TEXT');
+    if (!cols.includes('transfer_confirmed_by')) db.exec('ALTER TABLE orders ADD COLUMN transfer_confirmed_by INTEGER REFERENCES users(id)');
+  }
+
   // Thứ tự toàn bộ sản phẩm trên trang chủ (12/11/2026), kéo thả ở trang quản trị. Ban đầu giữ đúng thứ tự
   // khách đang thấy: hàng đang giảm giá trước, rồi theo mã sản phẩm.
   if (!db.prepare('PRAGMA table_info(products)').all().some((c) => c.name === 'sort_order')) {

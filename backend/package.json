@@ -22,6 +22,7 @@
     "test:promo": "node test/promo-2010.mjs",
     "test:push": "node test/push.mjs",
     "test:about": "node test/about-track.mjs",
+    "test:transfer": "node test/transfer.mjs",
     "test:wholesale": "node test/wholesale.mjs",
     "test:group-order": "node test/group-order.mjs",
     "test:attendance": "node test/attendance.mjs",
