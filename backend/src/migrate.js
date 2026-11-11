@@ -1070,6 +1070,12 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(deleteTestOrd
   })();
 }
 
+  // Thứ tự sản phẩm trong từng nhóm (11/11/2026), kéo thả ở trang quản trị. Ban đầu theo mã sản phẩm.
+  if (!db.prepare('PRAGMA table_info(product_group_items)').all().some((c) => c.name === 'sort_order')) {
+    db.exec('ALTER TABLE product_group_items ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0');
+    db.prepare('UPDATE product_group_items SET sort_order = product_id').run();
+  }
+
   // Chấm công (11/11/2026): mỗi người một dòng mỗi ngày; giờ lưu UTC, ngày công theo giờ Việt Nam.
   db.exec(`
     CREATE TABLE IF NOT EXISTS attendance (

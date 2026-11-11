@@ -203,6 +203,7 @@ export const api = {
   adminCreateGroup: (name) => request('/admin/groups', { method: 'POST', body: { name }, auth: true }),
   adminUpdateGroup: (id, payload) => request(`/admin/groups/${id}`, { method: 'PUT', body: payload, auth: true }),
   adminReorderGroups: (ids) => request('/admin/groups/reorder', { method: 'POST', body: { ids }, auth: true }),
+  adminReorderGroupProducts: (id, productIds) => request(`/admin/groups/${id}/order`, { method: 'POST', body: { product_ids: productIds }, auth: true }),
   adminDeleteGroup: (id) => request(`/admin/groups/${id}`, { method: 'DELETE', auth: true }),
   adminCreateProduct: (payload) => request('/admin/products', { method: 'POST', body: payload, auth: true }),
   adminUpdateProduct: (id, payload) =>

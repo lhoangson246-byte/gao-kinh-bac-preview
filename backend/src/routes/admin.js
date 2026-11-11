@@ -217,7 +217,7 @@ router.get('/products', (req, res) => {
  * ------------------------------------------------------------------ */
 const groupWithProducts = () => {
   const members = new Map();
-  for (const row of db.prepare('SELECT group_id, product_id FROM product_group_items').all()) {
+  for (const row of db.prepare('SELECT group_id, product_id FROM product_group_items ORDER BY group_id, sort_order, product_id').all()) {
     if (!members.has(row.group_id)) members.set(row.group_id, []);
     members.get(row.group_id).push(row.product_id);
   }
@@ -293,17 +293,49 @@ router.put('/groups/:id', (req, res, next) => {
       }
       if (Array.isArray(body.product_ids)) {
         const ids = [...new Set(body.product_ids.map((v) => toInteger(v, { min: 1 })).filter(Boolean))];
-        db.prepare('DELETE FROM product_group_items WHERE group_id = ?').run(id);
+        // Giữ thứ tự đã kéo thả của sản phẩm vẫn còn trong nhóm; sản phẩm mới chọn xếp cuối.
+        const current = db.prepare('SELECT product_id FROM product_group_items WHERE group_id = ?').all(id).map((r) => r.product_id);
+        const remove = db.prepare('DELETE FROM product_group_items WHERE group_id = ? AND product_id = ?');
+        for (const productId of current) if (!ids.includes(productId)) remove.run(id, productId);
+        let order = db.prepare('SELECT COALESCE(MAX(sort_order), 0) AS n FROM product_group_items WHERE group_id = ?').get(id).n;
         const insert = db.prepare(`
-          INSERT OR IGNORE INTO product_group_items (group_id, product_id)
-          SELECT ?, id FROM products WHERE id = ?
+          INSERT OR IGNORE INTO product_group_items (group_id, product_id, sort_order)
+          SELECT ?, id, ? FROM products WHERE id = ?
         `);
-        for (const productId of ids) insert.run(id, productId);
+        for (const productId of ids) if (!current.includes(productId)) insert.run(id, ++order, productId);
       }
     })();
     const group = groupWithProducts().find((g) => g.id === id);
     writeAdminAudit(req, { action: 'update', entityType: 'product_group', entityId: id, before, after: group });
     res.json({ group });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/admin/groups/:id/order { product_ids } — xếp thứ tự sản phẩm trong nhóm (kéo thả). Chỉ nhận
+ * sản phẩm đang thuộc nhóm; sản phẩm của nhóm không có trong danh sách giữ thứ tự cũ, xếp sau.
+ */
+router.post('/groups/:id/order', (req, res, next) => {
+  try {
+    const id = toInteger(req.params.id, { min: 1 });
+    const before = id ? groupWithProducts().find((g) => g.id === id) : null;
+    if (!before) throw new HttpError(404, 'Không tìm thấy nhóm.');
+    const ids = (Array.isArray(req.body?.product_ids) ? req.body.product_ids : []).map((v) => toInteger(v, { min: 1 }));
+    if (!ids.length || ids.some((v) => !v) || new Set(ids).size !== ids.length) {
+      throw new HttpError(400, 'Danh sách sản phẩm không hợp lệ.');
+    }
+    if (ids.some((productId) => !before.product_ids.includes(productId))) {
+      throw new HttpError(400, 'Có sản phẩm không thuộc nhóm này. Vui lòng tải lại trang.');
+    }
+    const order = [...ids, ...before.product_ids.filter((productId) => !ids.includes(productId))];
+    db.transaction(() => {
+      const update = db.prepare('UPDATE product_group_items SET sort_order = ? WHERE group_id = ? AND product_id = ?');
+      order.forEach((productId, index) => update.run(index + 1, id, productId));
+    })();
+    writeAdminAudit(req, { action: 'reorder_products', entityType: 'product_group', entityId: id, before: { product_ids: before.product_ids }, after: { product_ids: order } });
+    res.json({ groups: groupWithProducts() });
   } catch (err) {
     next(err);
   }

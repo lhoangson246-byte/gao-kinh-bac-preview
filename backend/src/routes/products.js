@@ -43,10 +43,14 @@ router.get('/', (req, res) => {
          AND (name LIKE ? ESCAPE '\\'
               OR IFNULL(origin, '') LIKE ? ESCAPE '\\'
               OR IFNULL(description, '') LIKE ? ESCAPE '\\')
-       -- Còn hàng lên trước, rồi trong đó hàng đang giảm giá lên đầu tiên.
-       ORDER BY stock > 0 DESC, (original_price > price AND price > 0) DESC, id`
+       -- Còn hàng lên trước. Lọc theo nhóm cửa hàng tạo: đúng thứ tự đã kéo thả trong nhóm;
+       -- còn lại: hàng đang giảm giá lên đầu tiên.
+       ORDER BY stock > 0 DESC, ${groupParams.length
+         ? `(SELECT gi.sort_order FROM product_group_items gi JOIN product_groups g ON g.id = gi.group_id
+              WHERE g.slug = ? AND gi.product_id = products.id),`
+         : '(original_price > price AND price > 0) DESC,'} id`
     )
-    .all(...groupParams, pattern, pattern, pattern);
+    .all(...groupParams, pattern, pattern, pattern, ...groupParams);
 
   // Chỉ danh mục công khai: đơn hàng vẫn tự đọc lại giá và tồn kho trong transaction.
   res.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=300');

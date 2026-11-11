@@ -1573,3 +1573,10 @@ Nhãn **HOT** đỏ tự hiện ở ô nhóm có tên chứa "Đi Chợ Hộ" (�
 - Quyền mới **Chấm công** (`attendance.manage`, có sẵn trong mẫu Kế toán): xem bảng công cả tháng của mọi người, bấm vào ô để sửa / bổ sung giờ cho người quên chấm (bắt buộc ghi lý do, có nhật ký). Không tự sửa công của chính mình, trừ chủ cửa hàng.
 - **Tài khoản kế toán tạo trước ngày này chưa có quyền Chấm công**: vào Quản trị → Nhân viên, tick "Chấm công" cho kế toán / quản lý.
 - Trang giao hàng, công nợ, chấm công có hàng tab dưới thanh trên cùng để chuyển qua lại, hiện cả trên điện thoại.
+
+### Sản phẩm theo nhóm, kéo thả thứ tự (11/11/2026)
+
+- Tab **Sản phẩm** chia sản phẩm theo nhóm gạo. Mỗi nhóm gập lại, **bấm vào nhóm mới hiện sản phẩm**; bấm lần nữa để gập. Cuối danh sách có "Chưa thuộc nhóm nào" và "Tất cả sản phẩm".
+- Trong nhóm, **nắm ⠿ rồi kéo lên, xuống** để đổi thứ tự (chuột, ngón tay, hoặc mũi tên lên/xuống). Khách lọc theo nhóm trên trang chủ thấy đúng thứ tự này; hàng hết vẫn xuống cuối.
+- Thứ tự lưu ở `product_group_items.sort_order`. Thêm sản phẩm vào nhóm (nút "Chọn sản phẩm" hoặc tick trong form sửa) thì xếp cuối nhóm, bỏ bớt thì phần còn lại giữ nguyên thứ tự.
+- Một sản phẩm thuộc nhiều nhóm thì có thứ tự riêng trong từng nhóm. Muốn chuyển sản phẩm sang nhóm khác: dùng "Chọn sản phẩm" hoặc tick nhóm trong form sửa.

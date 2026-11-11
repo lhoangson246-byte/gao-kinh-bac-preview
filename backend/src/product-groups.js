@@ -64,10 +64,17 @@ export function groupIdsOf(productId) {
  */
 export function setProductGroups(productId, groupIds) {
   const ids = [...new Set(groupIds.map(Number).filter((n) => Number.isSafeInteger(n) && n > 0))];
-  db.prepare('DELETE FROM product_group_items WHERE product_id = ?').run(productId);
-  if (!ids.length) return;
-  const valid = db.prepare(`SELECT id FROM product_groups WHERE id IN (${ids.map(() => '?').join(', ')})`)
-    .all(...ids).map((r) => r.id);
-  const insert = db.prepare('INSERT OR IGNORE INTO product_group_items (group_id, product_id) VALUES (?, ?)');
-  for (const groupId of valid) insert.run(groupId, productId);
+  // Chỉ bỏ nhóm bị bỏ tick và thêm nhóm mới (xếp cuối nhóm), để thứ tự đã kéo thả trong nhóm cũ giữ nguyên.
+  const current = db.prepare('SELECT group_id FROM product_group_items WHERE product_id = ?').all(productId).map((r) => r.group_id);
+  const remove = db.prepare('DELETE FROM product_group_items WHERE group_id = ? AND product_id = ?');
+  for (const groupId of current) if (!ids.includes(groupId)) remove.run(groupId, productId);
+  const added = ids.filter((id) => !current.includes(id));
+  if (!added.length) return;
+  const valid = db.prepare(`SELECT id FROM product_groups WHERE id IN (${added.map(() => '?').join(', ')})`)
+    .all(...added).map((r) => r.id);
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO product_group_items (group_id, product_id, sort_order)
+    SELECT ?, ?, COALESCE(MAX(sort_order), 0) + 1 FROM product_group_items WHERE group_id = ?
+  `);
+  for (const groupId of valid) insert.run(groupId, productId, groupId);
 }

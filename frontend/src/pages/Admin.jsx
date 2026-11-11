@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 const ImagePicker = lazy(() => import('../components/ImagePicker.jsx'));
 const BannerSettings = lazy(() => import('../components/BannerSettings.jsx'));
 const GroupManager = lazy(() => import('../components/GroupManager.jsx'));
+const ProductsByGroup = lazy(() => import('../components/ProductsByGroup.jsx'));
 import OrderAlerts from '../components/OrderAlerts.jsx';
 import PushSettings from '../components/PushSettings.jsx';
 import { api, salePercent, PRODUCT_CATEGORIES, formatDateTime, formatVND, pointsForLines, mapLink, STATUS_LABEL, DELIVERY_SLOT_LABEL, deliveryDateLabel, vietnamDate } from '../api';
@@ -406,6 +407,61 @@ export default function Admin() {
       setBusyId(null);
     }
   };
+
+  /** Một dòng sản phẩm trong tab Sản phẩm (dùng cho cả xem theo nhóm và danh sách tất cả). */
+  const renderProduct = (product) => (
+    <article className={`admin-product ${product.is_active ? '' : 'inactive'}`}>
+      <div className="admin-product-icon">
+        <ProductImage src={product.image_url} sizes="64px" />
+      </div>
+      <div className="admin-product-info">
+        <h2>{product.name}</h2>
+        <p>
+          {product.origin || 'Chưa có xuất xứ'} ·{' '}
+          {product.price > 0
+            ? `${formatVND(product.price)}/${product.unit}`
+            : <span className="price-pending">Chưa có giá</span>}
+          {product.cost_price > 0 && product.price > 0 && (
+            <span className="margin-tag"> · lãi {formatVND(product.price - product.cost_price)}</span>
+          )}
+        </p>
+        {(salePercent(product) > 0 || product.category === 'do-kho' || product.points_per_unit != null || !!product.is_reward || product.group_ids?.length > 0) && (
+          <p className="product-tags">
+            {groups.filter((g) => product.group_ids?.includes(g.id)).map((g) => (
+              <span key={g.id} className="admin-group-tag">{g.name}</span>
+            ))}
+            {product.points_per_unit != null && (
+              <span className="admin-points-tag">
+                {product.points_per_unit > 0 ? `★ ${product.points_per_unit} điểm/${product.unit}` : 'Không cộng điểm'}
+              </span>
+            )}
+            {!!product.is_reward && <span className="admin-reward-tag">Quà đổi điểm</span>}
+            {salePercent(product) > 0 && (
+              <span className="admin-sale-tag">Giảm {salePercent(product)}% · giá gốc {formatVND(product.original_price)}</span>
+            )}
+            {product.category === 'do-kho' && <span className="admin-category-tag">Thực phẩm khô</span>}
+          </p>
+        )}
+      </div>
+      <div className="inventory">
+        <span>Còn trong kho</span>
+        <strong className={product.is_active && product.stock <= 10 ? 'low-stock' : ''}>
+          {product.stock} {product.unit}
+          {product.is_active && product.stock <= 0 && ' · đã hết'}
+        </strong>
+      </div>
+      <span className={`visibility ${product.is_active ? 'shown' : ''}`}>{product.is_active ? 'Đang bán' : 'Đang ẩn'}</span>
+      <div className="product-actions">
+        <button className="btn btn-primary" onClick={() => setReceiving(product)}>Nhập kho</button>
+        <button className="btn btn-secondary" onClick={() => editProduct(product)}>Sửa</button>
+        {product.is_active
+          ? <button className="btn btn-danger-ghost" disabled={busyId === product.id} onClick={() => hideProduct(product)}>Ẩn</button>
+          : <button className="btn btn-primary" disabled={busyId === product.id} onClick={() => restoreProduct(product)}>Bán lại</button>}
+        <button className="btn btn-danger" disabled={busyId === product.id}
+                onClick={() => destroyProduct(product)}>Xoá hẳn</button>
+      </div>
+    </article>
+  );
 
   if (!firstTab) {
     if (can('delivery')) return <Navigate to="/quan-tri/giao-hang" replace />;
@@ -862,61 +918,9 @@ export default function Admin() {
                     </div>
                   )}
 
-                  <div className="product-admin-list">
-                    {products.map((product) => (
-                      <article key={product.id} className={`admin-product ${product.is_active ? '' : 'inactive'}`}>
-                        <div className="admin-product-icon">
-                          <ProductImage src={product.image_url} sizes="64px" />
-                        </div>
-                        <div className="admin-product-info">
-                          <h2>{product.name}</h2>
-                          <p>
-                            {product.origin || 'Chưa có xuất xứ'} ·{' '}
-                            {product.price > 0
-                              ? `${formatVND(product.price)}/${product.unit}`
-                              : <span className="price-pending">Chưa có giá</span>}
-                            {product.cost_price > 0 && product.price > 0 && (
-                              <span className="margin-tag"> · lãi {formatVND(product.price - product.cost_price)}</span>
-                            )}
-                          </p>
-                          {(salePercent(product) > 0 || product.category === 'do-kho' || product.points_per_unit != null || !!product.is_reward || product.group_ids?.length > 0) && (
-                            <p className="product-tags">
-                              {groups.filter((g) => product.group_ids?.includes(g.id)).map((g) => (
-                                <span key={g.id} className="admin-group-tag">{g.name}</span>
-                              ))}
-                              {product.points_per_unit != null && (
-                                <span className="admin-points-tag">
-                                  {product.points_per_unit > 0 ? `★ ${product.points_per_unit} điểm/${product.unit}` : 'Không cộng điểm'}
-                                </span>
-                              )}
-                              {!!product.is_reward && <span className="admin-reward-tag">Quà đổi điểm</span>}
-                              {salePercent(product) > 0 && (
-                                <span className="admin-sale-tag">Giảm {salePercent(product)}% · giá gốc {formatVND(product.original_price)}</span>
-                              )}
-                              {product.category === 'do-kho' && <span className="admin-category-tag">Thực phẩm khô</span>}
-                            </p>
-                          )}
-                        </div>
-                        <div className="inventory">
-                          <span>Còn trong kho</span>
-                          <strong className={product.is_active && product.stock <= 10 ? 'low-stock' : ''}>
-                            {product.stock} {product.unit}
-                            {product.is_active && product.stock <= 0 && ' · đã hết'}
-                          </strong>
-                        </div>
-                        <span className={`visibility ${product.is_active ? 'shown' : ''}`}>{product.is_active ? 'Đang bán' : 'Đang ẩn'}</span>
-                        <div className="product-actions">
-                          <button className="btn btn-primary" onClick={() => setReceiving(product)}>Nhập kho</button>
-                          <button className="btn btn-secondary" onClick={() => editProduct(product)}>Sửa</button>
-                          {product.is_active
-                            ? <button className="btn btn-danger-ghost" disabled={busyId === product.id} onClick={() => hideProduct(product)}>Ẩn</button>
-                            : <button className="btn btn-primary" disabled={busyId === product.id} onClick={() => restoreProduct(product)}>Bán lại</button>}
-                          <button className="btn btn-danger" disabled={busyId === product.id}
-                                  onClick={() => destroyProduct(product)}>Xoá hẳn</button>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
+                  {products.length > 0 && (
+                    <ProductsByGroup groups={groups} products={products} renderProduct={renderProduct} onReordered={setGroups} />
+                  )}
                 </section>
               )}
             </>

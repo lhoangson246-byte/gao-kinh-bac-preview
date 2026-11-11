@@ -138,6 +138,7 @@ add('admin', 'GET', /^\/orders\/latest\/?$/);
 add('admin', 'GET', /^\/groups\/?$/);
 add('admin', 'POST', /^\/groups\/?$/, obj({ name: text(60) }));
 add('admin', 'POST', /^\/groups\/reorder\/?$/, obj({ ids: z.array(id).min(1).max(30) }));
+add('admin', 'POST', /^\/groups\/[^/]+\/order\/?$/, obj({ product_ids: z.array(id).min(1).max(500) }));
 add('admin', 'PUT', /^\/groups\/[^/]+\/?$/, obj({
   name: text(60).optional(), is_active: flag.optional(), product_ids: z.array(id).max(500).optional(),
 }));

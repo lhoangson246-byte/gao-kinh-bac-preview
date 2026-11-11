@@ -1849,3 +1849,36 @@ label b { color: var(--danger); }
 .staff-nav { display: flex; gap: 6px; overflow-x: auto; padding: 8px clamp(14px, 3vw, 32px); border-bottom: 1px solid #d9d7cf; background: var(--paper); scrollbar-width: none; }
 .staff-nav a { flex: 0 0 auto; padding: 7px 13px; border: 1px solid var(--border); border-radius: 99px; background: var(--white); color: var(--green-950); font-size: .82rem; font-weight: 750; text-decoration: none; white-space: nowrap; }
 .staff-nav a.active { border-color: var(--green-950); background: var(--green-950); color: #fff; }
+
+/* --- Tab Sản phẩm: sản phẩm chia theo nhóm, mỗi nhóm gập lại --- */
+.group-sections { display: grid; gap: 8px; margin-top: 14px; }
+.group-sections-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-bottom: 2px; }
+.group-sections-head h2 { margin: 0; font-size: 1.15rem; }
+.group-section { border: 1px solid var(--border); border-radius: 12px; background: var(--white); }
+.group-section.open { border-color: #c9d9cd; box-shadow: 0 6px 18px rgba(34, 48, 38, .07); }
+.group-section.plain { background: #faf9f5; }
+.group-section-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; width: 100%; min-height: 52px; padding: 10px 14px; border: 0; border-radius: 12px; background: none; color: var(--green-950); text-align: left; cursor: pointer; }
+.group-section-head:hover { background: var(--green-100); }
+.group-section-head:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.group-section-head strong { font-size: .98rem; }
+.group-section-chevron { width: 16px; color: var(--muted); }
+.group-section-count { color: var(--muted); font-size: .8rem; }
+.group-section-hidden { padding: 1px 8px; border-radius: 99px; background: #f3efe6; color: var(--muted); font-size: .72rem; font-weight: 700; }
+.group-section-body { padding: 0 10px 10px; }
+.group-section-empty { margin: 4px 4px 10px; font-size: .82rem; }
+.group-product-list { display: grid; gap: 8px; }
+.group-product-list.sorting { user-select: none; }
+.group-product-row { display: flex; align-items: center; gap: 4px; border-radius: 14px; }
+.group-product-row > .admin-product { flex: 1; min-width: 0; margin: 0; }
+.group-product-row.dragging { position: relative; z-index: 2; box-shadow: 0 10px 24px rgba(34, 48, 38, .2); }
+.group-product-row.dragging > .admin-product { border-color: var(--gold); background: #fffaf0; }
+.group-section .product-admin-list { margin: 0; }
+@media (max-width: 760px) {
+  /* Trong khung nhóm dòng hẹp hơn (thêm tay nắm), nên bốn nút chia đều cả hàng dưới tên sản phẩm. */
+  .group-section-body { padding: 0 6px 8px; }
+  .group-product-row { gap: 2px; }
+  .group-product-row .group-grip { flex-basis: 24px; width: 24px; }
+  .group-section .admin-product { padding: 10px; }
+  .group-section .product-actions { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+  .group-section .product-actions .btn { min-height: 38px; padding: 4px 2px; font-size: .76rem; line-height: 1.15; white-space: normal; }
+}
