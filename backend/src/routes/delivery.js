@@ -18,7 +18,7 @@ const router = Router();
 router.use(requireAuth, requirePermission('delivery'));
 router.use(validateRoutes('delivery'));
 
-const ORDER_COLUMNS = `id, code, status, receiver_name, phone, address, note, delivery_slot, delivery_lat, delivery_lng,
+const ORDER_COLUMNS = `id, code, status, receiver_name, phone, address, note, delivery_slot, delivery_lat, delivery_lng, map_url,
   payment_method, payment_status, total, fulfillment, created_at, confirmed_at, shipping_at, completed_at, cancelled_at, delivery_photo`;
 
 /** Ảnh chứng từ phải do chính nhân viên này vừa chụp và tải lên. */

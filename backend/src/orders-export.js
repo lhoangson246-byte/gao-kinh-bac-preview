@@ -86,9 +86,9 @@ export async function buildOrdersWorkbook(period, { status = null } = {}) {
       const online = channel === 'Online';
       // Đơn online đã gộp voucher vào cột discount; hoá đơn quầy để voucher ở cột riêng.
       const discount = online ? order.discount : order.discount + (order.voucher_discount || 0);
-      const mapLink = online && order.delivery_lat != null && order.delivery_lng != null
+      const mapLink = !online ? '' : order.map_url || (order.delivery_lat != null && order.delivery_lng != null
         ? `https://www.google.com/maps/search/?api=1&query=${order.delivery_lat},${order.delivery_lng}`
-        : '';
+        : '');
       orders.addRow([
         order.code, order.day, order.clock, online && order.is_guest ? 'Online · mua nhanh' : channel,
         online ? statusNames[order.status] : 'Hoàn thành',

@@ -9,12 +9,12 @@ import db from './db.js';
 export const WHOLESALE_CODE_RE = /^kb\d{4,}$/i;
 export const wholesaleCode = (id) => `KB${String(id).padStart(4, '0')}`;
 
-const COLUMNS = `w.id, w.code, w.company, w.contact_name, w.phone, w.address, w.note, w.is_active, w.user_id,
+const COLUMNS = `w.id, w.code, w.company, w.contact_name, w.phone, w.address, w.map_url, w.note, w.is_active, w.user_id,
   w.created_at, w.updated_at, u.full_name AS login_name`;
 
 export const shapeWholesale = (row) => row && ({
   id: row.id, code: row.code, company: row.company, contact_name: row.contact_name, phone: row.phone,
-  address: row.address || null, note: row.note || null, is_active: row.is_active ? 1 : 0,
+  address: row.address || null, map_url: row.map_url || null, note: row.note || null, is_active: row.is_active ? 1 : 0,
   has_login: !!row.user_id, price_count: row.price_count ?? undefined,
   created_at: row.created_at, updated_at: row.updated_at || null,
 });

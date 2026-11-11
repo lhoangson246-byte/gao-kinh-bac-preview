@@ -20,6 +20,7 @@ import {
   MAX_GROUPS, groupIdsByProduct, groupIdsOf, listGroups, setProductGroups, uniqueSlug,
 } from '../product-groups.js';
 import { getWholesale, wholesalePrices } from '../wholesale.js';
+import { parseMapLink } from '../map-link.js';
 
 const router = Router();
 
@@ -148,6 +149,9 @@ router.post('/orders', async (req, res, next) => {
       else if (mentionsOtherProvince(raw)) errors.address = 'Cửa hàng chỉ giao trong tỉnh Bắc Ninh.';
       else address = normalizeBacNinhAddress(raw);
     }
+    // Định vị khách gửi (link Google Maps hoặc toạ độ): chỉ cần khi giao tận nơi.
+    const map = homeDelivery ? parseMapLink(body.map_url) : { url: null };
+    if (map.error) errors.map_url = map.error;
     const slot = body.delivery_slot || null;
     if (slot && !DELIVERY_SLOT_CODES.includes(slot)) errors.delivery_slot = 'Khung giờ giao không hợp lệ.';
     const payment = body.payment_method || 'cod';
@@ -192,6 +196,7 @@ router.post('/orders', async (req, res, next) => {
       receiverName,
       customerPhone: phone,
       deliveryAddress: address,
+      mapUrl: map.url,
       customerNote: cleanText(body.note, LIMITS.note),
       paymentMethod: payment,
       deliverySlot: slot,

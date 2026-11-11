@@ -1605,3 +1605,13 @@ Nhãn **HOT** đỏ tự hiện ở ô nhóm có tên chứa "Đi Chợ Hộ" (�
 - Ảnh lưu riêng tư (chỉ người trong cửa hàng xem được). Đơn mua nhanh gửi ảnh bằng mã bí mật nhận lúc đặt; đơn có tài khoản phải đúng chủ đơn.
 - Quản trị: khung xanh "Có N đơn khách báo đã chuyển khoản" → **Xem ngay** lọc đúng các đơn đó; mỗi đơn có **Xem ảnh** và **Xác nhận đã nhận tiền** (quyền xử lý đơn). Người xử lý đơn nhận thông báo đẩy khi khách gửi ảnh.
 - Ảnh QR: mặc định `frontend/public/bank-qr.png` (ảnh cửa hàng gửi, khoảng 100px nên hơi mờ). Đổi ảnh rõ hơn ở Quản trị → Sản phẩm → khung cài đặt trang chủ → "Mã QR chuyển khoản".
+
+### Định vị Google Maps khi tạo đơn, thêm khách kèm gạo hay đặt và giá cố định (12/11/2026)
+
+- Form **+ Tạo đơn** (Quản trị → Đơn hàng) có ô **Định vị (link Google Maps)** ngay dưới Địa chỉ giao. Dán link khách gửi qua Zalo (dán kèm chữ cũng được) hoặc toạ độ dạng `21.1861,106.0763`. Dán đúng sẽ hiện "Đã nhận định vị" và link **Mở thử trên bản đồ**.
+- Chỉ nhận link Google Maps (`maps.app.goo.gl`, `goo.gl/maps`, `google.com/maps`, `maps.google.com`). Máy chủ kiểm tra lại (`backend/src/map-link.js`); link trang khác bị từ chối.
+- Định vị lưu ở `orders.map_url`. Thẻ đơn trong quản trị có **Mở định vị khách gửi**; trang giao hàng nút **Chỉ đường** mở đúng vị trí này; thông báo đơn và file Excel cũng dùng link này.
+- Chọn **Khách buôn** trong form tạo đơn: nút **+ Thêm khách mới** mở form thêm khách ngay tại chỗ (cần quyền quản lý khách buôn). Một lần lưu gồm: tên công ty, người liên hệ, số điện thoại, địa chỉ, định vị, ghi chú và **Gạo hay đặt và giá cố định**. Lưu xong quay lại đơn, khách được chọn sẵn, địa chỉ và định vị tự điền.
+- **Gạo hay đặt** chính là bảng giá riêng của khách (`wholesale_prices`). Khi tạo đơn, các loại này hiện thành nút bấm, bấm là thêm vào đơn với đúng giá cố định. Nút **Sửa khách / giá** sửa ngay trong form đơn, không mất các dòng hàng đang nhập.
+- Quản trị → Khách buôn dùng chung form này (`frontend/src/components/WholesaleCustomerForm.jsx`); danh sách có link **Mở định vị**. Bảng "Giá riêng" đầy đủ vẫn còn.
+- Kiểm thử: `npm --prefix backend run test:map`.

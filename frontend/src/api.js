@@ -337,6 +337,35 @@ export function mapLink(lat, lng) {
   return `https://www.google.com/maps/search/?api=1&query=${Number(lat)},${Number(lng)}`;
 }
 
+/**
+ * Định vị nhân viên dán vào (link Google Maps, kể cả dán kèm chữ, hoặc toạ độ "21.18,106.07"): trả về
+ * link mở được, hoặc '' nếu chưa đúng. Cùng quy tắc với backend/src/map-link.js; máy chủ kiểm tra lại.
+ */
+export function pastedMapLink(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return '';
+  const coords = /^(-?\d{1,2}(?:\.\d+)?)\s*[,;]\s*(-?\d{1,3}(?:\.\d+)?)$/.exec(text);
+  if (coords) {
+    const lat = Number(coords[1]);
+    const lng = Number(coords[2]);
+    return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}` : '';
+  }
+  const found = /https?:\/\/[^\s<>"']+/i.exec(text);
+  if (!found) return '';
+  try {
+    const url = new URL(found[0].replace(/[.,;:!?)\]]+$/, ''));
+    url.protocol = 'https:';
+    const host = url.hostname.toLowerCase();
+    const path = url.pathname;
+    const ok = host === 'maps.app.goo.gl' ? path.length > 1
+      : host === 'goo.gl' ? path.startsWith('/maps/')
+      : /^(www\.|maps\.)?google\.com(\.vn)?$/.test(host) && (host.startsWith('maps.') || path === '/maps' || path.startsWith('/maps/'));
+    return ok && !url.username && !url.password && !url.port && url.href.length <= 1000 ? url.href : '';
+  } catch {
+    return '';
+  }
+}
+
 export const DELIVERY_AREA_CODE = 'bac-ninh';
 export const DELIVERY_AREA_LABEL = 'Bắc Ninh';
 

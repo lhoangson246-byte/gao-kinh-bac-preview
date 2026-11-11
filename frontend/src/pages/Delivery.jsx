@@ -8,7 +8,7 @@ import StaffNav from '../components/StaffNav.jsx';
 
 const REFRESH_MS = 30_000;
 const formatPhone = (phone) => String(phone || '').replace(/^(\d{4})(\d{3})(\d{3})$/, '$1 $2 $3');
-const directions = (order) => mapLink(order.delivery_lat, order.delivery_lng)
+const directions = (order) => order.map_url || mapLink(order.delivery_lat, order.delivery_lng)
   || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.address)}`;
 
 /**
@@ -124,7 +124,7 @@ export default function Delivery() {
                 <>
                   <p className="delivery-address">🏠 {order.address}</p>
                   <a className="btn btn-secondary btn-block" href={directions(order)} target="_blank" rel="noopener noreferrer">
-                    🗺️ {order.delivery_lat ? 'Chỉ đường tới vị trí khách ghim' : 'Tìm địa chỉ trên Google Maps'}
+                    🗺️ {order.map_url ? 'Chỉ đường tới định vị khách gửi' : order.delivery_lat ? 'Chỉ đường tới vị trí khách ghim' : 'Tìm địa chỉ trên Google Maps'}
                   </a>
                 </>
               )}

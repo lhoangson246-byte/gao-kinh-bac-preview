@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, DELIVERY_SLOTS, formatVND, shippingFeeFor } from '../api';
 import { foldText } from './WholesaleManager.jsx';
+import WholesaleCustomerForm from './WholesaleCustomerForm.jsx';
+import MapLinkField from './MapLinkField.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 
 const EMPTY = {
-  receiver_name: '', phone: '', home_delivery: true, address: '', delivery_slot: '', payment_method: 'cod',
+  receiver_name: '', phone: '', home_delivery: true, address: '', map_url: '', delivery_slot: '', payment_method: 'cod',
   note: '', discount_code: '', shipper_id: '',
 };
 const EMPTY_LINE = { product_id: '', quantity: 1, price: '' };
@@ -12,7 +15,9 @@ const EMPTY_LINE = { product_id: '', quantity: 1, price: '' };
  * Nhân viên nhập đơn bằng tay (khách gọi điện / nhắn Zalo) rồi giao cho khách.
  *  - Khách lẻ: giá web, không sửa giá; ưu đãi đơn đầu và mã giảm giá do máy chủ tính như đơn online.
  *  - Khách buôn: chọn khách trong danh sách (tìm theo mã, công ty, tên, số điện thoại); giá tự điền theo
- *    bảng giá cố định của khách (chưa có thì giá web) và sửa được từng dòng; không mã giảm giá.
+ *    bảng giá cố định của khách (chưa có thì giá web) và sửa được từng dòng; không mã giảm giá. Người
+ *    có quyền quản lý khách buôn thêm / sửa khách ngay tại đây (định vị, gạo hay đặt, giá cố định).
+ *  - Ô định vị: dán link Google Maps khách gửi để nhân viên giao hàng bấm chỉ đường.
  * Đơn được xác nhận ngay.
  */
 export default function ManualOrderForm({ shippers, onCreated, onClose }) {
@@ -26,6 +31,9 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
   const [wsQuery, setWsQuery] = useState('');
   const [wsOpen, setWsOpen] = useState(false);
   const [ws, setWs] = useState(null);              // { customer, prices: Map }
+  const [custForm, setCustForm] = useState(null);  // null | { customer: null } (thêm) | { customer } (sửa)
+  const { can } = useAuth();
+  const canManageCustomers = can('wholesale.manage');
   const wholesale = kind === 'wholesale';
 
   useEffect(() => {
@@ -61,23 +69,47 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
     if (next === 'wholesale') set('discount_code', '');
   };
 
+  /** Điền khách buôn vào đơn: người nhận, địa chỉ, định vị đã lưu và giá cố định cho các dòng đã chọn. */
+  const applyCustomer = (detail) => {
+    const prices = new Map(detail.prices.map((p) => [p.product_id, p.price]));
+    setWs({ customer: detail.customer, prices });
+    setForm((cur) => ({
+      ...cur, receiver_name: detail.customer.contact_name, phone: detail.customer.phone,
+      address: detail.customer.address || cur.address, map_url: detail.customer.map_url || cur.map_url, discount_code: '',
+    }));
+    setLines((cur) => cur.map((l) => (l.product_id ? { ...l, price: String(prices.get(Number(l.product_id)) ?? byId[l.product_id]?.price ?? '') } : l)));
+    setErrors({});
+  };
+
   const chooseCustomer = async (customer) => {
     setWsOpen(false);
     setWsQuery('');
     try {
-      const detail = await api.adminWholesaleGet(customer.id);
-      const prices = new Map(detail.prices.map((p) => [p.product_id, p.price]));
-      setWs({ customer: detail.customer, prices });
-      setForm((cur) => ({
-        ...cur, receiver_name: detail.customer.contact_name, phone: detail.customer.phone,
-        address: detail.customer.address || cur.address, discount_code: '',
-      }));
-      setLines((cur) => cur.map((l) => (l.product_id ? { ...l, price: String(prices.get(Number(l.product_id)) ?? byId[l.product_id]?.price ?? '') } : l)));
-      setErrors({});
+      applyCustomer(await api.adminWholesaleGet(customer.id));
     } catch (err) {
       setErrors({ form: err.message });
     }
   };
+
+  /** Vừa thêm / sửa khách ngay trong form tạo đơn: cập nhật danh sách và chọn luôn khách đó. */
+  const customerSaved = (result) => {
+    setCustForm(null);
+    setWsOpen(false);
+    setWsList((cur) => {
+      const rest = (cur || []).filter((c) => c.id !== result.customer.id);
+      return result.customer.is_active ? [...rest, result.customer] : rest;
+    });
+    if (result.customer.is_active) applyCustomer(result);
+    else setWs(null);
+  };
+
+  // Gạo hay đặt của khách (các loại có giá cố định, còn hàng, chưa có trong đơn): bấm là thêm vào đơn.
+  const usual = ws ? products.filter((p) => ws.prices.has(p.id) && !lines.some((l) => String(l.product_id) === String(p.id))) : [];
+  const addUsual = (product) => setLines((cur) => {
+    const line = { product_id: String(product.id), quantity: 1, price: String(ws.prices.get(product.id)) };
+    const empty = cur.findIndex((l) => !l.product_id);
+    return empty >= 0 ? cur.map((l, i) => (i === empty ? { ...line, quantity: l.quantity || 1 } : l)) : [...cur, line];
+  });
 
   const submit = async (event) => {
     event.preventDefault();
@@ -95,6 +127,7 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
         phone: form.phone.trim(),
         home_delivery: form.home_delivery,
         address: form.home_delivery ? form.address.trim() : null,
+        map_url: form.home_delivery ? form.map_url.trim() || null : null,
         delivery_slot: form.delivery_slot || null,
         payment_method: form.payment_method,
         note: form.note.trim() || null,
@@ -118,7 +151,11 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
   };
 
   return (
-    <form className="form-card flat manual-order" onSubmit={submit} noValidate>
+    <>
+    {custForm && (
+      <WholesaleCustomerForm key={custForm.customer?.id || 'new'} customer={custForm.customer} onSaved={customerSaved} onCancel={() => setCustForm(null)} />
+    )}
+    <form className="form-card flat manual-order" onSubmit={submit} noValidate style={custForm ? { display: 'none' } : undefined}>
       <div className="manual-order-head">
         <h2>Tạo đơn (khách gọi điện, nhắn Zalo)</h2>
         <button type="button" className="icon-close" onClick={onClose} aria-label="Đóng">×</button>
@@ -138,7 +175,11 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
           {ws ? (
             <div className="ws-chosen">
               <span><b>{ws.customer.code}</b> · {ws.customer.company}<small>{ws.customer.contact_name} · {ws.customer.phone}{ws.prices.size ? ` · ${ws.prices.size} loại có giá riêng` : ' · chưa có giá riêng'}</small></span>
-              <button type="button" className="btn btn-secondary" onClick={() => { setWs(null); setWsOpen(true); }}>Đổi khách</button>
+              <span className="ws-chosen-actions">
+                {ws.customer.map_url && <a className="btn btn-secondary" href={ws.customer.map_url} target="_blank" rel="noopener noreferrer">📍 Định vị</a>}
+                {canManageCustomers && <button type="button" className="btn btn-secondary" onClick={() => setCustForm({ customer: ws.customer })}>Sửa khách / giá</button>}
+                <button type="button" className="btn btn-secondary" onClick={() => { setWs(null); setWsOpen(true); }}>Đổi khách</button>
+              </span>
             </div>
           ) : (
             <label className="ws-search">Khách buôn
@@ -149,7 +190,7 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
                      aria-invalid={!!(errors.wholesale || errors.wholesale_customer_id)} />
               {wsOpen && wsList && (
                 <ul className="ws-options" id="ws-options" role="listbox">
-                  {matches.length === 0 && <li className="muted">Không tìm thấy. Chủ cửa hàng thêm khách ở Quản trị → Khách buôn.</li>}
+                  {matches.length === 0 && <li className="muted">{canManageCustomers ? 'Không tìm thấy. Bấm "+ Thêm khách mới" bên dưới để lưu khách này.' : 'Không tìm thấy. Chủ cửa hàng thêm khách ở Quản trị → Khách buôn.'}</li>}
                   {matches.map((c) => (
                     <li key={c.id} role="option" aria-selected="false">
                       <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => chooseCustomer(c)}>
@@ -161,6 +202,11 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
               )}
               {(errors.wholesale || errors.wholesale_customer_id) && <small className="err">{errors.wholesale || errors.wholesale_customer_id}</small>}
             </label>
+          )}
+          {!ws && canManageCustomers && (
+            <button type="button" className="link-button ws-add" onClick={() => { setWsOpen(false); setCustForm({ customer: null }); }}>
+              + Thêm khách mới (tên công ty, định vị, gạo hay đặt, giá cố định)
+            </button>
           )}
         </div>
       )}
@@ -186,9 +232,18 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
           {errors.address && <small className="err">{errors.address}</small>}
         </label>
       )}
+      {form.home_delivery && <MapLinkField value={form.map_url} onChange={(v) => set('map_url', v)} error={errors.map_url} />}
 
       <fieldset className="manual-lines">
         <legend>Hàng khách đặt</legend>
+        {usual.length > 0 && (
+          <div className="usual-rice" aria-label="Gạo khách hay đặt">
+            <span>Gạo hay đặt:</span>
+            {usual.map((p) => (
+              <button key={p.id} type="button" onClick={() => addUsual(p)}>+ {p.name} · {formatVND(ws.prices.get(p.id))}</button>
+            ))}
+          </div>
+        )}
         {lines.map((line, index) => {
           const product = byId[line.product_id];
           return (
@@ -261,5 +316,6 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
         <button type="button" className="btn btn-secondary" onClick={onClose}>Huỷ</button>
       </div>
     </form>
+    </>
   );
 }

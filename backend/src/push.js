@@ -67,7 +67,7 @@ const clip = (text, max) => {
 /** Đọc đơn kèm hàng để soạn thông báo (chỉ những cột cần, không lộ mã bí mật của đơn khách). */
 export function orderForNotice(orderId) {
   const order = db.prepare(`
-    SELECT id, code, receiver_name, phone, address, delivery_slot, delivery_lat, delivery_lng,
+    SELECT id, code, receiver_name, phone, address, delivery_slot, delivery_lat, delivery_lng, map_url,
            payment_method, total, is_guest, note
     FROM orders WHERE id = ?
   `).get(orderId);
@@ -89,7 +89,7 @@ export function orderPushPayload(order) {
     orderId: order.id,
     url: `/quan-tri?orderId=${order.id}`,
     phone: order.phone,
-    gpsUrl: mapsUrl(order.delivery_lat, order.delivery_lng),
+    gpsUrl: order.map_url || mapsUrl(order.delivery_lat, order.delivery_lng),
   };
 }
 
@@ -103,7 +103,7 @@ export function telegramText(order, siteOrigin) {
     const tag = item.is_reward ? ' (quà đổi điểm)' : item.promo ? ' (quà khuyến mãi)' : '';
     return `• ${escapeHtml(item.product_name)}${tag} × ${item.quantity} ${escapeHtml(item.unit || '')} — ${formatMoney(item.price * item.quantity)}đ`;
   });
-  const gps = mapsUrl(order.delivery_lat, order.delivery_lng);
+  const gps = order.map_url || mapsUrl(order.delivery_lat, order.delivery_lng);
   const lines = [
     `🌾 <b>ĐƠN HÀNG MỚI #${escapeHtml(order.code || order.id)}</b>${order.is_guest ? ' · mua nhanh' : ''}`,
     `👤 Khách: <b>${escapeHtml(order.receiver_name)}</b>`,

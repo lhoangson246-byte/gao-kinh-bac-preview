@@ -133,11 +133,15 @@ add('admin', 'POST', /^\/orders\/?$/, obj({
   delivery_slot: z.enum(['sang', 'chieu', '']).nullable().optional(), note, payment_method: z.enum(['cod', 'bank']).optional(),
   items: manualLines.min(1), discount_code: z.string().max(40).nullable().optional(), shipper_id: id.nullable().optional(),
   customer_type: z.enum(['retail', 'wholesale']).optional(), wholesale_customer_id: id.nullable().optional(),
+  map_url: optionalText(2000),
 }));
 // Khách buôn.
 const wholesaleBody = {
   company: optionalText(160), contact_name: optionalText(LIMITS.name), phone: optionalText(LIMITS.phone),
   address: optionalText(LIMITS.address), note: optionalText(300), password: newPassword.optional(), is_active: flag.optional(),
+  map_url: optionalText(2000),
+  // Gạo hay đặt kèm giá cố định, lưu cùng lúc với thông tin khách (giá null = bỏ giá riêng).
+  prices: z.array(obj({ product_id: id, price: z.union([integer(1, LIMITS.price), z.literal(''), z.null()]) })).max(1000).optional(),
 };
 add('wholesale', 'GET', /^\/?$/, empty, obj({ q: z.string().max(60).optional(), all: z.enum(['0', '1']).optional() }));
 add('wholesale', 'GET', /^\/[^/]+\/?$/);

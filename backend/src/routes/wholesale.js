@@ -8,6 +8,7 @@ import { HttpError, cleanText, normalizePhone, toInteger } from '../validate.js'
 import { LIMITS } from '../constants.js';
 import { writeAdminAudit } from '../audit.js';
 import { getWholesale, shapeWholesale, wholesaleCode, wholesalePrices } from '../wholesale.js';
+import { parseMapLink } from '../map-link.js';
 
 /**
  * /api/admin/wholesale — khách buôn. Nhân viên được tạo đơn (orders.create) xem danh sách và bảng giá
@@ -46,8 +47,7 @@ router.get('/:id', canSee, (req, res, next) => {
     const id = toInteger(req.params.id, { min: 1 });
     const row = id && getWholesale(id);
     if (!row) throw new HttpError(404, 'Không tìm thấy khách buôn.');
-    const prices = [...wholesalePrices(id)].map(([product_id, price]) => ({ product_id, price }));
-    res.json({ customer: shapeWholesale(row), prices });
+    res.json({ customer: shapeWholesale(row), prices: priceList(id) });
   } catch (err) { next(err); }
 });
 
@@ -69,10 +69,48 @@ function readInput(body, { partial }) {
     if (!phone) errors.phone = 'Số điện thoại không hợp lệ (10 số, ví dụ 0912345678).';
     else data.phone = phone;
   }
+  if (body.map_url !== undefined) {
+    const map = parseMapLink(body.map_url);
+    if (map.error) errors.map_url = map.error;
+    else data.map_url = map.url;
+  }
   if (body.is_active !== undefined) data.is_active = body.is_active ? 1 : 0;
+  Object.assign(errors, priceErrors(body.prices));
   if (Object.keys(errors).length) throw new HttpError(400, 'Dữ liệu khách buôn chưa hợp lệ.', errors);
   return data;
 }
+
+/** Đọc danh sách giá gửi lên: [[id sản phẩm, giá | null]]; lỗi ghi vào `errors`. */
+function readPrices(list, errors = {}) {
+  const changes = [];
+  for (const item of Array.isArray(list) ? list : []) {
+    const productId = toInteger(item?.product_id, { min: 1 });
+    if (!productId) { errors.prices = 'Sản phẩm không hợp lệ.'; continue; }
+    if (item.price === null || item.price === '') { changes.push([productId, null]); continue; }
+    const price = toInteger(item.price, { min: 1, max: LIMITS.price });
+    if (!price) errors[`price_${productId}`] = 'Giá phải là số nguyên lớn hơn 0.';
+    else changes.push([productId, price]);
+  }
+  return changes;
+}
+const priceErrors = (list) => { const errors = {}; readPrices(list, errors); return errors; };
+
+/** Ghi thay đổi bảng giá. Gọi BÊN TRONG transaction. */
+function applyPrices(customerId, changes, userId) {
+  if (!changes.length) return;
+  const exists = db.prepare('SELECT 1 FROM products WHERE id = ?');
+  const upsert = db.prepare(`
+    INSERT INTO wholesale_prices (customer_id, product_id, price, updated_by) VALUES (?, ?, ?, ?)
+    ON CONFLICT (customer_id, product_id) DO UPDATE SET price = excluded.price, updated_by = excluded.updated_by, updated_at = datetime('now')
+  `);
+  const remove = db.prepare('DELETE FROM wholesale_prices WHERE customer_id = ? AND product_id = ?');
+  for (const [productId, price] of changes) {
+    if (price == null) remove.run(customerId, productId);
+    else if (exists.get(productId)) upsert.run(customerId, productId, price, userId);
+    else throw new HttpError(400, 'Có loại gạo không còn trong cửa hàng. Vui lòng tải lại trang.');
+  }
+}
+const priceList = (customerId) => [...wholesalePrices(customerId)].map(([product_id, price]) => ({ product_id, price }));
 
 /**
  * Gắn tài khoản đăng nhập cho khách buôn (khách đăng nhập bằng mã KB…). Số điện thoại đã có tài khoản
@@ -119,21 +157,24 @@ router.post('/', manage, async (req, res, next) => {
   try {
     const body = req.body || {};
     const data = readInput(body, { partial: false });
+    const priceChanges = readPrices(body.prices);
     const hash = await hashOf(body.password);
     const result = db.transaction(() => {
       if (db.prepare('SELECT 1 FROM wholesale_customers WHERE phone = ? AND is_active = 1').get(data.phone)) {
         throw new HttpError(409, 'Đã có khách buôn dùng số điện thoại này.', { phone: 'Đã có khách buôn dùng số này.' });
       }
       const id = db.prepare(`
-        INSERT INTO wholesale_customers (company, contact_name, phone, address, note, created_by) VALUES (?, ?, ?, ?, ?, ?)
-      `).run(data.company, data.contact_name, data.phone, data.address ?? null, data.note ?? null, req.user.id).lastInsertRowid;
+        INSERT INTO wholesale_customers (company, contact_name, phone, address, map_url, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(data.company, data.contact_name, data.phone, data.address ?? null, data.map_url ?? null, data.note ?? null, req.user.id).lastInsertRowid;
       db.prepare('UPDATE wholesale_customers SET code = ? WHERE id = ?').run(wholesaleCode(id), id);
+      applyPrices(id, priceChanges, req.user.id);
       const login = linkLogin(getWholesale(id), hash);
       return { id: Number(id), login };
     })();
     const customer = shapeWholesale(getWholesale(result.id));
-    writeAdminAudit(req, { action: 'create', entityType: 'wholesale_customer', entityId: result.id, after: { ...customer, login: result.login } });
-    res.status(201).json({ customer, message: LOGIN_NOTE[result.login] || null });
+    const prices = priceList(result.id);
+    writeAdminAudit(req, { action: 'create', entityType: 'wholesale_customer', entityId: result.id, after: { ...customer, login: result.login, prices: Object.fromEntries(prices.map((p) => [p.product_id, p.price])) } });
+    res.status(201).json({ customer, prices, message: LOGIN_NOTE[result.login] || null });
   } catch (err) { next(err); }
 });
 
@@ -145,6 +186,8 @@ router.put('/:id', manage, async (req, res, next) => {
     if (!before) throw new HttpError(404, 'Không tìm thấy khách buôn.');
     const body = req.body || {};
     const data = readInput(body, { partial: true });
+    const priceChanges = readPrices(body.prices);
+    const pricesBefore = priceChanges.length ? Object.fromEntries(wholesalePrices(id)) : null;
     const hash = await hashOf(body.password);
     const login = db.transaction(() => {
       if (data.phone && db.prepare('SELECT 1 FROM wholesale_customers WHERE phone = ? AND is_active = 1 AND id <> ?').get(data.phone, id)) {
@@ -155,11 +198,17 @@ router.put('/:id', manage, async (req, res, next) => {
         db.prepare(`UPDATE wholesale_customers SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`)
           .run(...keys.map((k) => data[k]), id);
       }
+      applyPrices(id, priceChanges, req.user.id);
       return body.password ? linkLogin(getWholesale(id), hash) : null;
     })();
     const customer = shapeWholesale(getWholesale(id));
-    writeAdminAudit(req, { action: 'update', entityType: 'wholesale_customer', entityId: id, before: shapeWholesale(before), after: { ...customer, login } });
-    res.json({ customer, message: LOGIN_NOTE[login] || null });
+    const prices = priceList(id);
+    writeAdminAudit(req, {
+      action: 'update', entityType: 'wholesale_customer', entityId: id,
+      before: { ...shapeWholesale(before), ...(pricesBefore ? { prices: pricesBefore } : {}) },
+      after: { ...customer, login, ...(pricesBefore ? { prices: Object.fromEntries(prices.map((p) => [p.product_id, p.price])) } : {}) },
+    });
+    res.json({ customer, prices, message: LOGIN_NOTE[login] || null });
   } catch (err) { next(err); }
 });
 
@@ -171,33 +220,12 @@ router.put('/:id/prices', manage, (req, res, next) => {
   try {
     const id = toInteger(req.params.id, { min: 1 });
     if (!id || !getWholesale(id)) throw new HttpError(404, 'Không tìm thấy khách buôn.');
-    const list = Array.isArray(req.body?.prices) ? req.body.prices : [];
     const errors = {};
-    const changes = [];
-    for (const item of list) {
-      const productId = toInteger(item?.product_id, { min: 1 });
-      if (!productId) { errors.prices = 'Sản phẩm không hợp lệ.'; continue; }
-      if (item.price === null || item.price === '') { changes.push([productId, null]); continue; }
-      const price = toInteger(item.price, { min: 1, max: LIMITS.price });
-      if (!price) errors[`price_${productId}`] = 'Giá phải là số nguyên lớn hơn 0.';
-      else changes.push([productId, price]);
-    }
+    const changes = readPrices(req.body?.prices, errors);
     if (Object.keys(errors).length) throw new HttpError(400, 'Bảng giá chưa hợp lệ.', errors);
     const before = Object.fromEntries(wholesalePrices(id));
-    db.transaction(() => {
-      const exists = db.prepare('SELECT 1 FROM products WHERE id = ?');
-      const upsert = db.prepare(`
-        INSERT INTO wholesale_prices (customer_id, product_id, price, updated_by) VALUES (?, ?, ?, ?)
-        ON CONFLICT (customer_id, product_id) DO UPDATE SET price = excluded.price, updated_by = excluded.updated_by, updated_at = datetime('now')
-      `);
-      const remove = db.prepare('DELETE FROM wholesale_prices WHERE customer_id = ? AND product_id = ?');
-      for (const [productId, price] of changes) {
-        if (price == null) remove.run(id, productId);
-        else if (exists.get(productId)) upsert.run(id, productId, price, req.user.id);
-        else throw new HttpError(400, 'Có loại gạo không còn trong cửa hàng. Vui lòng tải lại trang.');
-      }
-    })();
-    const prices = [...wholesalePrices(id)].map(([product_id, price]) => ({ product_id, price }));
+    db.transaction(() => applyPrices(id, changes, req.user.id))();
+    const prices = priceList(id);
     writeAdminAudit(req, { action: 'prices', entityType: 'wholesale_customer', entityId: id, before, after: Object.fromEntries(prices.map((p) => [p.product_id, p.price])) });
     res.json({ prices });
   } catch (err) { next(err); }

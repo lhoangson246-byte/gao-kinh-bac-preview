@@ -1124,6 +1124,13 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(deleteTestOrd
   if (!db.prepare('PRAGMA table_info(orders)').all().some((c) => c.name === 'wholesale_customer_id')) {
     db.exec('ALTER TABLE orders ADD COLUMN wholesale_customer_id INTEGER REFERENCES wholesale_customers(id)');
   }
+  // Định vị (12/11/2026): link Google Maps nhân viên dán khi tạo đơn, và định vị lưu sẵn của khách buôn.
+  if (!db.prepare('PRAGMA table_info(orders)').all().some((c) => c.name === 'map_url')) {
+    db.exec('ALTER TABLE orders ADD COLUMN map_url TEXT');
+  }
+  if (!db.prepare('PRAGMA table_info(wholesale_customers)').all().some((c) => c.name === 'map_url')) {
+    db.exec('ALTER TABLE wholesale_customers ADD COLUMN map_url TEXT');
+  }
 
   // Chấm công (11/11/2026): mỗi người một dòng mỗi ngày; giờ lưu UTC, ngày công theo giờ Việt Nam.
   db.exec(`

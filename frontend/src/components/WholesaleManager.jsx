@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, formatVND } from '../api';
+import WholesaleCustomerForm from './WholesaleCustomerForm.jsx';
 
-const EMPTY = { company: '', contact_name: '', phone: '', address: '', note: '', password: '' };
 export const foldText = (value) => String(value || '').normalize('NFD').replace(/\p{M}/gu, '').replace(/[đĐ]/g, 'd').toLowerCase();
 
 /**
- * Quản trị → Khách buôn: thêm khách buôn (mã KB… cố định, tên công ty), đặt mật khẩu để khách đăng nhập
- * bằng mã, và bảng giá cố định từng loại gạo. Giá riêng chỉ áp dụng khi nhân viên tạo đơn cho khách
+ * Quản trị → Khách buôn: thêm khách buôn (mã KB… cố định, tên công ty, định vị, gạo hay đặt), đặt mật
+ * khẩu để khách đăng nhập bằng mã, và bảng giá cố định từng loại gạo. Giá riêng chỉ áp dụng khi nhân viên tạo đơn cho khách
  * buôn; khách tự đặt trên web vẫn trả giá web. Khách buôn không dùng mã giảm giá, không tích điểm.
  */
 export default function WholesaleManager() {
@@ -14,8 +14,6 @@ export default function WholesaleManager() {
   const [showAll, setShowAll] = useState(false);
   const [query, setQuery] = useState('');
   const [form, setForm] = useState(null);          // { id?, ...fields }
-  const [errors, setErrors] = useState({});
-  const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [pricing, setPricing] = useState(null);    // khách đang sửa bảng giá
 
@@ -29,81 +27,22 @@ export default function WholesaleManager() {
     return (list || []).filter((c) => !q || [c.code, c.company, c.contact_name, c.phone].some((v) => foldText(v).includes(q)));
   }, [list, query]);
 
-  const set = (field, value) => setForm((cur) => ({ ...cur, [field]: value }));
-  const save = async (event) => {
-    event.preventDefault();
-    setBusy(true);
-    setErrors({});
-    const payload = {
-      company: form.company.trim(), contact_name: form.contact_name.trim(), phone: form.phone.trim(),
-      address: form.address.trim() || null, note: form.note.trim() || null,
-      ...(form.password ? { password: form.password } : {}),
-      ...(form.id ? { is_active: form.is_active } : {}),
-    };
-    try {
-      const result = form.id ? await api.adminWholesaleUpdate(form.id, payload) : await api.adminWholesaleCreate(payload);
-      setNotice(`${form.id ? 'Đã lưu' : 'Đã thêm'} khách buôn ${result.customer.code}.${result.message ? ` ${result.message}` : ''}`);
-      setForm(null);
-      await load();
-      if (!form.id) setPricing(result.customer);
-    } catch (err) {
-      setErrors({ form: err.message, ...(err.errors || {}) });
-    } finally { setBusy(false); }
-  };
-
   return (
     <div className="wholesale-manager">
       {notice && <p className="alert success" role="status">{notice}</p>}
       <div className="wholesale-toolbar">
         <input className="input" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm theo mã, công ty, tên, số điện thoại" aria-label="Tìm khách buôn" />
         <label className="checkbox-label"><input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> Hiện cả khách đã ngừng</label>
-        <button type="button" className="btn btn-primary" onClick={() => { setForm({ ...EMPTY }); setErrors({}); setPricing(null); }}>+ Thêm khách buôn</button>
+        <button type="button" className="btn btn-primary" onClick={() => { setForm({}); setPricing(null); }}>+ Thêm khách buôn</button>
       </div>
 
       {form && (
-        <form className="form-card flat wholesale-form" onSubmit={save} noValidate>
-          <div className="manual-order-head">
-            <h2>{form.id ? `Sửa khách buôn ${form.code}` : 'Thêm khách buôn'}</h2>
-            <button type="button" className="icon-close" onClick={() => setForm(null)} aria-label="Đóng">×</button>
-          </div>
-          <div className="about-admin-row">
-            <label>Tên công ty / cửa hàng
-              <input className="input" value={form.company} maxLength={160} onChange={(e) => set('company', e.target.value)} aria-invalid={!!errors.company} placeholder="VD: Công ty Bếp ăn Kinh Bắc" />
-              {errors.company && <small className="err">{errors.company}</small>}
-            </label>
-            <label>Người liên hệ
-              <input className="input" value={form.contact_name} maxLength={120} onChange={(e) => set('contact_name', e.target.value)} aria-invalid={!!errors.contact_name} />
-              {errors.contact_name && <small className="err">{errors.contact_name}</small>}
-            </label>
-            <label>Số điện thoại
-              <input className="input" type="tel" inputMode="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} aria-invalid={!!errors.phone} placeholder="0912345678" />
-              {errors.phone && <small className="err">{errors.phone}</small>}
-            </label>
-          </div>
-          <label>Địa chỉ giao
-            <input className="input" value={form.address} maxLength={300} onChange={(e) => set('address', e.target.value)} placeholder="Số nhà, đường, phường — trong tỉnh Bắc Ninh" />
-          </label>
-          <div className="about-admin-row">
-            <label>Ghi chú
-              <input className="input" value={form.note} maxLength={300} onChange={(e) => set('note', e.target.value)} placeholder="VD: công nợ 30 ngày, giao trước 10h" />
-            </label>
-            <label>{form.has_login ? 'Đặt lại mật khẩu đăng nhập' : 'Mật khẩu đăng nhập (không bắt buộc)'}
-              <input className="input" value={form.password} autoComplete="new-password" onChange={(e) => set('password', e.target.value)}
-                     placeholder={form.has_login ? 'Để trống nếu không đổi' : 'Tối thiểu 8 ký tự'} aria-invalid={!!errors.password} />
-              {errors.password
-                ? <small className="err">{errors.password}</small>
-                : <small className="field-help">Khách đăng nhập bằng <b>mã khách buôn</b> và mật khẩu này để xem đơn của mình.</small>}
-            </label>
-          </div>
-          {form.id && (
-            <label className="checkbox-label"><input type="checkbox" checked={!!form.is_active} onChange={(e) => set('is_active', e.target.checked)} /> Đang mua buôn (bỏ tick để ngừng: không chọn được khi tạo đơn, không đăng nhập bằng mã)</label>
-          )}
-          {errors.form && <p className="alert error">{errors.form}</p>}
-          <div className="form-actions">
-            <button className="btn btn-primary" disabled={busy}>{busy ? 'Đang lưu…' : form.id ? 'Lưu' : 'Thêm khách buôn'}</button>
-            <button type="button" className="btn btn-secondary" onClick={() => setForm(null)}>Huỷ</button>
-          </div>
-        </form>
+        <WholesaleCustomerForm key={form.id || 'new'} customer={form.id ? form : null} onCancel={() => setForm(null)}
+                               onSaved={(result) => {
+                                 setNotice(`${form.id ? 'Đã lưu' : 'Đã thêm'} khách buôn ${result.customer.code}.${result.message ? ` ${result.message}` : ''}`);
+                                 setForm(null);
+                                 load();
+                               }} />
       )}
 
       {pricing && <PriceEditor customer={pricing} onClose={() => setPricing(null)} onSaved={(text) => { setNotice(text); load(); }} />}
@@ -120,12 +59,12 @@ export default function WholesaleManager() {
                     <td><strong className="wholesale-code">{c.code}</strong>{!c.is_active && <small className="cell-note">đã ngừng</small>}</td>
                     <td><strong>{c.company}</strong>{c.note && <small className="cell-note">{c.note}</small>}</td>
                     <td>{c.contact_name}<small className="cell-note"><a href={`tel:${c.phone}`}>{c.phone}</a></small></td>
-                    <td className="wholesale-address">{c.address || '—'}</td>
+                    <td className="wholesale-address">{c.address || '—'}{c.map_url && <a className="map-link" href={c.map_url} target="_blank" rel="noopener noreferrer">📍 Mở định vị</a>}</td>
                     <td>{c.price_count ? `${c.price_count} loại` : 'Chưa đặt'}</td>
                     <td>{c.has_login ? 'Có' : 'Chưa'}</td>
                     <td className="wholesale-actions">
                       <button type="button" className="btn btn-secondary" onClick={() => { setPricing(c); setForm(null); }}>Bảng giá</button>
-                      <button type="button" className="btn btn-secondary" onClick={() => { setForm({ ...EMPTY, ...c, address: c.address || '', note: c.note || '', password: '' }); setErrors({}); setPricing(null); }}>Sửa</button>
+                      <button type="button" className="btn btn-secondary" onClick={() => { setForm(c); setPricing(null); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Sửa</button>
                     </td>
                   </tr>
                 ))}

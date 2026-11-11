@@ -83,6 +83,8 @@ export function placeOrder({
   // Khách buôn: không mã giảm giá / ưu đãi đơn đầu / quà khuyến mãi; priceOverrides (Map id → giá) chỉ
   // truyền từ đơn nhân viên tạo cho khách buôn — đơn khách tự đặt trên web luôn tính giá web.
   wholesaleCustomerId = null, priceOverrides = null,
+  // Link định vị nhân viên dán khi tạo đơn (đã kiểm tra bằng parseMapLink).
+  mapUrl = null,
 }) {
   const rewardCount = vouchers + [...wantedRewards.values()].reduce((sum, q) => sum + q, 0);
   return db.transaction(() => {
@@ -175,8 +177,8 @@ export function placeOrder({
       voucherDiscount, pointsUsed, pointsUsed > 0 ? pointsPhone : null, guest ? 1 : 0, guestTokenHash
     ).lastInsertRowid;
     // Mã đơn tự tạo từ số thứ tự: DH000123, cùng kiểu mã hoá đơn quầy HD000123.
-    db.prepare('UPDATE orders SET code = ?, discount_code = ?, code_discount = ?, wholesale_customer_id = ? WHERE id = ?')
-      .run(orderCode(orderId), useCode ? codeRow.code : null, codeDiscount, wholesaleCustomerId, orderId);
+    db.prepare('UPDATE orders SET code = ?, discount_code = ?, code_discount = ?, wholesale_customer_id = ?, map_url = ? WHERE id = ?')
+      .run(orderCode(orderId), useCode ? codeRow.code : null, codeDiscount, wholesaleCustomerId, mapUrl, orderId);
     // Đơn nhân viên nhập tay (khách gọi điện / nhắn Zalo): đã xác nhận ngay, ghi người tạo, cách
     // nhận hàng và người giao — trong cùng transaction với đơn.
     if (staff) {

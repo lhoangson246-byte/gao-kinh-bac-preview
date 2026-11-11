@@ -728,6 +728,11 @@ export default function Admin() {
                                 {order.wholesale_code && <p className="wholesale-tag">🏢 Khách buôn {order.wholesale_code} · {order.wholesale_company}</p>}
                                 <a href={`tel:${order.phone}`} className="phone-link">{order.phone}</a>
                                 <p className="address-text">{order.address}</p>
+                                {order.map_url && order.fulfillment !== 'pickup' && (
+                                  <a className="map-link" href={order.map_url} target="_blank" rel="noopener noreferrer">
+                                    📍 Mở định vị khách gửi trên Google Maps
+                                  </a>
+                                )}
                                 {mapLink(order.delivery_lat, order.delivery_lng) && (
                                   <a className="map-link" href={mapLink(order.delivery_lat, order.delivery_lng)} target="_blank" rel="noopener noreferrer">
                                     📍 Mở vị trí khách ghim trên Google Maps
