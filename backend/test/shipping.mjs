@@ -1,4 +1,4 @@
-// Phí giao hàng: dưới 100.000đ tiền hàng thu 15.000đ, từ 100.000đ freeship, tự đến lấy không mất phí.
+// Phí giao hàng: dưới 100.000đ tiền hàng thu 10.000đ, từ 100.000đ freeship, tự đến lấy không mất phí.
 // Cách chạy: node test/shipping.mjs — tự dựng máy chủ và cơ sở dữ liệu riêng.
 import { fixture } from './fixture.mjs';
 
@@ -29,9 +29,9 @@ try {
   check('Tiền hàng đúng 100.000đ: freeship, giảm giá không làm mất freeship', first?.shipping_fee === 0 && first.discount === 20000 && first.total === 80000, JSON.stringify(first));
 
   const under = (await order([{ product_id: p50.id, quantity: 1 }])).data.order;
-  check('Tiền hàng 50.000đ: phí giao 15.000đ, cộng vào tổng', under?.subtotal === 50000 && under.shipping_fee === 15000 && under.total === 65000, JSON.stringify(under));
+  check('Tiền hàng 50.000đ: phí giao 10.000đ, cộng vào tổng', under?.subtotal === 50000 && under.shipping_fee === 10000 && under.total === 60000, JSON.stringify(under));
   const edge = (await order([{ product_id: p99.id, quantity: 1 }])).data.order;
-  check('Tiền hàng 99.999đ vẫn bị tính phí', edge?.shipping_fee === 15000 && edge.total === 114999, JSON.stringify(edge));
+  check('Tiền hàng 99.999đ vẫn bị tính phí', edge?.shipping_fee === 10000 && edge.total === 109999, JSON.stringify(edge));
   const two = (await order([{ product_id: p50.id, quantity: 2 }])).data.order;
   check('Hai túi 50.000đ đủ 100.000đ: freeship', two?.shipping_fee === 0 && two.total === 100000, JSON.stringify(two));
 
@@ -42,14 +42,14 @@ try {
   const guestPhone = `06${String(suffix).padStart(7, '0')}2`;
   const guestBody = { receiver_name: 'Cô Mua Nhanh', phone: guestPhone, address: 'Số 9 đường Lý Thái Tổ, phường Suối Hoa', delivery_area: 'bac-ninh', payment_method: 'cod', items: [{ product_id: p50.id, quantity: 1 }] };
   const g1 = (await call('/orders/guest', { method: 'POST', body: guestBody })).data.order;
-  check('Mua nhanh đơn đầu: giảm 20.000đ và vẫn tính phí giao', g1?.discount === 20000 && g1.shipping_fee === 15000 && g1.total === 45000, JSON.stringify(g1));
+  check('Mua nhanh đơn đầu: giảm 20.000đ và vẫn tính phí giao', g1?.discount === 20000 && g1.shipping_fee === 10000 && g1.total === 40000, JSON.stringify(g1));
 
   /* Tra cứu đơn và màn quản trị thấy phí */
   const track = await call('/orders/track', { method: 'POST', body: { phone: guestPhone, code: g1.code } });
   const tracked = track.data.orders?.[0] ?? track.data.order;
-  check('Tra cứu đơn thấy phí giao', tracked?.shipping_fee === 15000, JSON.stringify(track.data).slice(0, 200));
+  check('Tra cứu đơn thấy phí giao', tracked?.shipping_fee === 10000, JSON.stringify(track.data).slice(0, 200));
   const list = await call('/admin/orders?limit=50', { token: admin });
-  check('Quản trị thấy phí giao', list.data.orders?.find((o) => o.id === under.id)?.shipping_fee === 15000);
+  check('Quản trị thấy phí giao', list.data.orders?.find((o) => o.id === under.id)?.shipping_fee === 10000);
 
   /* Phí giao không tích điểm */
   for (const status of ['confirmed', 'shipping', 'completed']) {
@@ -64,7 +64,7 @@ try {
     body: { receiver_name: 'Anh Gọi Điện', phone: `05${String(suffix).padStart(7, '0')}${home ? 3 : 4}`, home_delivery: home, address: home ? 'Số 5 đường Trần Hưng Đạo, phường Đại Phúc' : null, payment_method: 'cod', items: [{ product_id: p50.id, quantity: 1 }] },
   });
   const delivered = await manual(true);
-  check('Nhân viên nhập đơn giao tận nơi dưới 100.000đ: có phí', delivered.data.order?.shipping_fee === 15000, JSON.stringify(delivered.data).slice(0, 220));
+  check('Nhân viên nhập đơn giao tận nơi dưới 100.000đ: có phí', delivered.data.order?.shipping_fee === 10000, JSON.stringify(delivered.data).slice(0, 220));
   const pickup = await manual(false);
   check('Khách lấy tại cửa hàng: không mất phí', pickup.data.order?.shipping_fee === 0, JSON.stringify(pickup.data).slice(0, 220));
 

@@ -54,6 +54,23 @@ try {
   await call('/admin/staff', { method: 'POST', token: owner, body: { full_name: 'Shipper', phone: shipPhone, password: 'giaohang26', permissions: ['delivery'] } });
   const shipper = (await call('/auth/login', { method: 'POST', body: { identifier: shipPhone, password: 'giaohang26' } })).data.token;
   check('Nhân viên không có quyền sản phẩm bị chặn (403)', (await order([a], shipper)).status === 403);
+
+  /* Thứ tự toàn bộ sản phẩm ("Tất cả mặt hàng" trên trang chủ) */
+  const all = async () => (await call('/products')).data.products.map((p) => p.id);
+  const pos = (list, id) => list.indexOf(id);
+  const newest = await make('Gạo mới nhất');
+  const before = await all();
+  check('Sản phẩm mới xếp cuối các hàng còn hàng', pos(before, newest) > Math.max(pos(before, b), pos(before, c), pos(before, d)), JSON.stringify(before.slice(-6)));
+  const reorder = (ids, token = owner) => call('/admin/products/order', { method: 'POST', token, body: { ids } });
+  const movedAll = await reorder([newest, d, c]);
+  const after = await all();
+  check('Kéo thả toàn bộ: lưu và trang chủ hiện đúng thứ tự', movedAll.status === 200 && after[0] === newest && pos(after, d) < pos(after, c) && pos(after, c) < pos(after, b),
+    JSON.stringify(after.slice(0, 5)));
+  check('Trang quản trị trả danh sách theo thứ tự mới', movedAll.data.products?.[0]?.id === newest && Array.isArray(movedAll.data.products[0].group_ids));
+  check('Hàng hết vẫn xuống cuối trang chủ', after[after.length - 1] === a || pos(after, a) > pos(after, b), JSON.stringify(after.slice(-3)));
+  check('Mã sản phẩm không có thật bị từ chối (400)', (await reorder([999999])).status === 400);
+  check('Trùng mã bị từ chối (400)', (await reorder([d, d])).status === 400);
+  check('Nhân viên không có quyền sản phẩm không đổi thứ tự được (403)', (await reorder([d], shipper)).status === 403);
 } finally {
   await app.close();
 }

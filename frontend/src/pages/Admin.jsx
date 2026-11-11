@@ -934,7 +934,7 @@ export default function Admin() {
                   )}
 
                   {products.length > 0 && (
-                    <ProductsByGroup groups={groups} products={products} renderProduct={renderProduct} onReordered={setGroups} />
+                    <ProductsByGroup groups={groups} products={products} renderProduct={renderProduct} onReordered={setGroups} onProductsReordered={setProducts} />
                   )}
                 </section>
               )}

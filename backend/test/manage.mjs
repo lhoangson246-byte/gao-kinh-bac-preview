@@ -944,12 +944,13 @@ const guestToken = (await call('/auth/register', {
     method: 'POST', token: admin,
     body: { name: `Gạo thử thứ tự ${suffix}`, price: 50000, original_price: 60000, unit: 'túi 5kg', stock: 5 },
   });
-  const list = (await call('/products')).data.products.filter((p) => p.stock > 0);
-  const onSale = (p) => p.original_price > p.price && p.price > 0;
-  const firstRegular = list.findIndex((p) => !onSale(p));
-  const lastSale = list.map(onSale).lastIndexOf(true);
-  check('Hàng đang giảm giá hiện lên đầu danh mục', lastSale !== -1 && (firstRegular === -1 || lastSale < firstRegular),
-    `giam gia cuoi o vi tri ${lastSale}, gia thuong dau o vi tri ${firstRegular}`);
+  // Từ 12/11/2026 cửa hàng tự kéo thả thứ tự: trang chủ theo đúng thứ tự trong quản trị (hàng hết xuống
+  // cuối); sản phẩm mới, kể cả hàng giảm giá, xếp cuối cho tới khi cửa hàng kéo lên.
+  const list = (await call('/products')).data.products.filter((p) => p.stock > 0).map((p) => p.id);
+  const adminOrder = (await call('/admin/products', { token: admin })).data.products.map((p) => p.id).filter((id) => list.includes(id));
+  check('Trang chủ theo đúng thứ tự cửa hàng sắp trong quản trị', JSON.stringify(list) === JSON.stringify(adminOrder),
+    `${list.slice(0, 5)} / ${adminOrder.slice(0, 5)}`);
+  check('Sản phẩm mới thêm xếp cuối các hàng còn hàng', list[list.length - 1] === promo.data.product?.id, String(list.slice(-3)));
   if (promo.data.product) await call(`/admin/products/${promo.data.product.id}/permanent`, { method: 'DELETE', token: admin });
 }
 

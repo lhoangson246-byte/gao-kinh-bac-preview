@@ -6,6 +6,9 @@ const STORAGE_KEY = 'gao_cart';
 /** Điểm riêng mỗi túi/bao: null = theo tiền, số nguyên ≥ 0 = điểm cố định. */
 const pointsRule = (value) => (Number.isInteger(value) && value >= 0 ? value : null);
 
+/** Ảnh sản phẩm trong giỏ: chỉ nhận ảnh của chính trang (/…) hoặc https. */
+const cleanImage = (value) => (typeof value === 'string' && /^(\/(?!\/)|https:\/\/)/.test(value) && value.length < 600 ? value : '');
+
 /** Chỉ giữ lại những dòng giỏ hàng có cấu trúc hợp lệ. */
 function readStoredCart() {
   try {
@@ -23,6 +26,7 @@ function readStoredCart() {
         points_per_unit: pointsRule(item.points_per_unit),
         category: typeof item.category === 'string' ? item.category : 'gao',
         weight_kg: Number(item.weight_kg) || 0,
+        image_url: cleanImage(item.image_url),
       }));
   } catch {
     return [];
@@ -67,12 +71,13 @@ export function CartProvider({ children }) {
           points_per_unit: pointsRule(product.points_per_unit),
           category: product.category || 'gao',
           weight_kg: Number(product.weight_kg) || 0,
+          image_url: cleanImage(product.image_url),
         };
         if (
           updated.price !== item.price || updated.stock !== item.stock ||
           updated.quantity !== item.quantity || updated.name !== item.name ||
           updated.unit !== item.unit || updated.points_per_unit !== item.points_per_unit
-          || updated.category !== item.category || updated.weight_kg !== item.weight_kg
+          || updated.category !== item.category || updated.weight_kg !== item.weight_kg || updated.image_url !== item.image_url
         ) changed = true;
         next.push(updated);
       }
@@ -104,6 +109,7 @@ export function CartProvider({ children }) {
             points_per_unit: pointsRule(product.points_per_unit),
             category: product.category || 'gao',
             weight_kg: Number(product.weight_kg) || 0,
+            image_url: cleanImage(product.image_url),
           };
           if (found) {
             return prev.map((item) => item.id === product.id

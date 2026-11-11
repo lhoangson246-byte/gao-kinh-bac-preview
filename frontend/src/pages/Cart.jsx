@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { api, formatVND, pointsForLines, shippingFeeFor, FIRST_ORDER_DISCOUNT, FREE_SHIPPING_MIN, SHIPPING_FEE } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 import { PromoGiftRow, PromoProgress } from '../components/Promotion.jsx';
+import ProductImage from '../components/ProductImage.jsx';
 import ShippingNotice from '../components/ShippingNotice.jsx';
 
 export default function Cart() {
@@ -70,16 +71,18 @@ export default function Cart() {
             const atMax = !soldOut && item.quantity >= item.stock;
             return (
               <article className={`cart-item${soldOut ? ' sold-out' : ''}`} key={item.id}>
-                <div className="cart-grain" aria-hidden="true">🌾</div>
+                <div className={`cart-grain${item.image_url ? ' has-image' : ''}`} aria-hidden="true">
+                  {item.image_url ? <ProductImage src={item.image_url} sizes="64px" /> : '🌾'}
+                </div>
                 <div className="cart-item-main">
                   <h2>{item.name}</h2>
-                  <p>{formatVND(item.price)} / {unit(item.unit)}</p>
+                  <p>
+                    {formatVND(item.price)} / {unit(item.unit)}
+                    <button className="link-button danger cart-remove" onClick={() => remove(item.id)}>{t('cart.remove')}</button>
+                  </p>
                   {soldOut
                     ? <p className="cart-warning">{t('cart.itemSoldOut')}</p>
                     : atMax && <p className="cart-warning">{t('cart.onlyLeft', { n: item.stock, unit: unit(item.unit) })}</p>}
-                  <button className="link-button danger" onClick={() => remove(item.id)}>
-                    {t('cart.remove')}
-                  </button>
                 </div>
                 <div className="cart-item-end">
                   <div className="qty-stepper">

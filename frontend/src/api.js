@@ -208,6 +208,7 @@ export const api = {
   adminCreateGroup: (name) => request('/admin/groups', { method: 'POST', body: { name }, auth: true }),
   adminUpdateGroup: (id, payload) => request(`/admin/groups/${id}`, { method: 'PUT', body: payload, auth: true }),
   adminReorderGroups: (ids) => request('/admin/groups/reorder', { method: 'POST', body: { ids }, auth: true }),
+  adminReorderProducts: (ids) => request('/admin/products/order', { method: 'POST', body: { ids }, auth: true }),
   adminReorderGroupProducts: (id, productIds) => request(`/admin/groups/${id}/order`, { method: 'POST', body: { product_ids: productIds }, auth: true }),
   adminDeleteGroup: (id) => request(`/admin/groups/${id}`, { method: 'DELETE', auth: true }),
   adminCreateProduct: (payload) => request('/admin/products', { method: 'POST', body: payload, auth: true }),
@@ -334,7 +335,7 @@ export const DELIVERY_AREA_CODE = 'bac-ninh';
 export const DELIVERY_AREA_LABEL = 'Bắc Ninh';
 
 /** Phí giao hàng, chỉ để xem trước; số tiền thật do máy chủ tính (backend/src/constants.js). */
-export const SHIPPING_FEE = 15000;
+export const SHIPPING_FEE = 10000;
 export const FREE_SHIPPING_MIN = 100000;
 export const shippingFeeFor = (subtotal) => (subtotal >= FREE_SHIPPING_MIN ? 0 : SHIPPING_FEE);
 

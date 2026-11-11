@@ -44,11 +44,11 @@ router.get('/', (req, res) => {
               OR IFNULL(origin, '') LIKE ? ESCAPE '\\'
               OR IFNULL(description, '') LIKE ? ESCAPE '\\')
        -- Còn hàng lên trước. Lọc theo nhóm cửa hàng tạo: đúng thứ tự đã kéo thả trong nhóm;
-       -- còn lại: hàng đang giảm giá lên đầu tiên.
+       -- còn lại: đúng thứ tự cửa hàng kéo thả ở "Tất cả sản phẩm".
        ORDER BY stock > 0 DESC, ${groupParams.length
          ? `(SELECT gi.sort_order FROM product_group_items gi JOIN product_groups g ON g.id = gi.group_id
               WHERE g.slug = ? AND gi.product_id = products.id),`
-         : '(original_price > price AND price > 0) DESC,'} id`
+         : 'sort_order,'} id`
     )
     .all(...groupParams, pattern, pattern, pattern, ...groupParams);
 

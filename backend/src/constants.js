@@ -7,10 +7,10 @@ export const DELIVERY_AREA_LABEL = 'Bắc Ninh';
 export const ORDER_STATUSES = ['pending', 'confirmed', 'shipping', 'completed', 'cancelled'];
 
 /**
- * Phí giao hàng: đơn có tiền hàng (trước giảm giá) từ 100.000đ được freeship, dưới đó thu 15.000đ.
+ * Phí giao hàng: đơn có tiền hàng (trước giảm giá) từ 100.000đ được freeship, dưới đó thu 10.000đ (đổi từ 15.000đ ngày 12/11/2026).
  * Khách tự đến lấy tại cửa hàng không mất phí.
  */
-export const SHIPPING_FEE = 15000;
+export const SHIPPING_FEE = 10000;
 export const FREE_SHIPPING_MIN = 100000;
 export const shippingFeeFor = (subtotal, fulfillment = 'delivery') =>
   (fulfillment === 'pickup' || subtotal >= FREE_SHIPPING_MIN ? 0 : SHIPPING_FEE);

@@ -236,7 +236,7 @@ router.patch('/orders/:id/shipper', async (req, res, next) => {
 /** GET /api/admin/products — Danh sách gồm cả loại đã ẩn */
 router.get('/products', (req, res) => {
   const groups = groupIdsByProduct();
-  const products = db.prepare('SELECT * FROM products ORDER BY id').all()
+  const products = db.prepare('SELECT * FROM products ORDER BY sort_order, id').all()
     .map((p) => ({ ...p, group_ids: groups.get(p.id) || [] }));
   res.json({ products });
 });
@@ -517,6 +517,29 @@ const MAX_STOCK_IN = 100_000;
  *  body: { quantity, cost_price?, note? }
  *  Số lượng được CỘNG THÊM vào tồn kho hiện có, không phải ghi đè.
  */
+/**
+ * POST /api/admin/products/order { ids } — thứ tự sản phẩm khách thấy ở "Tất cả mặt hàng" (kéo thả).
+ * Sản phẩm không có trong danh sách giữ thứ tự cũ, xếp sau.
+ */
+router.post('/products/order', (req, res, next) => {
+  try {
+    const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).map((v) => toInteger(v, { min: 1 }));
+    if (!ids.length || ids.some((v) => !v) || new Set(ids).size !== ids.length) throw new HttpError(400, 'Danh sách sản phẩm không hợp lệ.');
+    const current = db.prepare('SELECT id FROM products ORDER BY sort_order, id').all().map((r) => r.id);
+    if (ids.some((id) => !current.includes(id))) throw new HttpError(400, 'Có sản phẩm không còn trong cửa hàng. Vui lòng tải lại trang.');
+    const order = [...ids, ...current.filter((id) => !ids.includes(id))];
+    db.transaction(() => {
+      const update = db.prepare('UPDATE products SET sort_order = ? WHERE id = ?');
+      order.forEach((id, index) => update.run(index + 1, id));
+    })();
+    writeAdminAudit(req, { action: 'reorder', entityType: 'product', entityId: null, before: { ids: current }, after: { ids: order } });
+    const groups = groupIdsByProduct();
+    res.json({ products: db.prepare('SELECT * FROM products ORDER BY sort_order, id').all().map((p) => ({ ...p, group_ids: groups.get(p.id) || [] })) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/products/:id/stock', (req, res, next) => {
   try {
     const productId = toInteger(req.params.id, { min: 1 });
@@ -615,8 +638,8 @@ router.post('/products', (req, res, next) => {
       const id = db
         .prepare(
           `INSERT INTO products (name, description, origin, price, cost_price, unit, weight_kg, stock,
-                                 image_url, is_active, category, original_price, points_per_unit, is_reward)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                                 image_url, is_active, category, original_price, points_per_unit, is_reward, sort_order)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM products))`
         )
         .run(
           data.name, data.description ?? null, data.origin ?? null, data.price,

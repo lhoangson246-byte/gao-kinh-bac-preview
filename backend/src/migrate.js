@@ -1070,6 +1070,17 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(deleteTestOrd
   })();
 }
 
+  // Thứ tự toàn bộ sản phẩm trên trang chủ (12/11/2026), kéo thả ở trang quản trị. Ban đầu giữ đúng thứ tự
+  // khách đang thấy: hàng đang giảm giá trước, rồi theo mã sản phẩm.
+  if (!db.prepare('PRAGMA table_info(products)').all().some((c) => c.name === 'sort_order')) {
+    db.exec('ALTER TABLE products ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0');
+    db.prepare(`
+      UPDATE products SET sort_order = (
+        SELECT r FROM (SELECT id, ROW_NUMBER() OVER (ORDER BY (original_price > price AND price > 0) DESC, id) AS r FROM products) x
+        WHERE x.id = products.id)
+    `).run();
+  }
+
   // Thứ tự sản phẩm trong từng nhóm (11/11/2026), kéo thả ở trang quản trị. Ban đầu theo mã sản phẩm.
   if (!db.prepare('PRAGMA table_info(product_group_items)').all().some((c) => c.name === 'sort_order')) {
     db.exec('ALTER TABLE product_group_items ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0');

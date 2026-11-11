@@ -1551,7 +1551,7 @@ Xem phần “Triển khai Vercel và migration (09/2026)” trong README trư�
 
 ### Phí giao hàng và freeship (09/11/2026)
 
-- Tiền hàng **dưới 100.000đ** thu phí giao **15.000đ**; **từ 100.000đ** được freeship. Khách tự đến lấy tại cửa hàng không mất phí.
+- Tiền hàng **dưới 100.000đ** thu phí giao **10.000đ** (trước 12/11/2026 là 15.000đ); **từ 100.000đ** được freeship. Khách tự đến lấy tại cửa hàng không mất phí.
 - Mức xét là tiền hàng **trước giảm giá**, nên dùng mã giảm giá không làm khách mất freeship.
 - Máy chủ tự tính và lưu ở `orders.shipping_fee` (đã cộng trong `orders.total`). Đổi mức phí: sửa `SHIPPING_FEE`, `FREE_SHIPPING_MIN` ở cả `backend/src/constants.js` và `frontend/src/api.js`.
 - Phí giao tính vào doanh thu và tiền cần thu, **không** tích điểm. Đơn cũ giữ phí 0đ.
@@ -1591,3 +1591,10 @@ Nhãn **HOT** đỏ tự hiện ở ô nhóm có tên chứa "Đi Chợ Hộ" (�
 - Đơn khách buôn hiện nhãn "🏢 Khách buôn KB… · tên công ty" trong danh sách đơn quản trị.
 
 - (11/11/2026) Cô bé hiện thêm ở **giỏ hàng**: tự nói bước 1, mỗi lần bấm là bước kế tiếp (kéo xuống chọn Đặt hàng → thêm tên, SĐT, địa chỉ → nhập mã giảm giá trong nhóm Zalo nếu có → ấn Đặt hàng ngay), hết thì quay lại bước 1. Ở **tra cứu đơn**: "Mình nhập số điện thoại và mã đơn hàng để xem thời gian nhận hàng nhé!". Lời từng trang ở `MASCOT_SCRIPTS` (`frontend/src/components/Mascot.jsx`), chữ ở các khoá `mascot.*` trong `messages.js`.
+
+### Thứ tự toàn bộ sản phẩm, giỏ hàng có ảnh, phí giao 10k (12/11/2026)
+
+- Tab Sản phẩm → mở **"Tất cả sản phẩm"** → nắm ⠿ kéo lên, xuống: đây là thứ tự khách thấy ở "Tất cả mặt hàng" trên trang chủ (lưu ở `products.sort_order`). Hàng hết vẫn tự xuống cuối. Sản phẩm mới thêm xếp cuối.
+- Thay quy tắc cũ "hàng giảm giá tự lên đầu": lần chuyển đổi đầu tiên giữ nguyên thứ tự khách đang thấy (giảm giá trước), sau đó cửa hàng tự sắp; hàng mới giảm giá không tự nhảy lên đầu nữa.
+- Giỏ hàng hiện ảnh sản phẩm, mỗi dòng gọn hơn trên điện thoại (nút "Xoá khỏi giỏ" nằm cạnh giá).
+- Phí giao đơn dưới 100.000đ: **10.000đ** (`SHIPPING_FEE` ở `backend/src/constants.js` và `frontend/src/api.js`). Đơn cũ giữ phí đã tính lúc đặt.

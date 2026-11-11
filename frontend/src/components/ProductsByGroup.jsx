@@ -5,12 +5,13 @@ import useDragReorder from './useDragReorder.js';
 /**
  * Danh sách sản phẩm trong trang quản trị, chia theo nhóm gạo. Mỗi nhóm gập lại, bấm vào mới mở ra các
  * sản phẩm của nhóm; trong nhóm kéo tay nắm ⠿ để xếp thứ tự (khách thấy đúng thứ tự này khi lọc nhóm).
- * Một sản phẩm thuộc nhiều nhóm thì hiện ở mỗi nhóm. Cuối danh sách có "Chưa thuộc nhóm nào" và "Tất cả".
+ * Một sản phẩm thuộc nhiều nhóm thì hiện ở mỗi nhóm. Cuối danh sách có "Chưa thuộc nhóm nào" và "Tất cả
+ * sản phẩm" (kéo thả ở đây là thứ tự khách thấy ở "Tất cả mặt hàng").
  *
  *   renderProduct(product) — dòng sản phẩm (ảnh, giá, tồn kho, nút Nhập kho / Sửa / Ẩn / Xoá) do trang
  *   quản trị dựng, để hai cách xem dùng chung một kiểu dòng.
  */
-export default function ProductsByGroup({ groups, products, renderProduct, onReordered }) {
+export default function ProductsByGroup({ groups, products, renderProduct, onReordered, onProductsReordered }) {
   const [open, setOpen] = useState(() => new Set());
   const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const ungrouped = useMemo(() => products.filter((p) => !p.group_ids?.length), [products]);
@@ -34,8 +35,56 @@ export default function ProductsByGroup({ groups, products, renderProduct, onReo
         <PlainSection title="Chưa thuộc nhóm nào" note="Khách vẫn thấy ở “Tất cả mặt hàng”, nhưng không thấy khi lọc theo nhóm."
                       products={ungrouped} open={open.has('none')} onToggle={() => toggle('none')} renderProduct={renderProduct} />
       )}
-      <PlainSection title="Tất cả sản phẩm" products={products} open={open.has('all')} onToggle={() => toggle('all')} renderProduct={renderProduct} />
+      <AllSection products={products} open={open.has('all')} onToggle={() => toggle('all')} renderProduct={renderProduct} onReordered={onProductsReordered} />
     </div>
+  );
+}
+
+/** Mọi sản phẩm, kéo thả để đổi thứ tự khách thấy ở "Tất cả mặt hàng" trên trang chủ. */
+function AllSection({ products, open, onToggle, renderProduct, onReordered }) {
+  const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  const ids = useMemo(() => products.map((p) => p.id), [products]);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const sort = useDragReorder({
+    ids,
+    disabled: busy,
+    onSave: async (next) => {
+      setBusy(true);
+      setError('');
+      try {
+        const result = await api.adminReorderProducts(next);
+        onReordered(result.products);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setBusy(false);
+      }
+    },
+  });
+  return (
+    <section className={`group-section plain${open ? ' open' : ''}`}>
+      <SectionHead title="Tất cả sản phẩm" count={products.length} open={open} onToggle={onToggle} />
+      {open && (
+        <div className="group-section-body">
+          <p className="muted group-section-empty">Nắm ⠿ rồi kéo lên, xuống để đổi thứ tự khách thấy ở “Tất cả mặt hàng” trên trang chủ. Hàng hết vẫn tự xuống cuối.</p>
+          {error && <p className="alert error" role="alert">{error}</p>}
+          <div className={`group-product-list${sort.dragId ? ' sorting' : ''}`} ref={sort.listRef}>
+            {sort.order.map((id) => {
+              const product = byId.get(id);
+              return (
+                <div key={id} className={`group-product-row${sort.dragId === id ? ' dragging' : ''}`}>
+                  <button type="button" className="group-grip" disabled={busy && !sort.dragId}
+                          title="Kéo để đổi thứ tự" aria-label={`Kéo để đổi thứ tự “${product.name}” trên trang chủ. Hoặc bấm mũi tên lên, xuống.`}
+                          onPointerDown={(event) => sort.start(event, id)} onKeyDown={(event) => sort.keyMove(event, id)}>⠿</button>
+                  {renderProduct(product)}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 

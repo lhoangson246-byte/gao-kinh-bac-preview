@@ -170,6 +170,7 @@ add('admin', 'PUT', /^\/settings\/storefront\/?$/, obj({
   })).max(5).optional(),
 }));
 add('admin', 'POST', /^\/products\/?$/, obj(product));
+add('admin', 'POST', /^\/products\/order\/?$/, obj({ ids: z.array(id).min(1).max(2000) }));
 add('admin', 'PUT', /^\/products\/[^/]+\/?$/, obj(product).partial());
 add('admin', 'DELETE', /^\/products\/[^/]+\/?$/);
 add('admin', 'DELETE', /^\/products\/[^/]+\/permanent\/?$/);
