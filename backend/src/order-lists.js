@@ -21,8 +21,10 @@ export function listAdminOrders({ status, from = null, to = null, limit = 30, of
   const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const args = [...(status ? [status] : []), ...rangeArgs, limit, offset];
   const page = `SELECT id FROM orders ${clause} ORDER BY id DESC LIMIT ? OFFSET ?`;
-  const rows = db.prepare(`SELECT o.*, u.email AS user_email, u.full_name AS user_name, s.full_name AS shipper_name
+  const rows = db.prepare(`SELECT o.*, u.email AS user_email, u.full_name AS user_name, s.full_name AS shipper_name,
+           w.code AS wholesale_code, w.company AS wholesale_company
     FROM orders o JOIN users u ON u.id = o.user_id LEFT JOIN users s ON s.id = o.shipper_id
+    LEFT JOIN wholesale_customers w ON w.id = o.wholesale_customer_id
     WHERE o.id IN (${page}) ORDER BY o.id DESC`).all(...args);
   // Mã băm bí mật của đơn mua nhanh không cần lộ ra, kể cả với quản trị.
   for (const row of rows) {

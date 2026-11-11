@@ -356,8 +356,8 @@ export const vi = {
   // Đăng nhập, đăng ký
   'login.title': 'Đăng nhập',
   'login.expired': 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để tiếp tục.',
-  'login.identifier': 'Số điện thoại hoặc email',
-  'login.identifierPlaceholder': '0912345678 hoặc email',
+  'login.identifier': 'Số điện thoại, email hoặc mã khách buôn',
+  'login.identifierPlaceholder': '0912345678, email hoặc KB0001',
   'login.password': 'Mật khẩu',
   'login.busy': 'Đang xử lý…',
   'login.submit': 'Đăng nhập',
@@ -854,8 +854,8 @@ export const en = {
 
   'login.title': 'Log in',
   'login.expired': 'Your session has expired. Please log in again to continue.',
-  'login.identifier': 'Phone number or email',
-  'login.identifierPlaceholder': '0912345678 or email',
+  'login.identifier': 'Phone, email or wholesale code',
+  'login.identifierPlaceholder': '0912345678, email or KB0001',
   'login.password': 'Password',
   'login.busy': 'Signing in…',
   'login.submit': 'Log in',
@@ -1349,8 +1349,8 @@ export const zh = {
 
   'login.title': '登录',
   'login.expired': '登录已过期，请重新登录以继续。',
-  'login.identifier': '手机号或邮箱',
-  'login.identifierPlaceholder': '0912345678 或邮箱',
+  'login.identifier': '手机号、邮箱或批发客户代码',
+  'login.identifierPlaceholder': '0912345678、邮箱或 KB0001',
   'login.password': '密码',
   'login.busy': '登录中…',
   'login.submit': '登录',

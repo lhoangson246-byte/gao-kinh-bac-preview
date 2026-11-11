@@ -1580,3 +1580,12 @@ Nhãn **HOT** đỏ tự hiện ở ô nhóm có tên chứa "Đi Chợ Hộ" (�
 - Trong nhóm, **nắm ⠿ rồi kéo lên, xuống** để đổi thứ tự (chuột, ngón tay, hoặc mũi tên lên/xuống). Khách lọc theo nhóm trên trang chủ thấy đúng thứ tự này; hàng hết vẫn xuống cuối.
 - Thứ tự lưu ở `product_group_items.sort_order`. Thêm sản phẩm vào nhóm (nút "Chọn sản phẩm" hoặc tick trong form sửa) thì xếp cuối nhóm, bỏ bớt thì phần còn lại giữ nguyên thứ tự.
 - Một sản phẩm thuộc nhiều nhóm thì có thứ tự riêng trong từng nhóm. Muốn chuyển sản phẩm sang nhóm khác: dùng "Chọn sản phẩm" hoặc tick nhóm trong form sửa.
+
+### Khách buôn (11/11/2026)
+
+- Quản trị → **Khách buôn** (quyền `wholesale.manage`, mặc định chỉ chủ cửa hàng): thêm khách với tên công ty, người liên hệ, SĐT, địa chỉ. Mã khách **KB0001, KB0002…** tự cấp và không đổi.
+- **Bảng giá** của từng khách: mỗi loại gạo một giá cố định; để trống = dùng giá web.
+- **Đăng nhập bằng mã**: đặt mật khẩu cho khách buôn thì khách đăng nhập bằng mã KB… (ô "Số điện thoại, email hoặc mã khách buôn") để xem đơn của mình. SĐT đã có tài khoản khách thì gắn vào tài khoản đó, khách dùng mật khẩu cũ.
+- **Tạo đơn**: chọn Khách lẻ / Khách buôn. Khách buôn: chọn trong danh sách thả xuống (gõ mã, công ty, tên, SĐT; không cần gõ dấu), giá tự điền theo bảng giá và sửa được từng dòng cho riêng đơn đó. Khách lẻ: giá web, không sửa giá.
+- Máy chủ chỉ nhận giá riêng cho đơn khách buôn do nhân viên tạo. Khách buôn **không dùng mã giảm giá**, không có ưu đãi đơn đầu, không quà khuyến mãi theo đợt, **không tích điểm**. Khách buôn tự đặt trên web: trả đúng giá web.
+- Đơn khách buôn hiện nhãn "🏢 Khách buôn KB… · tên công ty" trong danh sách đơn quản trị.

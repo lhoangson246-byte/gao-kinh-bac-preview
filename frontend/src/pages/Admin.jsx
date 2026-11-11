@@ -15,6 +15,7 @@ const ActivityLog = lazy(() => import('../components/ActivityLog.jsx'));
 const AboutManager = lazy(() => import('../components/AboutManager.jsx'));
 const DiscountCodeManager = lazy(() => import('../components/DiscountCodeManager.jsx'));
 const StaffManager = lazy(() => import('../components/StaffManager.jsx'));
+const WholesaleManager = lazy(() => import('../components/WholesaleManager.jsx'));
 import ProductImage from '../components/ProductImage.jsx';
 import OrdersExportButton from '../components/OrdersExportButton.jsx';
 import OrdersTable from '../components/OrdersTable.jsx';
@@ -58,7 +59,7 @@ const NEXT_STEP = {
 /** Các mục của trang quản trị và quyền cần có. null = chỉ chủ cửa hàng. */
 const TAB_ACCESS = {
   orders: 'orders.view', products: 'products.manage', customers: 'customers.manage', revenue: 'revenue.view',
-  activity: null, codes: null, about: null, staff: null,
+  wholesale: 'wholesale.manage', activity: null, codes: null, about: null, staff: null,
 };
 
 export default function Admin() {
@@ -500,6 +501,9 @@ export default function Admin() {
           {allowed('revenue') && <button className={tab === 'revenue' ? 'active' : ''} onClick={() => setTab('revenue')}>
             <span aria-hidden="true">◱</span><span>Doanh thu<small>Lọc theo ngày, tháng</small></span>
           </button>}
+          {allowed('wholesale') && <button className={tab === 'wholesale' ? 'active' : ''} onClick={() => setTab('wholesale')}>
+            <span aria-hidden="true">🏢</span><span>Khách buôn<small>Mã khách và bảng giá riêng</small></span>
+          </button>}
           {allowed('activity') && <button className={tab === 'activity' ? 'active' : ''} onClick={() => setTab('activity')}>
             <span aria-hidden="true">⌁</span><span>Nhật ký<small>Thay đổi và đăng nhập</small></span>
           </button>}
@@ -532,7 +536,7 @@ export default function Admin() {
             <PageLoadBoundary key={tab}>
             <Suspense fallback={<div className="loading-state" role="status"><span></span>Đang mở chức năng…</div>}>
             <>
-              {!['revenue', 'customers', 'activity', 'about', 'codes', 'staff'].includes(tab) && (
+              {!['revenue', 'customers', 'activity', 'about', 'codes', 'staff', 'wholesale'].includes(tab) && (
               <div className="admin-page-heading">
                 <div>
                   <p className="eyebrow dark"><span></span>{tab === 'orders' ? 'Công việc hôm nay' : 'Quản lý gian hàng'}</p>
@@ -547,6 +551,15 @@ export default function Admin() {
               </div>
               )}
 
+              {tab === 'wholesale' && (
+              <div className="admin-page-heading">
+                <div>
+                  <p className="eyebrow dark"><span></span>Công ty, nhà hàng, bếp ăn</p>
+                  <h1>Khách buôn</h1>
+                  <p>Mỗi khách buôn có mã cố định và bảng giá riêng. Giá riêng chỉ dùng khi nhân viên tạo đơn; khách tự đặt trên web vẫn trả giá web.</p>
+                </div>
+              </div>
+              )}
               {tab === 'staff' && (
               <div className="admin-page-heading">
                 <div>
@@ -574,7 +587,7 @@ export default function Admin() {
                 </div>
               </div>
               )}
-              {!['revenue', 'customers', 'activity', 'about', 'codes', 'staff'].includes(tab) && stats && (
+              {!['revenue', 'customers', 'activity', 'about', 'codes', 'staff', 'wholesale'].includes(tab) && stats && (
                 <section className="stats" aria-label="Thống kê cửa hàng">
                   <div className="stat urgent"><span>Đơn cần xác nhận</span><strong>{pendingCount}</strong><small>Nên xử lý trước</small></div>
                   <div className="stat"><span>Tổng đơn hàng</span><strong>{stats.orders}</strong><small>Tất cả thời gian</small></div>
@@ -583,7 +596,7 @@ export default function Admin() {
                 </section>
               )}
 
-              {canProducts && !['revenue', 'customers', 'activity', 'about', 'codes', 'staff'].includes(tab) && stats?.missingPrice > 0 && (
+              {canProducts && !['revenue', 'customers', 'activity', 'about', 'codes', 'staff', 'wholesale'].includes(tab) && stats?.missingPrice > 0 && (
                 <div className="alert warning" role="status">
                   <strong>{stats.missingPrice} loại gạo chưa có giá bán.</strong>{' '}
                   Khách nhìn thấy sản phẩm nhưng chưa đặt mua được.{' '}
@@ -605,6 +618,7 @@ export default function Admin() {
                 : tab === 'about' ? <AboutManager />
                 : tab === 'codes' ? <DiscountCodeManager />
                 : tab === 'staff' ? <StaffManager />
+                : tab === 'wholesale' ? <WholesaleManager />
                 : tab === 'revenue' ? <RevenueReport />
                 : tab === 'customers' ? <CustomerManager />
                 : tab === 'orders' ? (
@@ -680,6 +694,7 @@ export default function Admin() {
                               <section>
                                 <p className="detail-label">Khách nhận hàng</p>
                                 <h2>{order.receiver_name}</h2>
+                                {order.wholesale_code && <p className="wholesale-tag">🏢 Khách buôn {order.wholesale_code} · {order.wholesale_company}</p>}
                                 <a href={`tel:${order.phone}`} className="phone-link">{order.phone}</a>
                                 <p className="address-text">{order.address}</p>
                                 {mapLink(order.delivery_lat, order.delivery_lng) && (

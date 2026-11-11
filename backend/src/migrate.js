@@ -1076,6 +1076,35 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(deleteTestOrd
     db.prepare('UPDATE product_group_items SET sort_order = product_id').run();
   }
 
+  // Khách buôn (11/11/2026): mã cố định KB…, bảng giá cố định theo từng loại gạo, gắn tài khoản đăng nhập.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS wholesale_customers (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      code         TEXT UNIQUE,
+      company      TEXT NOT NULL,
+      contact_name TEXT NOT NULL,
+      phone        TEXT NOT NULL,
+      address      TEXT,
+      note         TEXT,
+      user_id      INTEGER UNIQUE REFERENCES users(id),
+      is_active    INTEGER NOT NULL DEFAULT 1,
+      created_by   INTEGER REFERENCES users(id),
+      created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at   TEXT
+    );
+    CREATE TABLE IF NOT EXISTS wholesale_prices (
+      customer_id INTEGER NOT NULL REFERENCES wholesale_customers(id) ON DELETE CASCADE,
+      product_id  INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      price       INTEGER NOT NULL CHECK (price > 0),
+      updated_by  INTEGER REFERENCES users(id),
+      updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (customer_id, product_id)
+    );
+  `);
+  if (!db.prepare('PRAGMA table_info(orders)').all().some((c) => c.name === 'wholesale_customer_id')) {
+    db.exec('ALTER TABLE orders ADD COLUMN wholesale_customer_id INTEGER REFERENCES wholesale_customers(id)');
+  }
+
   // Chấm công (11/11/2026): mỗi người một dòng mỗi ngày; giờ lưu UTC, ngày công theo giờ Việt Nam.
   db.exec(`
     CREATE TABLE IF NOT EXISTS attendance (

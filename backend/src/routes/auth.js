@@ -1,6 +1,7 @@
 import { adminPassword, validateRoutes } from '../schemas.js';
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import { WHOLESALE_CODE_RE } from '../wholesale.js';
 import { createHash } from 'node:crypto';
 import db from '../db.js';
 import { signToken, requireAuth } from '../middleware/auth.js';
@@ -97,9 +98,15 @@ router.post('/login', async (req, res, next) => {
     const raw = cleanText(identifier ?? phone ?? email, LIMITS.email) || '';
     if (!raw) throw new HttpError(400, 'Nhập số điện thoại hoặc email.');
 
-    // Có "@" thì coi là email, còn lại thử đọc như số điện thoại.
+    // Có "@" thì coi là email; dạng KB0001 là mã khách buôn; còn lại thử đọc như số điện thoại.
     let row = null;
-    if (raw.includes('@')) {
+    const byWholesaleCode = WHOLESALE_CODE_RE.test(raw);
+    if (byWholesaleCode) {
+      row = db.prepare(`
+        SELECT u.* FROM wholesale_customers w JOIN users u ON u.id = w.user_id
+        WHERE w.code = ? AND w.is_active = 1 AND u.role = 'customer'
+      `).get(raw.toUpperCase());
+    } else if (raw.includes('@')) {
       row = db.prepare('SELECT * FROM users WHERE email = ?').get(raw.toLowerCase());
     } else {
       const normalized = normalizePhone(raw);
@@ -110,7 +117,7 @@ router.post('/login', async (req, res, next) => {
     // Thông báo giống nhau cho mọi trường hợp để không lộ tài khoản nào đang tồn tại.
     const validPassword = await bcrypt.compare(password, row?.password_hash || dummyHash);
     if (!row || !validPassword) {
-      throw new HttpError(401, 'Số điện thoại/email hoặc mật khẩu không đúng.');
+      throw new HttpError(401, 'Số điện thoại/email/mã khách buôn hoặc mật khẩu không đúng.');
     }
     // Đúng mật khẩu nhưng tài khoản đã bị khoá — báo rõ để khách biết đường liên hệ.
     if (row.is_locked) {
@@ -128,7 +135,7 @@ router.post('/login', async (req, res, next) => {
       phone: row.phone, address: row.address, role: row.role,
       permissions: permissionsOf(row), ...(row.role === 'staff' ? { staff_title: row.staff_title } : {}),
     };
-    writeLoginHistory(req, row.id, raw.includes('@') ? 'email' : 'phone');
+    writeLoginHistory(req, row.id, byWholesaleCode ? 'wholesale_code' : raw.includes('@') ? 'email' : 'phone');
     deliverSession(req, res, user, signToken(user));
   } catch (err) {
     next(err);

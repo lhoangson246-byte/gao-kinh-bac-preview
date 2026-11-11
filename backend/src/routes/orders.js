@@ -17,6 +17,7 @@ import { loyaltyProfile, refundPoints, spendPoints } from '../loyalty.js';
 import { notifyNewOrder, siteOrigin } from '../push.js';
 import { trackOrder } from '../order-tracking.js';
 import { findUsableCode, normalizeCode, publicCode } from '../discount-codes.js';
+import { wholesaleOfUser } from '../wholesale.js';
 
 const router = Router();
 
@@ -78,6 +79,9 @@ export function placeOrder({
   paymentMethod, deliverySlot, lat = null, lng = null, wanted,
   wantedRewards = new Map(), vouchers = 0, pointsPhone = null, guestTokenHash = null, promoGift = null,
   discountCode = null, staff = null,
+  // Khách buôn: không mã giảm giá / ưu đãi đơn đầu / quà khuyến mãi; priceOverrides (Map id → giá) chỉ
+  // truyền từ đơn nhân viên tạo cho khách buôn — đơn khách tự đặt trên web luôn tính giá web.
+  wholesaleCustomerId = null, priceOverrides = null,
 }) {
   const rewardCount = vouchers + [...wantedRewards.values()].reduce((sum, q) => sum + q, 0);
   return db.transaction(() => {
@@ -103,11 +107,15 @@ export function placeOrder({
     const lines = [];
     let subtotal = 0;
 
+    if (wholesaleCustomerId && discountCode) {
+      throw new HttpError(400, 'Khách buôn không áp dụng mã giảm giá.', { discount_code: 'Khách buôn không áp dụng mã giảm giá.' });
+    }
     for (const [productId, quantity] of wanted) {
-      const product = getProduct.get(productId);
-      if (!product) {
+      const found = getProduct.get(productId);
+      if (!found) {
         throw new HttpError(400, 'Có loại gạo trong giỏ không còn được bán. Vui lòng cập nhật giỏ hàng.');
       }
+      const product = priceOverrides?.has(productId) ? { ...found, price: priceOverrides.get(productId) } : found;
       if (product.price <= 0) {
         // Cửa hàng chưa nhập giá — không được để khách đặt với giá 0 đồng.
         throw new HttpError(400, `“${product.name}” chưa có giá bán. Vui lòng liên hệ cửa hàng.`);
@@ -134,7 +142,7 @@ export function placeOrder({
     // transaction với INSERT bên dưới nên hai yêu cầu song song cũng chỉ một đơn được giảm.
     const boughtBefore = firstOrderUsed({ userId: guest ? null : userId, phone: customerPhone, guest });
     // Không để tiền giảm vượt quá tiền hàng.
-    const firstCandidate = boughtBefore ? 0 : Math.min(FIRST_ORDER_DISCOUNT, subtotal);
+    const firstCandidate = boughtBefore || wholesaleCustomerId ? 0 : Math.min(FIRST_ORDER_DISCOUNT, subtotal);
     // Mã giảm giá khách nhập (sai, hết hạn, chưa đủ tiền… thì báo lỗi ngay tại ô nhập mã).
     const codeRow = discountCode ? findUsableCode(discountCode, { subtotal, phone: customerPhone }) : null;
     const codeCandidate = codeRow ? Math.min(codeRow.amount, subtotal) : 0;
@@ -166,8 +174,8 @@ export function placeOrder({
       voucherDiscount, pointsUsed, pointsUsed > 0 ? pointsPhone : null, guest ? 1 : 0, guestTokenHash
     ).lastInsertRowid;
     // Mã đơn tự tạo từ số thứ tự: DH000123, cùng kiểu mã hoá đơn quầy HD000123.
-    db.prepare('UPDATE orders SET code = ?, discount_code = ?, code_discount = ? WHERE id = ?')
-      .run(orderCode(orderId), useCode ? codeRow.code : null, codeDiscount, orderId);
+    db.prepare('UPDATE orders SET code = ?, discount_code = ?, code_discount = ?, wholesale_customer_id = ? WHERE id = ?')
+      .run(orderCode(orderId), useCode ? codeRow.code : null, codeDiscount, wholesaleCustomerId, orderId);
     // Đơn nhân viên nhập tay (khách gọi điện / nhắn Zalo): đã xác nhận ngay, ghi người tạo, cách
     // nhận hàng và người giao — trong cùng transaction với đơn.
     if (staff) {
@@ -198,7 +206,7 @@ export function placeOrder({
     // Quà khuyến mãi theo đợt (ví dụ 20/10: mỗi 15kg gạo tặng 1kg nếp, tối đa 3kg). Máy chủ tự
     // tính từ hàng thật trong đơn. Còn túi quà trong kho thì trừ kho (huỷ đơn sẽ hoàn lại như
     // hàng thường); hết thì vẫn ghi quà theo tên để cửa hàng giao tay, không chặn đơn.
-    const gift = promoGiftFor(lines, promoGift);
+    const gift = wholesaleCustomerId ? null : promoGiftFor(lines, promoGift);
     if (gift) {
       const insGift = db.prepare(
         `INSERT INTO order_items (order_id, product_id, product_name, unit, price, quantity, cost_price,
@@ -391,6 +399,8 @@ router.post('/', requireAuth, async (req, res, next) => {
 
     const orderId = placeOrder({
       userId: req.user.id,
+      // Khách buôn tự đặt trên web: giá web, không khuyến mãi (giá riêng chỉ có ở đơn nhân viên tạo).
+      wholesaleCustomerId: wholesaleOfUser(req.user.id)?.id ?? null,
       receiverName,
       customerPhone: normalizePhone(delivery.phone),
       deliveryAddress: normalizeBacNinhAddress(rawAddress),
@@ -419,7 +429,7 @@ router.post('/', requireAuth, async (req, res, next) => {
  * Khai báo trước '/:id' để không bị nuốt bởi tuyến đó.
  */
 router.get('/discount', requireAuth, (req, res) => {
-  const boughtBefore = firstOrderUsed({ userId: req.user.id });
+  const boughtBefore = firstOrderUsed({ userId: req.user.id }) || !!wholesaleOfUser(req.user.id);
   // Điểm tích luỹ và danh sách quà để trang đặt hàng cho khách đổi điểm.
   const phone = db.prepare('SELECT phone FROM users WHERE id = ?').get(req.user.id)?.phone;
   const points = loyaltyProfile(phone)?.points ?? 0;

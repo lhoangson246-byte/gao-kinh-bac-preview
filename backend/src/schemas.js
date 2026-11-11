@@ -36,6 +36,9 @@ const phone = optionalText(LIMITS.phone);
 const note = optionalText(LIMITS.note);
 const line = obj({ product_id: id, quantity: integer(1, LIMITS.quantityPerLine) });
 const lines = z.array(line).max(LIMITS.linesPerOrder);
+// Đơn nhân viên nhập: khách buôn được ghi giá riêng từng dòng (máy chủ chỉ nhận giá này cho khách buôn).
+const manualLines = z.array(obj({ product_id: id, quantity: integer(1, LIMITS.quantityPerLine), price: integer(1, LIMITS.price).nullable().optional() }))
+  .max(LIMITS.linesPerOrder);
 const retailLines = z.array(obj({ product_id: id, quantity: integer(1, 500) })).max(60);
 const address = {
   label: optionalText(40), receiver_name: name, phone: text(LIMITS.phone),
@@ -128,8 +131,21 @@ add('admin', 'GET', /^\/orders\/?$/, empty, obj({
 add('admin', 'POST', /^\/orders\/?$/, obj({
   receiver_name: name, phone: text(LIMITS.phone), home_delivery: z.boolean().optional(), address: optionalText(LIMITS.address),
   delivery_slot: z.enum(['sang', 'chieu', '']).nullable().optional(), note, payment_method: z.enum(['cod', 'bank']).optional(),
-  items: lines.min(1), discount_code: z.string().max(40).nullable().optional(), shipper_id: id.nullable().optional(),
+  items: manualLines.min(1), discount_code: z.string().max(40).nullable().optional(), shipper_id: id.nullable().optional(),
+  customer_type: z.enum(['retail', 'wholesale']).optional(), wholesale_customer_id: id.nullable().optional(),
 }));
+// Khách buôn.
+const wholesaleBody = {
+  company: optionalText(160), contact_name: optionalText(LIMITS.name), phone: optionalText(LIMITS.phone),
+  address: optionalText(LIMITS.address), note: optionalText(300), password: newPassword.optional(), is_active: flag.optional(),
+};
+add('wholesale', 'GET', /^\/?$/, empty, obj({ q: z.string().max(60).optional(), all: z.enum(['0', '1']).optional() }));
+add('wholesale', 'GET', /^\/[^/]+\/?$/);
+add('wholesale', 'POST', /^\/?$/, obj(wholesaleBody));
+add('wholesale', 'PUT', /^\/[^/]+\/prices\/?$/, obj({
+  prices: z.array(obj({ product_id: id, price: z.union([integer(1, LIMITS.price), z.literal(''), z.null()]) })).max(1000),
+}));
+add('wholesale', 'PUT', /^\/[^/]+\/?$/, obj(wholesaleBody));
 add('admin', 'PATCH', /^\/orders\/[^/]+\/status\/?$/, obj({ status: z.enum(ORDER_STATUSES) }));
 add('admin', 'PATCH', /^\/orders\/[^/]+\/shipper\/?$/, obj({ shipper_id: id.nullable() }));
 add('admin', 'GET', /^\/shippers\/?$/);

@@ -44,7 +44,8 @@ export function changeOrderStatus(orderId, status, { guard, within } = {}) {
     // đặt hàng — cùng hồ sơ với mua tại quầy.
     if (status === 'completed') {
       const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(current.id);
-      const phone = loyaltyPhoneForOrder(order);
+      // Khách buôn đã có giá riêng nên không tích điểm.
+      const phone = order.wholesale_customer_id ? null : loyaltyPhoneForOrder(order);
       if (phone) {
         // Điểm tính theo từng loại gạo, dùng quy tắc điểm đã lưu vào dòng hàng lúc đặt.
         const items = db.prepare(

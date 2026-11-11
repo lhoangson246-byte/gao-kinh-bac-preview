@@ -19,6 +19,7 @@ export const PERMISSIONS = {
   'debt.accounting': 'Kế toán: duyệt đơn nợ, xác nhận đã thu tiền, đặt hạn công nợ',
   'debt.final': 'Mẹ duyệt tất toán đơn nợ',
   'closing.manage': 'Đóng ngày: kê tiền, lưu và xuất báo cáo cuối ngày',
+  'wholesale.manage': 'Khách buôn: thêm khách buôn, mã đăng nhập và bảng giá cố định',
   'attendance.manage': 'Chấm công: xem bảng công tháng của mọi người và sửa giờ cho người quên chấm',
 };
 export const PERMISSION_CODES = Object.keys(PERMISSIONS);

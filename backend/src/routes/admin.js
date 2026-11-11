@@ -19,6 +19,7 @@ import { MAX_BANNERS, MAX_BRANCHES, readStorefront } from './settings.js';
 import {
   MAX_GROUPS, groupIdsByProduct, groupIdsOf, listGroups, setProductGroups, uniqueSlug,
 } from '../product-groups.js';
+import { getWholesale, wholesalePrices } from '../wholesale.js';
 
 const router = Router();
 
@@ -131,11 +132,36 @@ router.post('/orders', async (req, res, next) => {
         errors.shipper_id = 'Người này không phải nhân viên giao hàng đang làm.';
       }
     }
+    // Khách buôn: giá từng dòng = giá nhân viên ghi, không có thì giá cố định của khách, không có nữa
+    // thì giá web. Khách lẻ: không nhận giá từ trình duyệt, luôn tính giá web.
+    const items = Array.isArray(body.items) ? body.items : [];
+    let wholesale = null;
+    let priceOverrides = null;
+    if (body.customer_type === 'wholesale') {
+      const wid = toInteger(body.wholesale_customer_id, { min: 1 });
+      wholesale = wid && getWholesale(wid);
+      if (!wholesale || !wholesale.is_active) errors.wholesale_customer_id = 'Chọn khách buôn trong danh sách.';
+      if (body.discount_code) errors.discount_code = 'Khách buôn không áp dụng mã giảm giá.';
+      if (wholesale?.is_active) {
+        priceOverrides = wholesalePrices(wholesale.id);
+        for (const line of items) {
+          if (line?.price == null) continue;
+          const price = toInteger(line.price, { min: 1, max: LIMITS.price });
+          if (!price) errors.items = 'Giá bán cho khách buôn phải là số nguyên lớn hơn 0.';
+          else priceOverrides.set(Number(line.product_id), price);
+        }
+      }
+    } else if (items.some((line) => line?.price != null)) {
+      errors.items = 'Khách lẻ tính đúng giá web, không sửa giá được.';
+    }
     if (Object.keys(errors).length) throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', errors);
 
     const orderId = placeOrder({
-      userId: guestAccountId(),
-      guest: true,
+      // Khách buôn có tài khoản: đơn hiện trong lịch sử đơn của khách.
+      userId: wholesale?.user_id || guestAccountId(),
+      guest: !wholesale?.user_id,
+      wholesaleCustomerId: wholesale?.id ?? null,
+      priceOverrides,
       receiverName,
       customerPhone: phone,
       deliveryAddress: address,
@@ -146,7 +172,10 @@ router.post('/orders', async (req, res, next) => {
       discountCode: body.discount_code || null,
       staff: { createdBy: req.user.id, fulfillment: homeDelivery ? 'delivery' : 'pickup', shipperId },
     });
-    writeAdminAudit(req, { action: 'create_order', entityType: 'order', entityId: orderId, after: { phone, home_delivery: homeDelivery, shipper_id: shipperId } });
+    writeAdminAudit(req, {
+      action: 'create_order', entityType: 'order', entityId: orderId,
+      after: { phone, home_delivery: homeDelivery, shipper_id: shipperId, ...(wholesale ? { wholesale: wholesale.code, prices: Object.fromEntries(priceOverrides) } : {}) },
+    });
     if (shipperId) await notifyShipperAssigned(orderId, shipperId);
     const order = db.prepare(`
       SELECT o.*, s.full_name AS shipper_name FROM orders o LEFT JOIN users s ON s.id = o.shipper_id WHERE o.id = ?
@@ -681,6 +710,7 @@ router.delete('/products/:id/permanent', (req, res, next) => {
     `).get(productId, productId).n;
 
       db.prepare('DELETE FROM product_group_items WHERE product_id = ?').run(productId);
+      db.prepare('DELETE FROM wholesale_prices WHERE product_id = ?').run(productId);
       const info = db.prepare('DELETE FROM products WHERE id = ?').run(productId);
       if (!info.changes) throw new HttpError(404, 'Không tìm thấy loại gạo.');
       return { before, sold };

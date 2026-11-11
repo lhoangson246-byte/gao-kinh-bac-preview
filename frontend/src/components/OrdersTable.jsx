@@ -21,7 +21,7 @@ export default function OrdersTable({ orders }) {
             <tr key={o.id} className={o.status === 'cancelled' ? 'row-muted' : ''}>
               <td><strong>{o.code}</strong></td>
               <td>{time(o.created_at)}<small className="cell-note">{formatDateTime(o.created_at).split(' ')[1]}</small></td>
-              <td>{o.receiver_name}</td>
+              <td>{o.receiver_name}{o.wholesale_code && <small className="cell-note">🏢 {o.wholesale_code} · {o.wholesale_company}</small>}</td>
               <td><a href={`tel:${o.phone}`}>{o.phone}</a></td>
               <td>{o.fulfillment === 'pickup' ? 'Lấy tại cửa hàng' : o.address}</td>
               <td>{o.items.map((i) => `${i.product_name} × ${i.quantity}`).join(', ')}</td>
