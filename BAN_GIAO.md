@@ -1589,3 +1589,5 @@ Nhãn **HOT** đỏ tự hiện ở ô nhóm có tên chứa "Đi Chợ Hộ" (�
 - **Tạo đơn**: chọn Khách lẻ / Khách buôn. Khách buôn: chọn trong danh sách thả xuống (gõ mã, công ty, tên, SĐT; không cần gõ dấu), giá tự điền theo bảng giá và sửa được từng dòng cho riêng đơn đó. Khách lẻ: giá web, không sửa giá.
 - Máy chủ chỉ nhận giá riêng cho đơn khách buôn do nhân viên tạo. Khách buôn **không dùng mã giảm giá**, không có ưu đãi đơn đầu, không quà khuyến mãi theo đợt, **không tích điểm**. Khách buôn tự đặt trên web: trả đúng giá web.
 - Đơn khách buôn hiện nhãn "🏢 Khách buôn KB… · tên công ty" trong danh sách đơn quản trị.
+
+- (11/11/2026) Cô bé hiện thêm ở **giỏ hàng**: tự nói bước 1, mỗi lần bấm là bước kế tiếp (kéo xuống chọn Đặt hàng → thêm tên, SĐT, địa chỉ → nhập mã giảm giá trong nhóm Zalo nếu có → ấn Đặt hàng ngay), hết thì quay lại bước 1. Ở **tra cứu đơn**: "Mình nhập số điện thoại và mã đơn hàng để xem thời gian nhận hàng nhé!". Lời từng trang ở `MASCOT_SCRIPTS` (`frontend/src/components/Mascot.jsx`), chữ ở các khoá `mascot.*` trong `messages.js`.

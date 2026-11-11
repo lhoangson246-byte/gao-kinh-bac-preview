@@ -2,8 +2,9 @@ import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import Mascot from './components/Mascot.jsx';
 
-// Không che form khi khách đang đặt hàng hoặc đăng nhập.
-const MASCOT_HIDDEN = ['/gio-hang', '/dat-hang', '/dat-nhanh', '/dang-nhap', '/dang-ky'];
+// Không che form khi khách đang điền đặt hàng hoặc đăng nhập. Giỏ hàng và tra cứu đơn có lời hướng dẫn riêng.
+const MASCOT_HIDDEN = ['/dat-hang', '/dat-nhanh', '/dang-nhap', '/dang-ky'];
+const MASCOT_SCENE = { '/gio-hang': 'cart', '/tra-cuu-don': 'track' };
 import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
@@ -151,7 +152,9 @@ export default function App() {
         </PageLoadBoundary>
       </main>
       <Footer />
-      {!MASCOT_HIDDEN.includes(location.pathname) && <Mascot />}
+      {!MASCOT_HIDDEN.includes(location.pathname) && (
+        <Mascot key={MASCOT_SCENE[location.pathname] || 'greet'} scene={MASCOT_SCENE[location.pathname] || 'greet'} />
+      )}
     </>
   );
 }

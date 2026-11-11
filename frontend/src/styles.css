@@ -1765,8 +1765,11 @@ label b { color: var(--danger); }
   0%, 18%, 21%, 56%, 59%, 74%, 94%, 100% { opacity: 0; }
   19%, 20%, 57%, 58%, 76%, 92% { opacity: 1; }
 }
-.mascot-bubble { position: absolute; right: calc(100% - 8px); top: 4px; width: 178px; padding: 9px 26px 10px 12px; border: 1.5px solid var(--gold); border-radius: 14px 14px 3px 14px; background: #fffaf0; box-shadow: 0 8px 20px rgba(34, 48, 38, .18); color: var(--green-950); font-size: .84rem; font-weight: 700; line-height: 1.35; animation: mascot-pop .32s ease-out; }
-.mascot-bubble button { position: absolute; top: 2px; right: 2px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer; }
+.mascot-bubble { position: absolute; right: calc(100% - 8px); top: 4px; width: 188px; padding: 9px 26px 10px 12px; border: 1.5px solid var(--gold); border-radius: 14px 14px 3px 14px; background: #fffaf0; box-shadow: 0 8px 20px rgba(34, 48, 38, .18); color: var(--green-950); font-size: .84rem; font-weight: 700; line-height: 1.35; animation: mascot-pop .32s ease-out; }
+.mascot-bubble p { margin: 0; }
+.mascot-step { display: block; margin-bottom: 2px; color: var(--gold-dark, #8a6512); font-size: .68rem; font-weight: 850; letter-spacing: .04em; text-transform: uppercase; }
+.mascot-bubble .mascot-next { margin-top: 6px; padding: 3px 10px; border: 1px solid var(--green-950); border-radius: 99px; background: var(--white); color: var(--green-950); font-size: .76rem; font-weight: 800; cursor: pointer; }
+.mascot-bubble .mascot-close { position: absolute; top: 2px; right: 2px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer; }
 @keyframes mascot-pop { from { opacity: 0; transform: translateY(6px) scale(.94); } to { opacity: 1; transform: none; } }
 @media (max-width: 760px) {
   /* Đứng trên thanh menu dưới cùng; có thanh giỏ hàng nổi thì đứng cao hơn nữa. */
