@@ -1614,4 +1614,7 @@ Nhãn **HOT** đỏ tự hiện ở ô nhóm có tên chứa "Đi Chợ Hộ" (�
 - Chọn **Khách buôn** trong form tạo đơn: nút **+ Thêm khách mới** mở form thêm khách ngay tại chỗ (cần quyền quản lý khách buôn). Một lần lưu gồm: tên công ty, người liên hệ, số điện thoại, địa chỉ, định vị, ghi chú và **Gạo hay đặt và giá cố định**. Lưu xong quay lại đơn, khách được chọn sẵn, địa chỉ và định vị tự điền.
 - **Gạo hay đặt** chính là bảng giá riêng của khách (`wholesale_prices`). Khi tạo đơn, các loại này hiện thành nút bấm, bấm là thêm vào đơn với đúng giá cố định. Nút **Sửa khách / giá** sửa ngay trong form đơn, không mất các dòng hàng đang nhập.
 - Quản trị → Khách buôn dùng chung form này (`frontend/src/components/WholesaleCustomerForm.jsx`); danh sách có link **Mở định vị**. Bảng "Giá riêng" đầy đủ vẫn còn.
+- **Dán link thẳng vào ô Địa chỉ giao cũng được** (form tạo đơn và form khách buôn): link tự chuyển sang ô Định vị, phần chữ còn lại ở lại làm địa chỉ. Máy chủ cũng tự tách nếu link còn nằm trong ô địa chỉ.
+- Nhận cả link chép từ thanh địa chỉ Google Maps (dạng `google.com/maps/place/21°17'27.6"N+106°12'04.4"E/@…`) và toạ độ độ-phút-giây `21°17'27.6"N 106°12'04.4"E`. Link đầy đủ dài quá 1000 ký tự được rút về đúng điểm ghim nằm trong link.
+- Đơn giao tận nơi **chỉ có định vị, không gõ địa chỉ** vẫn tạo được; địa chỉ trên đơn ghi "Giao theo định vị Google Maps". Không có cả địa chỉ lẫn định vị thì vẫn bị từ chối.
 - Kiểm thử: `npm --prefix backend run test:map`.

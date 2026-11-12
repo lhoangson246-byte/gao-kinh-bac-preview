@@ -341,29 +341,59 @@ export function mapLink(lat, lng) {
  * Định vị nhân viên dán vào (link Google Maps, kể cả dán kèm chữ, hoặc toạ độ "21.18,106.07"): trả về
  * link mở được, hoặc '' nếu chưa đúng. Cùng quy tắc với backend/src/map-link.js; máy chủ kiểm tra lại.
  */
+const MAP_URL_RE = /https?:\/\/[^\s<>]+/i;
+const mapCoordsUrl = (lat, lng) => (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
+  ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}` : '');
+
 export function pastedMapLink(raw) {
   const text = String(raw || '').trim();
-  if (!text) return '';
+  if (!text || text.length > 2000) return '';
   const coords = /^(-?\d{1,2}(?:\.\d+)?)\s*[,;]\s*(-?\d{1,3}(?:\.\d+)?)$/.exec(text);
-  if (coords) {
-    const lat = Number(coords[1]);
-    const lng = Number(coords[2]);
-    return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}` : '';
+  if (coords) return mapCoordsUrl(Number(coords[1]), Number(coords[2]));
+  // Toạ độ dạng độ-phút-giây Google Maps hiển thị: 21°17'27.6"N 106°12'04.4"E
+  const dms = /^(\d{1,2})\s*°\s*(\d{1,2})\s*['′’]\s*(\d{1,2}(?:\.\d+)?)\s*(?:"|″|”|'')?\s*([NS])[\s,;+]*(\d{1,3})\s*°\s*(\d{1,2})\s*['′’]\s*(\d{1,2}(?:\.\d+)?)\s*(?:"|″|”|'')?\s*([EW])$/i.exec(text);
+  if (dms) {
+    const part = (deg, min, sec, negative) => {
+      if (Number(min) >= 60 || Number(sec) >= 60) return NaN;
+      const value = Number(deg) + Number(min) / 60 + Number(sec) / 3600;
+      return Number((negative ? -value : value).toFixed(6));
+    };
+    return mapCoordsUrl(part(dms[1], dms[2], dms[3], /s/i.test(dms[4])), part(dms[5], dms[6], dms[7], /w/i.test(dms[8])));
   }
-  const found = /https?:\/\/[^\s<>"']+/i.exec(text);
+  // Link chép từ thanh địa chỉ có dấu ' và " trong toạ độ nên link chỉ kết thúc ở khoảng trắng.
+  const found = MAP_URL_RE.exec(text);
   if (!found) return '';
   try {
-    const url = new URL(found[0].replace(/[.,;:!?)\]]+$/, ''));
+    const url = new URL(found[0].replace(/[.,;:!?)\]"'”’]+$/, ''));
     url.protocol = 'https:';
     const host = url.hostname.toLowerCase();
     const path = url.pathname;
     const ok = host === 'maps.app.goo.gl' ? path.length > 1
       : host === 'goo.gl' ? path.startsWith('/maps/')
       : /^(www\.|maps\.)?google\.com(\.vn)?$/.test(host) && (host.startsWith('maps.') || path === '/maps' || path.startsWith('/maps/'));
-    return ok && !url.username && !url.password && !url.port && url.href.length <= 1000 ? url.href : '';
+    if (!ok || url.username || url.password || url.port) return '';
+    const href = url.href.replace(/'/g, '%27');
+    if (href.length <= 1000) return href;
+    // Link đầy đủ quá dài: giữ lại đúng điểm ghim nằm trong link.
+    const pin = /!3d(-?\d{1,2}(?:\.\d+)?)!4d(-?\d{1,3}(?:\.\d+)?)/.exec(href) || /@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/.exec(href);
+    return pin ? mapCoordsUrl(Number(pin[1]), Number(pin[2])) : '';
   } catch {
     return '';
   }
+}
+
+/**
+ * Dán link Google Maps thẳng vào ô địa chỉ: tách link ra khỏi phần chữ.
+ * Trả về `{ address, link }`, hoặc null khi đoạn văn bản không chứa link Google Maps hợp lệ.
+ */
+export function splitAddressMap(raw) {
+  const text = String(raw || '');
+  const found = MAP_URL_RE.exec(text);
+  const link = found ? pastedMapLink(found[0]) : '';
+  if (!link) return null;
+  const address = `${text.slice(0, found.index)} ${text.slice(found.index + found[0].length)}`
+    .replace(/\s+/g, ' ').replace(/^[\s,;:|–-]+|[\s,;:|(–-]+$/g, '');
+  return { address, link };
 }
 
 export const DELIVERY_AREA_CODE = 'bac-ninh';

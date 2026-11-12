@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, formatVND } from '../api';
-import MapLinkField from './MapLinkField.jsx';
+import MapLinkField, { addressMapProps } from './MapLinkField.jsx';
 
 const EMPTY = { company: '', contact_name: '', phone: '', address: '', map_url: '', note: '', password: '' };
 const EMPTY_ROW = { product_id: '', price: '' };
@@ -22,6 +22,7 @@ export default function WholesaleCustomerForm({ customer = null, onSaved, onCanc
   const [ready, setReady] = useState(!editing);
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
+  const [mapFromAddress, setMapFromAddress] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -94,9 +95,12 @@ export default function WholesaleCustomerForm({ customer = null, onSaved, onCanc
       </div>
       <div className="about-admin-row">
         <label>Địa chỉ giao
-          <input className="input" value={form.address} maxLength={300} onChange={(e) => set('address', e.target.value)} placeholder="Số nhà, đường, phường — trong tỉnh Bắc Ninh" />
+          <input className="input" value={form.address} maxLength={300} aria-invalid={!!errors.address}
+                 {...addressMapProps(form.address, (v) => set('address', v), (v) => set('map_url', v), () => setMapFromAddress(true))}
+                 placeholder="Số nhà, đường, phường — hoặc dán link Google Maps" />
+          {errors.address && <small className="err">{errors.address}</small>}
         </label>
-        <MapLinkField value={form.map_url} onChange={(v) => set('map_url', v)} error={errors.map_url} />
+        <MapLinkField value={form.map_url} onChange={(v) => { set('map_url', v); setMapFromAddress(false); }} error={errors.map_url} fromAddress={mapFromAddress} />
       </div>
 
       <fieldset className="manual-lines usual-rows">

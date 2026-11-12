@@ -8,7 +8,7 @@ import { HttpError, cleanText, normalizePhone, toInteger } from '../validate.js'
 import { LIMITS } from '../constants.js';
 import { writeAdminAudit } from '../audit.js';
 import { getWholesale, shapeWholesale, wholesaleCode, wholesalePrices } from '../wholesale.js';
-import { parseMapLink } from '../map-link.js';
+import { parseMapLink, splitAddressMap } from '../map-link.js';
 
 /**
  * /api/admin/wholesale — khách buôn. Nhân viên được tạo đơn (orders.create) xem danh sách và bảng giá
@@ -51,9 +51,18 @@ router.get('/:id', canSee, (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-function readInput(body, { partial }) {
+function readInput(input, { partial }) {
   const errors = {};
   const data = {};
+  // Link Google Maps dán thẳng vào ô địa chỉ: tách ra làm định vị (nếu ô định vị đang trống).
+  const pasted = splitAddressMap(input.address);
+  const body = !pasted ? input : {
+    ...input, address: pasted.address || null,
+    map_url: typeof input.map_url === 'string' && input.map_url.trim() ? input.map_url : pasted.url,
+  };
+  if (typeof body.address === 'string' && body.address.length > LIMITS.address) {
+    throw new HttpError(400, 'Dữ liệu khách buôn chưa hợp lệ.', { address: `Địa chỉ dài quá ${LIMITS.address} ký tự.` });
+  }
   const textField = (key, max, min, message) => {
     if (body[key] === undefined && partial) return;
     const value = cleanText(body[key], max);

@@ -1,7 +1,7 @@
 // Định vị Google Maps khi tạo đơn; thêm khách buôn kèm định vị, gạo hay đặt và giá cố định trong một lần lưu.
 // Cách chạy: node test/map-link.mjs — tự dựng máy chủ và cơ sở dữ liệu riêng.
 import { fixture } from './fixture.mjs';
-import { parseMapLink } from '../src/map-link.js';
+import { parseMapLink, splitAddressMap } from '../src/map-link.js';
 
 const results = [];
 const check = (name, ok, extra = '') => results.push(`${ok ? 'PASS' : 'FAIL'}  ${name}${!ok && extra ? `  — ${extra}` : ''}`);
@@ -25,6 +25,25 @@ for (const [name, bad] of [
   ['Toạ độ ngoài phạm vi', '95.0,200.0'],
   ['Chữ không có link', 'ngã tư gần chợ'],
 ]) check(`Từ chối: ${name}`, !!parseMapLink(bad).error && !parseMapLink(bad).url, JSON.stringify(parseMapLink(bad)));
+
+
+/* Link chép từ thanh địa chỉ Google Maps: toạ độ độ-phút-giây có dấu ' và " ngay trong link */
+const PIN = "!3d21.291007!4d106.20121";
+const BAR = `https://www.google.com/maps/place/21%C2%B017'27.6%22N+106%C2%B012'04.4%22E/@21.2915085,106.2012041,16.9z/data=!4m4!3m3!8m2${PIN}?entry=ttu`;
+const SHOWN = `https://www.google.com/maps/place/21°17'27.6"N+106°12'04.4"E/@21.2915085,106.2012041,16.9z/data=!4m4!3m3!8m2${PIN}`;
+const barUrl = parseMapLink(BAR).url || '';
+check('Link chép từ thanh địa chỉ (có dấu \' và "): giữ trọn link, không cắt cụt', barUrl.includes(PIN) && barUrl.includes("21%C2%B017%2727.6%22N") && !barUrl.includes("'"), barUrl);
+check('Link dạng hiển thị (° \' ") cũng giữ trọn', (parseMapLink(SHOWN).url || '').includes(PIN), JSON.stringify(parseMapLink(SHOWN)));
+check('Link trong dấu ngoặc kép: bỏ dấu ngoặc ở cuối', parseMapLink(`"${SHORT}"`).url === SHORT, JSON.stringify(parseMapLink(`"${SHORT}"`)));
+check('Toạ độ độ-phút-giây đổi thành link', parseMapLink(`21°17'27.6"N 106°12'04.4"E`).url === 'https://www.google.com/maps/search/?api=1&query=21.291,106.201222', JSON.stringify(parseMapLink(`21°17'27.6"N 106°12'04.4"E`)));
+check('Toạ độ độ-phút-giây sai (phút 75) bị từ chối', !!parseMapLink(`21°75'27.6"N 106°12'04.4"E`).error);
+const LONG = `https://www.google.com/maps/place/${'Nha+hang+'.repeat(120)}/@21.2915085,106.2012041,17z/data=!4m6!3m5!1s0x0:0x0!8m2${PIN}!16s`;
+check('Link đầy đủ quá dài: giữ lại đúng điểm ghim trong link', parseMapLink(LONG).url === 'https://www.google.com/maps/search/?api=1&query=21.291007,106.20121', JSON.stringify(parseMapLink(LONG)).slice(0, 200));
+check('Link quá dài không có toạ độ: báo lỗi', !!parseMapLink(`https://www.google.com/maps/place/${'a'.repeat(1100)}`).error);
+const sp = splitAddressMap(`Số 12 ngõ 5 đường Quang Khải - ${SHORT}`);
+check('Tách link khỏi ô địa chỉ, giữ phần chữ', sp?.address === 'Số 12 ngõ 5 đường Quang Khải' && sp?.url === SHORT, JSON.stringify(sp));
+check('Ô địa chỉ chỉ có link: địa chỉ rỗng', splitAddressMap(BAR)?.address === '' && splitAddressMap(BAR)?.url === barUrl);
+check('Ô địa chỉ có link trang lạ hoặc không có link: giữ nguyên', splitAddressMap('Số 12, xem https://evil.example.com/maps') === null && splitAddressMap('Số 12 đường Lý Thái Tổ') === null);
 
 const app = await fixture();
 const { call } = app;
@@ -64,6 +83,25 @@ try {
   check('Khách tự đến lấy: không lưu định vị', pickup.status === 201 && pickup.data.order.map_url == null, JSON.stringify(pickup.data).slice(0, 200));
   const coords = await order({ phone: phone('09', 7), map_url: '21.1861,106.0763' });
   check('Dán toạ độ: đổi thành link Google Maps', coords.status === 201 && coords.data.order.map_url === 'https://www.google.com/maps/search/?api=1&query=21.1861,106.0763');
+
+  /* Dán link thẳng vào ô địa chỉ */
+  const inAddr = await order({ phone: phone('09', 1), address: `Số 12 ngõ 5 đường Quang Khải, ${BAR}` });
+  check('Link dán trong ô địa chỉ: tách thành định vị, địa chỉ còn phần chữ', inAddr.status === 201 && inAddr.data.order.map_url === barUrl
+    && /^Số 12 ngõ 5 đường Quang Khải, Bắc Ninh$/.test(inAddr.data.order.address), JSON.stringify(inAddr.data).slice(0, 300));
+  const onlyLink = await order({ phone: phone('09', 2), address: BAR });
+  check('Ô địa chỉ chỉ có link: vẫn tạo đơn, ghi "Giao theo định vị Google Maps"', onlyLink.status === 201 && onlyLink.data.order.map_url === barUrl
+    && onlyLink.data.order.address === 'Giao theo định vị Google Maps', JSON.stringify(onlyLink.data).slice(0, 300));
+  const onlyMap = await order({ phone: phone('07', 3), address: null, map_url: `21°17'27.6"N 106°12'04.4"E` });
+  check('Để trống địa chỉ, chỉ dán toạ độ ở ô định vị: tạo được đơn', onlyMap.status === 201 && /query=21\.291,106\.201222$/.test(onlyMap.data.order.map_url || '')
+    && onlyMap.data.order.address === 'Giao theo định vị Google Maps', JSON.stringify(onlyMap.data).slice(0, 300));
+  const noBoth = await order({ phone: phone('07', 4), address: null });
+  check('Không địa chỉ, không định vị: vẫn bị từ chối (400)', noBoth.status === 400 && !!noBoth.data.errors?.address, JSON.stringify(noBoth.data));
+  const evilAddr = await order({ phone: phone('07', 5), address: 'Số 12 đường Lý Thái Tổ https://evil.example.com/maps' });
+  check('Link trang lạ trong ô địa chỉ không thành định vị', evilAddr.status === 201 && evilAddr.data.order.map_url == null);
+  const tooLong = await order({ phone: phone('07', 6), address: 'Số 1 đường A '.repeat(40) });
+  check('Địa chỉ chữ dài quá 300 ký tự vẫn bị từ chối (400)', tooLong.status === 400, JSON.stringify(tooLong.data).slice(0, 200));
+  const wsAddr = await call('/admin/wholesale', { method: 'POST', token: owner, body: { company: 'Quán cơm Quang Khải', contact_name: 'Anh Tư', phone: phone('08', 7), address: `Ngõ 5 Quang Khải ${SHORT}` } });
+  check('Thêm khách buôn dán link trong ô địa chỉ: tách thành định vị', wsAddr.status === 201 && wsAddr.data.customer.map_url === SHORT && wsAddr.data.customer.address === 'Ngõ 5 Quang Khải', JSON.stringify(wsAddr.data).slice(0, 300));
 
   /* Thêm khách buôn kèm định vị, gạo hay đặt và giá cố định trong một lần */
   const custPhone = phone('08', 8);

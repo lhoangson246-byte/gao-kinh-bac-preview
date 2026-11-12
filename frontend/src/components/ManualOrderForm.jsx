@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, DELIVERY_SLOTS, formatVND, shippingFeeFor } from '../api';
+import { api, DELIVERY_SLOTS, formatVND, pastedMapLink, shippingFeeFor } from '../api';
 import { foldText } from './WholesaleManager.jsx';
 import WholesaleCustomerForm from './WholesaleCustomerForm.jsx';
-import MapLinkField from './MapLinkField.jsx';
+import MapLinkField, { addressMapProps } from './MapLinkField.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const EMPTY = {
@@ -32,6 +32,7 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
   const [wsOpen, setWsOpen] = useState(false);
   const [ws, setWs] = useState(null);              // { customer, prices: Map }
   const [custForm, setCustForm] = useState(null);  // null | { customer: null } (thêm) | { customer } (sửa)
+  const [mapFromAddress, setMapFromAddress] = useState(false);
   const { can } = useAuth();
   const canManageCustomers = can('wholesale.manage');
   const wholesale = kind === 'wholesale';
@@ -227,12 +228,14 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
       </label>
       {form.home_delivery && (
         <label>Địa chỉ giao
-          <textarea className="input" rows={2} value={form.address} maxLength={300} onChange={(e) => set('address', e.target.value)}
-                    placeholder="Số nhà, đường, phường — trong tỉnh Bắc Ninh" aria-invalid={!!errors.address} />
-          {errors.address && <small className="err">{errors.address}</small>}
+          <textarea className="input" rows={2} value={form.address} maxLength={300} aria-invalid={!!errors.address}
+                    {...addressMapProps(form.address, (v) => set('address', v), (v) => set('map_url', v), () => setMapFromAddress(true))}
+                    placeholder="Số nhà, đường, phường — hoặc dán link Google Maps khách gửi" />
+          {errors.address ? <small className="err">{errors.address}</small>
+            : !form.address.trim() && pastedMapLink(form.map_url) && <small className="field-help">Chưa gõ địa chỉ: đơn sẽ ghi "Giao theo định vị Google Maps".</small>}
         </label>
       )}
-      {form.home_delivery && <MapLinkField value={form.map_url} onChange={(v) => set('map_url', v)} error={errors.map_url} />}
+      {form.home_delivery && <MapLinkField value={form.map_url} onChange={(v) => { set('map_url', v); setMapFromAddress(false); }} error={errors.map_url} fromAddress={mapFromAddress} />}
 
       <fieldset className="manual-lines">
         <legend>Hàng khách đặt</legend>

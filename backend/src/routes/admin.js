@@ -20,7 +20,7 @@ import {
   MAX_GROUPS, groupIdsByProduct, groupIdsOf, listGroups, setProductGroups, uniqueSlug,
 } from '../product-groups.js';
 import { getWholesale, wholesalePrices } from '../wholesale.js';
-import { parseMapLink } from '../map-link.js';
+import { MAP_ONLY_ADDRESS, parseMapLink, splitAddressMap } from '../map-link.js';
 
 const router = Router();
 
@@ -142,16 +142,23 @@ router.post('/orders', async (req, res, next) => {
     const phone = normalizePhone(body.phone);
     if (!phone) errors.phone = 'Số điện thoại không hợp lệ (10 số, ví dụ 0912345678).';
     const homeDelivery = body.home_delivery !== false;
+    // Định vị khách gửi (link Google Maps hoặc toạ độ): chỉ cần khi giao tận nơi.
+    // Link dán thẳng vào ô địa chỉ được tách ra làm định vị (nếu ô định vị đang trống).
+    const pasted = homeDelivery ? splitAddressMap(body.address) : null;
+    const mapInput = typeof body.map_url === 'string' && body.map_url.trim() ? body.map_url : pasted?.url;
+    const map = homeDelivery ? parseMapLink(mapInput) : { url: null };
+    if (map.error) errors.map_url = map.error;
     let address = 'Khách lấy tại cửa hàng';
     if (homeDelivery) {
-      const raw = cleanText(body.address, LIMITS.address);
-      if (!raw || raw.length < 8) errors.address = 'Nhập địa chỉ giao hàng chi tiết.';
+      const typed = pasted ? pasted.address : body.address;
+      if (typeof typed === 'string' && typed.length > LIMITS.address) errors.address = `Địa chỉ dài quá ${LIMITS.address} ký tự.`;
+      const raw = errors.address ? null : cleanText(typed, LIMITS.address);
+      if (errors.address) { /* đã báo ở trên */ }
+      else if (!raw && map.url) address = MAP_ONLY_ADDRESS;      // chỉ có định vị: giao theo điểm ghim
+      else if (!raw || (raw.length < 8 && !map.url)) errors.address = 'Nhập địa chỉ giao hàng chi tiết hoặc dán link định vị Google Maps.';
       else if (mentionsOtherProvince(raw)) errors.address = 'Cửa hàng chỉ giao trong tỉnh Bắc Ninh.';
       else address = normalizeBacNinhAddress(raw);
     }
-    // Định vị khách gửi (link Google Maps hoặc toạ độ): chỉ cần khi giao tận nơi.
-    const map = homeDelivery ? parseMapLink(body.map_url) : { url: null };
-    if (map.error) errors.map_url = map.error;
     const slot = body.delivery_slot || null;
     if (slot && !DELIVERY_SLOT_CODES.includes(slot)) errors.delivery_slot = 'Khung giờ giao không hợp lệ.';
     const payment = body.payment_method || 'cod';
