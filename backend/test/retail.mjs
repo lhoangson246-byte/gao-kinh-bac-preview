@@ -225,14 +225,14 @@ let invoice10k;
   check('Số lượng gộp đúng bằng 3', dup.data.invoice?.items?.[0]?.quantity === 3);
 }
 
-/* ---------- Tồn kho KHÔNG bị trừ (theo yêu cầu tách riêng) ---------- */
+/* ---------- Bán tại quầy trừ tồn Cửa hàng Nguyễn Cao (từ 13/11/2026, hai kho) ---------- */
 {
   const before = (await call(`/products/${p35.id}`)).data.product.stock;
   await call('/retail/invoices', {
     method: 'POST', token: admin, body: { items: [{ product_id: p35.id, quantity: 3 }] },
   });
   const after = (await call(`/products/${p35.id}`)).data.product.stock;
-  check('Bán tại quầy KHÔNG trừ tồn kho của web', after === before, `${before} -> ${after}`);
+  check('Bán tại quầy trừ tồn Cửa hàng Nguyễn Cao', after === before - 3, `${before} -> ${after}`);
 }
 
 /* ---------- Tra cứu khách theo số điện thoại ---------- */

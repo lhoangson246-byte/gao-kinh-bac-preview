@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const ADMIN_TAB_PERMISSIONS = ['orders.view', 'products.manage', 'customers.manage', 'revenue.view'];
+const INVENTORY_PERMISSIONS = ['inventory.view', 'inventory.receive', 'inventory.transfer', 'inventory.count'];
 
 /**
  * Hàng tab dưới thanh trên cùng ở các trang của nhân viên (giao hàng, công nợ, chấm công). Luôn hiện
@@ -12,6 +13,7 @@ export default function StaffNav() {
   const isAdmin = user?.role === 'admin';
   const links = [
     !isAdmin && can('delivery') && ['/quan-tri/giao-hang', '🛵 Giao hàng'],
+    INVENTORY_PERMISSIONS.some((p) => can(p)) && ['/quan-tri/kho', '📦 Kho hàng'],
     can('debt.view') && ['/quan-tri/cong-no', '📒 Công nợ'],
     ['/quan-tri/cham-cong', '⏱ Chấm công'],
     (isAdmin || ADMIN_TAB_PERMISSIONS.some((p) => can(p))) && ['/quan-tri', '▤ Quản trị'],

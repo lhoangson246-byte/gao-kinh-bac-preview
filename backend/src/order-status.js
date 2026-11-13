@@ -14,7 +14,7 @@ import { creditPoints, loyaltyPhoneForOrder } from './loyalty.js';
  * `guard(current)` (tuỳ chọn) chạy trong transaction trước khi đổi, để kiểm tra thêm điều kiện, ví
  * dụ nhân viên giao hàng chỉ được đổi đơn của chính mình. Trả { before, order }.
  */
-export function changeOrderStatus(orderId, status, { guard, within } = {}) {
+export function changeOrderStatus(orderId, status, { guard, within, actor = null } = {}) {
   if (!ORDER_STATUSES.includes(status)) {
     throw new HttpError(400, `Trạng thái phải thuộc: ${ORDER_STATUSES.join(', ')}.`);
   }
@@ -36,7 +36,7 @@ export function changeOrderStatus(orderId, status, { guard, within } = {}) {
     if (!changed) {
       throw new HttpError(409, 'Đơn hàng vừa được cập nhật ở nơi khác. Vui lòng tải lại trang.');
     }
-    if (status === 'cancelled') restoreStockForOrder(current.id);
+    if (status === 'cancelled') restoreStockForOrder(current.id, actor);
 
     // CHỈ đơn giao xong mới được cộng điểm. Đơn huỷ (ở bất kỳ bước nào trước đó)
     // không bao giờ tới nhánh này, và ALLOWED_TRANSITIONS không cho huỷ đơn đã hoàn thành.

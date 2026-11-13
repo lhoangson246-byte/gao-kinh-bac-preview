@@ -59,6 +59,7 @@ const product = {
   points_per_unit: integer(0, 10_000).or(z.literal('')).nullable().optional(),
   is_reward: flag.optional(),
   group_ids: z.array(id).max(30).optional(),
+  sku: optionalText(30),
 };
 const day = text(10).regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => {
   const d = new Date(`${v}T00:00:00Z`);
@@ -136,6 +137,8 @@ add('admin', 'POST', /^\/orders\/?$/, obj({
   items: manualLines.min(1), discount_code: z.string().max(40).nullable().optional(), shipper_id: id.nullable().optional(),
   customer_type: z.enum(['retail', 'wholesale']).optional(), wholesale_customer_id: id.nullable().optional(),
   map_url: optionalText(2000),
+  // Kho xuất hàng của đơn khách buôn (bỏ trống = Cửa hàng Nguyễn Cao).
+  warehouse: z.enum(['KH_NC', 'KH_BS']).optional(),
 }));
 // Khách buôn.
 const wholesaleBody = {
@@ -283,6 +286,35 @@ add('debts', 'PUT', /^\/accounts\/[^/]+\/?$/, obj({
 }), obj({ scope: z.enum(['open', 'settled']).optional() }));
 add('closing', 'GET', /^\/?$/, empty, obj({ day: z.string().max(10).optional() }));
 // Chấm công: giờ vào / ra do máy chủ ghi, nên chấm vào / ra không nhận dữ liệu nào.
+// Kho hàng: hai kho, phiếu nhập, điều chuyển, kiểm kê, nhật ký kho.
+const warehouseCode = z.enum(['KH_NC', 'KH_BS']);
+const stockQty = integer(0, 100_000).or(z.literal('')).nullable().optional();
+add('inventory', 'GET', /^\/?$/);
+add('inventory', 'GET', /^\/(stock|receipts)\/?$/);
+add('inventory', 'GET', /^\/movements\/?$/, empty, obj({
+  product_id: id.optional(), warehouse: warehouseCode.optional(), group: z.enum(['in', 'transfer', 'sale', 'count']).optional(),
+  from: day.optional(), to: day.optional(), ...page,
+}));
+add('inventory', 'GET', /^\/transfers\/?$/, empty, obj({ status: z.enum(['in_transit', 'received', 'cancelled']).optional() }));
+add('inventory', 'POST', /^\/receipts\/?$/, obj({
+  kind: z.enum(['cong-gao', 'cua-hang']), source: optionalText(120), vehicle: optionalText(80), note,
+  items: z.array(obj({
+    product_id: id, quantity_bs: stockQty, quantity_nc: stockQty,
+    cost_price: integer(0, LIMITS.price).or(z.literal('')).nullable().optional(),
+  })).min(1).max(300),
+}));
+add('inventory', 'POST', /^\/transfers\/?$/, obj({
+  from: warehouseCode, to: warehouseCode, note,
+  items: z.array(obj({ product_id: id, quantity: integer(1, 100_000) })).min(1).max(300),
+}));
+add('inventory', 'POST', /^\/transfers\/[^/]+\/receive\/?$/, obj({
+  note, items: z.array(obj({ item_id: id, received: integer(0, 100_000) })).max(300).optional(),
+}));
+add('inventory', 'POST', /^\/transfers\/[^/]+\/cancel\/?$/, obj({ note }));
+add('inventory', 'POST', /^\/count\/?$/, obj({
+  warehouse: warehouseCode, kind: z.enum(['opening', 'count']).optional(), note,
+  items: z.array(obj({ product_id: id, counted: integer(0, LIMITS.stock) })).min(1).max(1000),
+}));
 const monthQuery = obj({ month: z.string().max(7).optional() });
 add('attendance', 'GET', /^\/(me|month)\/?$/, empty, monthQuery);
 add('attendance', 'POST', /^\/clock-(in|out)\/?$/);

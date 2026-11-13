@@ -290,6 +290,10 @@ export default function Admin() {
     setShowForm(false);
   };
 
+  // Tồn (Cửa hàng Nguyễn Cao) của sản phẩm đang sửa, để biết ô tồn có bị đổi hay không.
+  const stockOriginal = editingId ? products.find((p) => p.id === editingId)?.stock : null;
+  const stockUnchanged = editingId != null && form.stock !== '' && Number(form.stock) === stockOriginal;
+
   /** Kiểm tra ngay tại trình duyệt; máy chủ vẫn kiểm tra lại lần nữa. */
   const validateProduct = () => {
     const errors = {};
@@ -306,7 +310,8 @@ export default function Admin() {
     } else if (original > 0 && original <= Number(form.price)) {
       errors.original_price = 'Giá gốc phải cao hơn giá bán. Để trống nếu không giảm giá.';
     }
-    if (!Number.isFinite(stock) || !Number.isInteger(stock) || stock < 0) {
+    // Không đổi ô tồn thì không kiểm tra (bán tại quầy có thể làm tồn âm, sửa ở trang Kho hàng).
+    if (!stockUnchanged && (!Number.isFinite(stock) || !Number.isInteger(stock) || stock < 0)) {
       errors.stock = 'Tồn kho phải là số nguyên từ 0 trở lên.';
     }
     if (form.points_custom) {
@@ -346,6 +351,8 @@ export default function Admin() {
         original_price: form.original_price === '' ? 0 : Number(form.original_price),
         stock: form.stock === '' ? 0 : Number(form.stock),
       };
+      // Sửa sản phẩm mà không đụng ô tồn thì không gửi tồn lên, để không ghi nhầm vào nhật ký kho.
+      if (stockUnchanged) delete payload.stock;
       if (editingId) {
         await api.adminUpdateProduct(editingId, payload);
         notify('Đã lưu thay đổi sản phẩm.');
@@ -537,6 +544,10 @@ export default function Admin() {
           {allowed('staff') && <button className={tab === 'staff' ? 'active' : ''} onClick={() => setTab('staff')}>
             <span aria-hidden="true">☷</span><span>Nhân viên<small>Tài khoản và quyền</small></span>
           </button>}
+          {['inventory.view', 'inventory.receive', 'inventory.transfer', 'inventory.count'].some((p) => can(p)) && <Link to="/quan-tri/kho" className="admin-sidebar-link">
+            <span aria-hidden="true">📦</span>
+            <span>Kho hàng<small>Tồn Nguyễn Cao, Bồ Sơn, nhập và điều chuyển</small></span>
+          </Link>}
           {can('retail.sell') && <Link to="/quan-tri/ban-hang" className="admin-sidebar-link">
             <span aria-hidden="true">◧</span>
             <span>Bán hàng tại quầy<small>Hoá đơn và tích điểm</small></span>
@@ -726,6 +737,7 @@ export default function Admin() {
                                 <p className="detail-label">Khách nhận hàng</p>
                                 <h2>{order.receiver_name}</h2>
                                 {order.wholesale_code && <p className="wholesale-tag">🏢 Khách buôn {order.wholesale_code} · {order.wholesale_company}</p>}
+                                {order.warehouse === 'KH_BS' && <p className="warehouse-tag">📦 Xuất hàng từ Kho Bồ Sơn</p>}
                                 <a href={`tel:${order.phone}`} className="phone-link">{order.phone}</a>
                                 <p className="address-text">{order.address}</p>
                                 {order.map_url && order.fulfillment !== 'pickup' && (
@@ -899,8 +911,10 @@ export default function Admin() {
                                 : <small className="field-help">Dùng để tính mốc 50kg giảm giá tại quầy và quà khuyến mãi theo kg.</small>}
                           </label>
                           <label>Số lượng còn lại
-                            <input className="input" type="number" name="stock" value={form.stock} onChange={onChange} min="0" step="1" inputMode="numeric" aria-invalid={!!formErrors.stock} />
-                            {formErrors.stock && <small className="err">{formErrors.stock}</small>}
+                            <input className="input" type="number" name="stock" value={form.stock} onChange={onChange} min={stockUnchanged ? undefined : 0} step="1" inputMode="numeric" aria-invalid={!!formErrors.stock} />
+                            {formErrors.stock
+                              ? <small className="err">{formErrors.stock}</small>
+                              : <small className="field-help">Tồn ở Cửa hàng Nguyễn Cao (số khách thấy trên web). Nhập kho, điều chuyển, kiểm kê ở trang Kho hàng.</small>}
                           </label>
                         </div>
                         {groups.length > 0 && (

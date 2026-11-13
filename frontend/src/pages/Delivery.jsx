@@ -128,6 +128,7 @@ export default function Delivery() {
                   </a>
                 </>
               )}
+              {order.warehouse === 'KH_BS' && <p className="delivery-meta">📦 Lấy hàng ở Kho Bồ Sơn</p>}
               {order.delivery_slot && <p className="delivery-meta">🕒 {DELIVERY_SLOT_LABEL[order.delivery_slot]}</p>}
               {order.note && <p className="delivery-note">📝 {order.note}</p>}
               <ul className="delivery-items">

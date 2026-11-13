@@ -135,9 +135,8 @@ Các bảng này được tạo tự động khi khởi động API, không cầ
 
 ### Điểm cần biết
 
-- **Không trừ tồn kho của web.** Theo yêu cầu của cửa hàng, bán tại quầy và bán online theo dõi
-  tồn kho riêng. Nếu sau này muốn dùng chung một kho thì sửa `routes/retail.js` để trừ `products.stock`
-  trong cùng transaction, giống `routes/orders.js`.
+- **Từ 13/11/2026 bán tại quầy TRỪ tồn Cửa hàng Nguyễn Cao** (cửa hàng đổi quy định khi làm hai kho, xem mục
+  "Hai kho: Cửa hàng Nguyễn Cao và Kho Bồ Sơn"). Trước đó bán tại quầy không trừ tồn kho của web.
 - Toàn bộ tiền (tiền hàng, giảm giá, điểm) đều do **máy chủ tính lại**; dữ liệu gửi từ trình duyệt bị bỏ qua.
 - Loại gạo **chưa có giá** thì không bán được tại quầy.
 - Khách không cho số điện thoại vẫn bán được, chỉ là không tích điểm.
@@ -1445,6 +1444,73 @@ khoá. Muốn thêm câu mới thì viết bảng `vi` trước; bảng nào thi
 Câu lỗi từ máy chủ được dịch trong `frontend/src/i18n/server.js`. Bản tiếng Trung dùng chữ giản
 thể. Nếu có người đọc tiếng Trung hoặc tiếng Anh, nên nhờ họ đọc soát lại một lượt.
 
+
+## Hai kho: Cửa hàng Nguyễn Cao và Kho Bồ Sơn (13/11/2026)
+
+Trang **Kho hàng** (`/quan-tri/kho`, mục "Kho hàng" ở trang quản trị và thanh tab nhân viên) thay cho việc theo dõi tồn kho trên AppSheet.
+
+### Cửa hàng đã chốt
+
+- **Bán tại quầy trừ tồn Cửa hàng Nguyễn Cao** (trước đây không trừ). Quầy vẫn bán được khi số trên máy đã hết, vì hàng thật đang ở quầy: tồn hiện số âm màu đỏ để biết cần kiểm kê.
+- **Khách đặt trên web chỉ mua theo tồn Nguyễn Cao.** Nguyễn Cao hết thì web báo hết hàng dù Bồ Sơn còn; bảng tồn kho nhắc "Chuyển từ Bồ Sơn".
+
+### Dữ liệu
+
+| Bảng | Nội dung |
+| --- | --- |
+| `warehouses` | Hai kho: `KH_NC` Cửa hàng Nguyễn Cao, `KH_BS` Kho Bồ Sơn |
+| `products.stock` | Tồn **Nguyễn Cao** (số khách thấy trên web, ý nghĩa không đổi so với trước) |
+| `products.stock_bs` | Tồn **Bồ Sơn** |
+| `products.sku` | Mã sản phẩm của cửa hàng (SP014…), không bắt buộc, không trùng nhau |
+| `stock_movements` | **Nhật ký kho**: mỗi lần tồn thay đổi là một dòng (kho, loại việc, số lượng ±, tồn sau đó, mã phiếu/đơn, người làm, lúc nào) |
+| `stock_receipts`, `stock_receipt_items` | Phiếu nhập `NK000123`: loại phiếu, nguồn nhập, số xe, từng dòng hàng vào kho nào |
+| `stock_transfers`, `stock_transfer_items` | Lệnh chuyển `DC000123`: kho xuất, kho nhận, trạng thái, số chuyển và số thực nhận |
+| `orders.warehouse` | Kho xuất hàng của đơn |
+
+Tồn đang có lúc cập nhật được coi là tồn đầu kỳ của Nguyễn Cao (số không đổi, chỉ ghi thêm dòng nhật ký mở đầu). Bồ Sơn bắt đầu từ 0.
+
+### Công thức
+
+Mọi thay đổi tồn đi qua một hàm duy nhất, `moveStock` trong `backend/src/inventory.js`, vừa đổi số tồn vừa ghi nhật ký trong cùng transaction. Vì vậy:
+
+- **Tồn một kho = tổng số lượng của mọi dòng nhật ký thuộc kho đó** = tồn đầu kỳ + nhập + chuyển đến − chuyển đi − bán.
+- Tồn Nguyễn Cao giảm theo: đơn web, đơn nhân viên tạo cho khách lẻ, hoá đơn bán tại quầy, chuyển đi.
+- Tồn Bồ Sơn giảm theo: đơn khách buôn xuất từ Bồ Sơn, chuyển đi.
+- Tổng tồn hệ thống = Nguyễn Cao + Bồ Sơn. Hàng đang trên xe (lệnh chưa xác nhận) không nằm trong kho nào, hiện ở cột "Đang chuyển".
+
+### Cách dùng
+
+- **📥 Nhập kho**: chọn "Nhập công gạo" (về Bồ Sơn, mỗi dòng ghi được cả phần giao thẳng Nguyễn Cao, kèm số xe) hoặc "Nhập hàng cửa hàng" (về Nguyễn Cao). Nhiều loại hàng trên một phiếu. Người có quyền quản lý sản phẩm ghi được giá nhập.
+- **🔄 Điều chuyển hàng**: chọn chiều, loại hàng, số lượng rồi gửi. **Kho xuất bị trừ ngay**; kho nhận chỉ cộng khi người nhận bấm **Xác nhận đã nhận đủ**. Đếm thiếu thì bấm "Nhận thiếu…", gõ số thực nhận; phần thiếu được ghi lại trên lệnh và trong nhật ký. Lệnh còn đang chuyển thì huỷ được, hàng trả về kho xuất. Mỗi lệnh chỉ xác nhận hoặc huỷ được một lần.
+- **📋 Kiểm kê**: chọn kho, gõ số đếm được, máy tự tính chênh lệch. Chọn lý do "Tồn đầu kỳ" cho lần đầu nhập số thật.
+- **Bảng tồn kho**: lọc Tất cả / Nguyễn Cao / Bồ Sơn; cảnh báo xanh (đủ), vàng (Nguyễn Cao còn từ 20 trở xuống), xanh dương (chỉ có ở Bồ Sơn), đỏ (hết hàng hoặc âm kho). Mức 20 đặt ở `LOW_STOCK_AT` trong `backend/src/inventory.js`.
+- **📒 Nhật ký kho**: ai làm gì, ở kho nào, bao nhiêu, tồn sau đó. Lọc theo kho, theo việc, hoặc bấm "Xem lịch sử" ở một loại hàng.
+- **Đơn khách buôn**: form tạo đơn có "Xuất hàng từ: Kho Bồ Sơn / Cửa hàng Nguyễn Cao" (mặc định Bồ Sơn khi Bồ Sơn đã có hàng). Huỷ đơn thì hàng trả về đúng kho đã xuất. Nhân viên giao hàng thấy "Lấy hàng ở Kho Bồ Sơn".
+- Ô "Số lượng còn lại" và nút "Nhập kho" ở trang Sản phẩm vẫn dùng được (là tồn Nguyễn Cao) và cũng ghi vào nhật ký kho.
+
+### Quyền (chủ cửa hàng tick ở mục Nhân viên)
+
+| Quyền | Làm được |
+| --- | --- |
+| `inventory.view` | Xem bảng tồn và nhật ký kho |
+| `inventory.receive` | Tạo phiếu nhập |
+| `inventory.transfer` | Tạo lệnh chuyển, xác nhận đã nhận, huỷ lệnh |
+| `inventory.count` | Kiểm kê, đặt tồn đầu kỳ |
+
+Mẫu "Kế toán" và "Nhân viên bán hàng" có sẵn ba quyền đầu cho tài khoản **tạo mới**. Tài khoản nhân viên đang có **chưa được tự cấp**: chủ cửa hàng phải tick thêm. Kiểm kê mặc định chỉ chủ cửa hàng.
+
+### Việc cửa hàng cần làm sau khi cập nhật
+
+1. Nhập **tồn đầu kỳ thật** cho cả hai kho (Kho hàng → Kiểm kê → lý do "Tồn đầu kỳ").
+2. Gõ **mã sản phẩm** đang dùng trên AppSheet (bấm "+ mã" ở bảng tồn kho).
+3. Cấp quyền kho cho kế toán và nhân viên cửa hàng.
+
+### Chưa làm
+
+- Đổi/trả hàng tại quầy chưa tự cộng lại tồn (hàng trả có thể là hàng lỗi). Hàng trả về bán lại được thì dùng Kiểm kê.
+
+Kiểm thử: `npm --prefix backend run test:inventory` (55 kiểm tra).
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.
@@ -1524,8 +1590,9 @@ chặt hơn thì phải chuyển bộ đếm sang lưu trong cơ sở dữ liệ
 
 Những mục sau **cố tình không có dữ liệu giả**. Khi bạn cung cấp, chúng sẽ được đưa vào giao diện:
 
-- **Số lượng tồn kho thật**: hiện đặt tạm 100 cho mỗi loại đã có giá. Phải sửa lại trong
-  trang quản trị, nếu không cửa hàng sẽ nhận đơn nhiều hơn số hàng đang có.
+- **Số lượng tồn kho thật**: hiện đặt tạm 100 cho mỗi loại đã có giá. Phải nhập số thật ở trang
+  **Kho hàng → Kiểm kê → Tồn đầu kỳ** (cho cả Nguyễn Cao và Bồ Sơn), nếu không cửa hàng sẽ nhận đơn nhiều hơn số hàng đang có.
+- **Mã sản phẩm (SP014…)**: chưa có mã nào. Bấm "+ mã" ở bảng tồn kho để gõ mã đang dùng trên AppSheet.
 - **Giá của 7 loại còn lại** (xem mục "Bảng giá" bên dưới).
 - **Số điện thoại cửa hàng**: chưa hiển thị ở đâu. Cần có để khách gọi khi muốn đổi đơn đã xác nhận.
 - **Địa chỉ cửa hàng**: chưa hiển thị ở footer hay trang liên hệ.

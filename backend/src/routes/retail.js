@@ -15,6 +15,7 @@ import { writeAdminAudit } from '../audit.js';
 import { promoGiftFor } from '../promotions.js';
 import { loyaltyProfile, onlineAccount } from '../loyalty.js';
 import { attachItems } from '../order-lists.js';
+import { STORE, moveStock } from '../inventory.js';
 
 const router = Router();
 
@@ -297,8 +298,8 @@ router.post('/invoices', (req, res, next) => {
     const invoiceNote = cleanText(note, LIMITS.note);
 
     const create = db.transaction(() => {
-      // Bán tại quầy KHÔNG trừ tồn kho của cửa hàng online (theo yêu cầu của cửa hàng),
-      // nên ở đây chỉ đọc giá hiện tại chứ không đụng vào cột stock.
+      // Từ 13/11/2026 (hai kho): hàng bán tại quầy lấy từ Cửa hàng Nguyễn Cao nên TRỪ tồn ở đó, xem
+      // cuối transaction. Ở đây chỉ đọc giá hiện tại.
       // Chuẩn bị trong transaction: trên Turso, câu lệnh chuẩn bị trước BEGIN không
       // chạy cùng phiên với transaction.
       const getProduct = db.prepare('SELECT * FROM products WHERE id = ?');
@@ -436,6 +437,18 @@ router.post('/invoices', (req, res, next) => {
           VALUES (?, ?, ?, ?, 0, ?, ?, 0, ?)
         `).run(invoiceId, gift.product?.id ?? null, gift.product?.name || gift.choice.name,
           gift.product?.unit || 'kg', gift.kg, gift.product?.cost_price ?? 0, gift.promo.code);
+      }
+      // Trừ tồn Cửa hàng Nguyễn Cao và ghi nhật ký kho, trong cùng transaction với hoá đơn. Quầy vẫn bán
+      // được khi số trên máy đã hết (hàng thật đang nằm ở quầy): tồn được phép âm, bảng tồn kho báo đỏ
+      // để cửa hàng kiểm kê lại.
+      const sold = new Map();
+      for (const { product, quantity } of [...lines, ...rewardLines]) sold.set(product.id, (sold.get(product.id) || 0) + quantity);
+      if (gift?.product && Number.isInteger(gift.kg)) sold.set(gift.product.id, (sold.get(gift.product.id) || 0) + gift.kg);
+      for (const [productId, quantity] of sold) {
+        moveStock({
+          productId, warehouse: STORE, delta: -quantity, kind: 'counter', strict: false,
+          ref: { type: 'retail_invoice', id: invoiceId, code: invoiceCode(invoiceId) }, actor: req.user,
+        });
       }
       return invoiceId;
     });

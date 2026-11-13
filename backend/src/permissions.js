@@ -21,16 +21,20 @@ export const PERMISSIONS = {
   'closing.manage': 'Đóng ngày: kê tiền, lưu và xuất báo cáo cuối ngày',
   'wholesale.manage': 'Khách buôn: thêm khách buôn, mã đăng nhập và bảng giá cố định',
   'attendance.manage': 'Chấm công: xem bảng công tháng của mọi người và sửa giờ cho người quên chấm',
+  'inventory.view': 'Kho hàng: xem tồn Cửa hàng Nguyễn Cao, Kho Bồ Sơn và nhật ký kho',
+  'inventory.receive': 'Kho hàng: tạo phiếu nhập kho (công gạo, hàng nhập cửa hàng)',
+  'inventory.transfer': 'Kho hàng: tạo lệnh điều chuyển giữa hai kho và xác nhận đã nhận hàng',
+  'inventory.count': 'Kho hàng: kiểm kê, đặt tồn đầu kỳ',
 };
 export const PERMISSION_CODES = Object.keys(PERMISSIONS);
 
 /** Mẫu quyền để chủ cửa hàng chọn nhanh khi tạo tài khoản; vẫn tick thêm / bỏ được. */
 export const PRESETS = {
   // Kế toán cập nhật các bước Chờ xác nhận → Đã xác nhận → Đang giao (02/11/2026).
-  'ke-toan': { title: 'Kế toán', permissions: ['orders.view', 'orders.manage', 'orders.export', 'revenue.view', 'debt.view', 'debt.accounting', 'closing.manage', 'attendance.manage'] },
+  'ke-toan': { title: 'Kế toán', permissions: ['orders.view', 'orders.manage', 'orders.export', 'revenue.view', 'debt.view', 'debt.accounting', 'closing.manage', 'attendance.manage', 'inventory.view', 'inventory.receive', 'inventory.transfer'] },
   'duyet-cuoi': { title: 'Duyệt cuối (mẹ)', permissions: ['orders.view', 'revenue.view', 'debt.view', 'debt.final'] },
   'giao-hang': { title: 'Nhân viên giao hàng', permissions: ['delivery'] },
-  'ban-hang': { title: 'Nhân viên bán hàng', permissions: ['orders.view', 'orders.manage', 'orders.create', 'retail.sell'] },
+  'ban-hang': { title: 'Nhân viên bán hàng', permissions: ['orders.view', 'orders.manage', 'orders.create', 'retail.sell', 'inventory.view', 'inventory.receive', 'inventory.transfer'] },
 };
 
 /** Danh sách quyền hợp lệ của một tài khoản (chủ cửa hàng: tất cả; khách: không có). */

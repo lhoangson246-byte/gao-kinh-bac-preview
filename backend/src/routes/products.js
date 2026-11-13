@@ -8,7 +8,8 @@ import { listGroups } from '../product-groups.js';
 const router = Router();
 router.use(validateRoutes('products'));
 // Không có cost_price: giá nhập là thông tin nội bộ của cửa hàng.
-const PUBLIC_COLUMNS = 'id, name, description, origin, price, original_price, unit, stock, '
+// Tồn khách thấy là tồn Cửa hàng Nguyễn Cao; bán tại quầy có thể làm số này âm nên không để lộ số âm.
+const PUBLIC_COLUMNS = 'id, name, description, origin, price, original_price, unit, MAX(stock, 0) AS stock, '
   + 'image_url, is_active, category, points_per_unit, weight_kg, created_at';
 
 /** Bỏ ý nghĩa đặc biệt của % và _ để khách gõ ký tự nào cũng chỉ là tìm kiếm chữ. */

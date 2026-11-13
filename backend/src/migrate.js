@@ -1149,5 +1149,106 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(deleteTestOrd
     CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(work_date);
   `);
 
+  // Hai kho (13/11/2026): Cửa hàng Nguyễn Cao (products.stock — kho bán lẻ, bán web, bán tại quầy) và
+  // Kho Bồ Sơn (products.stock_bs — kho tổng, nhận công gạo, xuất bán sỉ). Mọi thay đổi tồn ghi một dòng
+  // vào stock_movements, nên tồn một kho = tổng quantity các dòng nhật ký của kho đó.
+  const productColumns = db.prepare('PRAGMA table_info(products)').all().map((c) => c.name);
+  if (!productColumns.includes('stock_bs')) db.exec('ALTER TABLE products ADD COLUMN stock_bs INTEGER NOT NULL DEFAULT 0');
+  if (!productColumns.includes('sku')) db.exec('ALTER TABLE products ADD COLUMN sku TEXT');
+  if (!db.prepare('PRAGMA table_info(orders)').all().some((c) => c.name === 'warehouse')) {
+    db.exec("ALTER TABLE orders ADD COLUMN warehouse TEXT NOT NULL DEFAULT 'KH_NC'");
+  }
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS warehouses (
+      code       TEXT PRIMARY KEY,
+      name       TEXT NOT NULL,
+      kind       TEXT NOT NULL,            -- store: cửa hàng bán lẻ · main: kho tổng
+      sort_order INTEGER NOT NULL DEFAULT 0
+    );
+    INSERT OR IGNORE INTO warehouses (code, name, kind, sort_order) VALUES
+      ('KH_NC', 'Cửa hàng Nguyễn Cao', 'store', 1),
+      ('KH_BS', 'Kho Bồ Sơn', 'main', 2);
+    CREATE TABLE IF NOT EXISTS stock_movements (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id    INTEGER REFERENCES products(id) ON DELETE SET NULL,
+      product_name  TEXT NOT NULL,         -- chụp lại tên lúc ghi, xoá sản phẩm vẫn còn lịch sử
+      unit          TEXT,
+      warehouse     TEXT NOT NULL REFERENCES warehouses(code),
+      kind          TEXT NOT NULL,         -- opening, receipt, transfer_out, transfer_in, order, counter, count…
+      quantity      INTEGER NOT NULL,      -- dương: vào kho · âm: ra kho
+      balance_after INTEGER NOT NULL,      -- tồn của kho này ngay sau biến động
+      ref_type      TEXT,                  -- receipt, transfer, order, retail_invoice
+      ref_id        INTEGER,
+      ref_code      TEXT,
+      note          TEXT,
+      created_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      actor_name    TEXT,
+      created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements(product_id, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_stock_movements_warehouse ON stock_movements(warehouse, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_stock_movements_created ON stock_movements(created_at);
+    CREATE TABLE IF NOT EXISTS stock_receipts (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      code       TEXT UNIQUE,              -- NK000123
+      kind       TEXT NOT NULL,            -- cong-gao · cua-hang
+      source     TEXT,                     -- nguồn nhập / nhà cung cấp
+      vehicle    TEXT,                     -- số xe, số container
+      note       TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      actor_name TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS stock_receipt_items (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      receipt_id   INTEGER NOT NULL REFERENCES stock_receipts(id) ON DELETE CASCADE,
+      product_id   INTEGER REFERENCES products(id) ON DELETE SET NULL,
+      product_name TEXT NOT NULL,
+      unit         TEXT,
+      warehouse    TEXT NOT NULL REFERENCES warehouses(code),
+      quantity     INTEGER NOT NULL CHECK (quantity > 0),
+      cost_price   INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_stock_receipt_items_receipt ON stock_receipt_items(receipt_id);
+    CREATE TABLE IF NOT EXISTS stock_transfers (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      code           TEXT UNIQUE,          -- DC000123
+      from_warehouse TEXT NOT NULL REFERENCES warehouses(code),
+      to_warehouse   TEXT NOT NULL REFERENCES warehouses(code),
+      status         TEXT NOT NULL DEFAULT 'in_transit',   -- in_transit · received · cancelled
+      note           TEXT,
+      created_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      actor_name     TEXT,
+      created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+      received_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      receiver_name  TEXT,
+      received_at    TEXT,
+      receive_note   TEXT,
+      cancelled_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      cancelled_at   TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_stock_transfers_status ON stock_transfers(status, id DESC);
+    CREATE TABLE IF NOT EXISTS stock_transfer_items (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      transfer_id       INTEGER NOT NULL REFERENCES stock_transfers(id) ON DELETE CASCADE,
+      product_id        INTEGER REFERENCES products(id) ON DELETE SET NULL,
+      product_name      TEXT NOT NULL,
+      unit              TEXT,
+      quantity          INTEGER NOT NULL CHECK (quantity > 0),
+      received_quantity INTEGER           -- số thực nhận khi xác nhận; nhỏ hơn quantity = thiếu trên đường
+    );
+    CREATE INDEX IF NOT EXISTS idx_stock_transfer_items_transfer ON stock_transfer_items(transfer_id);
+  `);
+  // Số tồn đang có trước ngày chia hai kho là tồn đầu kỳ của Cửa hàng Nguyễn Cao (số tồn không đổi, chỉ
+  // ghi thêm dòng nhật ký mở đầu). Kho Bồ Sơn bắt đầu từ 0, cửa hàng tự nhập tồn đầu kỳ thật.
+  if (!db.prepare("SELECT 1 FROM app_migrations WHERE name = 'stock-opening-2026-11-13'").get()) {
+    db.prepare(`
+      INSERT INTO stock_movements (product_id, product_name, unit, warehouse, kind, quantity, balance_after, note)
+      SELECT id, name, unit, 'KH_NC', 'opening', stock, stock, 'Số tồn đang có khi bắt đầu quản lý hai kho'
+      FROM products WHERE stock <> 0
+    `).run();
+    db.prepare("INSERT OR IGNORE INTO app_migrations (name) VALUES ('stock-opening-2026-11-13')").run();
+  }
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

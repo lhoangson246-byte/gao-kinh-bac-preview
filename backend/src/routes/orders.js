@@ -14,6 +14,7 @@ import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../val
 import { readLocation } from './addresses.js';
 import { promoGiftFor } from '../promotions.js';
 import { attachItems } from '../order-lists.js';
+import { STORE, moveStock, stockColumn, warehouseName } from '../inventory.js';
 import { loyaltyProfile, refundPoints, spendPoints } from '../loyalty.js';
 import { notifyNewOrder, notifyTransferReported, siteOrigin } from '../push.js';
 import { trackOrder } from '../order-tracking.js';
@@ -85,6 +86,9 @@ export function placeOrder({
   wholesaleCustomerId = null, priceOverrides = null,
   // Link định vị nhân viên dán khi tạo đơn (đã kiểm tra bằng parseMapLink).
   mapUrl = null,
+  // Kho xuất hàng (13/11/2026): đơn web và đơn khách lẻ luôn là Cửa hàng Nguyễn Cao; đơn khách buôn do
+  // nhân viên chọn (thường là Kho Bồ Sơn). stockActor: người tạo đơn, ghi vào nhật ký kho.
+  warehouse = STORE, stockActor = null,
 }) {
   const rewardCount = vouchers + [...wantedRewards.values()].reduce((sum, q) => sum + q, 0);
   return db.transaction(() => {
@@ -104,8 +108,12 @@ export function placeOrder({
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     // Trừ kho có điều kiện: nếu người khác vừa mua trước thì không dòng nào đổi
-    // và cả transaction bị huỷ bỏ, tránh bán vượt tồn kho.
-    const decStock = db.prepare('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?');
+    // và cả transaction bị huỷ bỏ, tránh bán vượt tồn kho. Mỗi lần trừ ghi một dòng nhật ký kho.
+    const column = stockColumn(warehouse);
+    const takeStock = (productId, quantity, orderId) => moveStock({
+      productId, warehouse, delta: -quantity, kind: wholesaleCustomerId ? 'order_wholesale' : 'order',
+      ref: { type: 'order', id: orderId, code: orderCode(orderId) }, actor: stockActor,
+    });
 
     const lines = [];
     let subtotal = 0;
@@ -123,8 +131,9 @@ export function placeOrder({
         // Cửa hàng chưa nhập giá — không được để khách đặt với giá 0 đồng.
         throw new HttpError(400, `“${product.name}” chưa có giá bán. Vui lòng liên hệ cửa hàng.`);
       }
-      if (product.stock < quantity) {
-        throw new HttpError(400, `“${product.name}” chỉ còn ${product.stock} ${product.unit}.`);
+      const available = Math.max(product[column], 0);
+      if (available < quantity) {
+        throw new HttpError(400, `“${product.name}” chỉ còn ${available} ${product.unit}${warehouse === STORE ? '' : ` ở ${warehouseName(warehouse)}`}.`);
       }
       lines.push({ product, quantity });
       subtotal += product.price * quantity;
@@ -177,8 +186,8 @@ export function placeOrder({
       voucherDiscount, pointsUsed, pointsUsed > 0 ? pointsPhone : null, guest ? 1 : 0, guestTokenHash
     ).lastInsertRowid;
     // Mã đơn tự tạo từ số thứ tự: DH000123, cùng kiểu mã hoá đơn quầy HD000123.
-    db.prepare('UPDATE orders SET code = ?, discount_code = ?, code_discount = ?, wholesale_customer_id = ?, map_url = ? WHERE id = ?')
-      .run(orderCode(orderId), useCode ? codeRow.code : null, codeDiscount, wholesaleCustomerId, mapUrl, orderId);
+    db.prepare('UPDATE orders SET code = ?, discount_code = ?, code_discount = ?, wholesale_customer_id = ?, map_url = ?, warehouse = ? WHERE id = ?')
+      .run(orderCode(orderId), useCode ? codeRow.code : null, codeDiscount, wholesaleCustomerId, mapUrl, warehouse, orderId);
     // Đơn nhân viên nhập tay (khách gọi điện / nhắn Zalo): đã xác nhận ngay, ghi người tạo, cách
     // nhận hàng và người giao — trong cùng transaction với đơn.
     if (staff) {
@@ -189,7 +198,7 @@ export function placeOrder({
     }
 
     for (const { product, quantity } of lines) {
-      const changed = decStock.run(quantity, product.id, quantity).changes;
+      const changed = takeStock(product.id, quantity, orderId);
       if (!changed) {
         throw new HttpError(409, `“${product.name}” vừa được mua hết. Vui lòng thử lại.`);
       }
@@ -197,7 +206,7 @@ export function placeOrder({
         product.cost_price ?? 0, product.points_per_unit ?? null, 0);
     }
     for (const { product, quantity } of rewardLines) {
-      const changed = decStock.run(quantity, product.id, quantity).changes;
+      const changed = takeStock(product.id, quantity, orderId);
       if (!changed) {
         throw new HttpError(409, `Quà “${product.name}” vừa hết hàng. Vui lòng chọn quà khác.`);
       }
@@ -216,7 +225,7 @@ export function placeOrder({
                                   points_per_unit, is_reward, promo)
          VALUES (?, ?, ?, ?, 0, ?, ?, 0, 0, ?)`
       );
-      const stocked = gift.product && decStock.run(gift.kg, gift.product.id, gift.kg).changes;
+      const stocked = gift.product && takeStock(gift.product.id, gift.kg, orderId);
       insGift.run(orderId, stocked ? gift.product.id : null,
         gift.product?.name || gift.choice.name, gift.product?.unit || 'kg', gift.kg,
         gift.product?.cost_price ?? 0, gift.promo.code);
@@ -529,7 +538,7 @@ router.patch('/:id/cancel', requireAuth, (req, res, next) => {
       if (!changed) {
         throw new HttpError(400, 'Chỉ có thể tự huỷ đơn đang chờ xác nhận. Vui lòng liên hệ cửa hàng.');
       }
-      restoreStockForOrder(order.id);
+      restoreStockForOrder(order.id, { id: req.user.id, full_name: req.user.full_name });
     });
 
     cancel();
@@ -558,15 +567,19 @@ router.get('/:id', requireAuth, (req, res, next) => {
  */
 export { guestAccountId, normalizeItems };
 
-export function restoreStockForOrder(orderId) {
+export function restoreStockForOrder(orderId, actor = null) {
+  const order = db.prepare('SELECT code, warehouse, points_used, points_phone FROM orders WHERE id = ?').get(orderId);
   const items = db
     .prepare('SELECT product_id, quantity FROM order_items WHERE order_id = ?')
     .all(orderId);
-  const restore = db.prepare('UPDATE products SET stock = stock + ? WHERE id = ?');
+  // Hàng trả về đúng kho đã xuất (đơn khách buôn có thể xuất từ Kho Bồ Sơn), có ghi nhật ký kho.
   for (const item of items) {
-    if (item.product_id) restore.run(item.quantity, item.product_id);
+    if (!item.product_id) continue;
+    moveStock({
+      productId: item.product_id, warehouse: order?.warehouse || STORE, delta: item.quantity, kind: 'order_cancel',
+      ref: { type: 'order', id: orderId, code: order?.code }, actor,
+    });
   }
-  const order = db.prepare('SELECT points_used, points_phone FROM orders WHERE id = ?').get(orderId);
   if (order?.points_used > 0) refundPoints(order.points_phone, order.points_used);
 }
 

@@ -32,14 +32,25 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
   const [wsOpen, setWsOpen] = useState(false);
   const [ws, setWs] = useState(null);              // { customer, prices: Map }
   const [custForm, setCustForm] = useState(null);  // null | { customer: null } (thêm) | { customer } (sửa)
+  const [warehouse, setWarehouse] = useState('KH_NC');   // kho xuất hàng của đơn khách buôn
+  const [mainStock, setMainStock] = useState(null);       // Map id → tồn Kho Bồ Sơn
   const [mapFromAddress, setMapFromAddress] = useState(false);
   const { can } = useAuth();
   const canManageCustomers = can('wholesale.manage');
   const wholesale = kind === 'wholesale';
 
   useEffect(() => {
-    api.products().then((d) => setProducts((d.products || []).filter((p) => p.stock > 0))).catch(() => {});
+    api.products().then((d) => setProducts(d.products || [])).catch(() => {});
   }, []);
+  // Khách buôn: chọn kho xuất hàng. Kho Bồ Sơn đã có hàng thì mặc định xuất từ đó (kho tổng, hàng sỉ).
+  useEffect(() => {
+    if (!wholesale || mainStock) return;
+    api.inventoryStock().then((d) => {
+      const map = new Map(d.products.map((p) => [p.id, p.stock_bs]));
+      setMainStock(map);
+      if ([...map.values()].some((n) => n > 0)) setWarehouse('KH_BS');
+    }).catch(() => setMainStock(new Map()));
+  }, [wholesale, mainStock]);
   useEffect(() => {
     if (!wholesale || wsList) return;
     api.adminWholesaleList().then((d) => setWsList(d.customers)).catch((err) => setErrors({ form: err.message }));
@@ -51,7 +62,16 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
   const defaultPrice = (productId) => fixedPrice(productId) ?? byId[productId]?.price ?? '';
   const setLine = (index, patch) => setLines((cur) => cur.map((line, i) => (i === index ? { ...line, ...patch } : line)));
   const pickProduct = (index, productId) => setLine(index, { product_id: productId, price: wholesale && productId ? String(defaultPrice(productId)) : '' });
-  const selectable = products.filter((p) => p.price > 0 || (wholesale && fixedPrice(p.id)));
+  const fromMain = wholesale && warehouse === 'KH_BS';
+  // Số còn bán được ở kho xuất hàng của đơn: khách lẻ luôn là Cửa hàng Nguyễn Cao.
+  const avail = (p) => (fromMain ? mainStock?.get(p.id) ?? 0 : p.stock);
+  const selectable = products.filter((p) => avail(p) > 0 && (p.price > 0 || (wholesale && fixedPrice(p.id))));
+  const pickWarehouse = (code) => {
+    if (code === warehouse) return;
+    setWarehouse(code);
+    setLines([{ ...EMPTY_LINE }]);     // tồn hai kho khác nhau nên chọn lại hàng
+    setErrors({});
+  };
   const chosen = lines.filter((l) => l.product_id && Number(l.quantity) > 0);
   const unitPrice = (l) => (wholesale ? Number(l.price) || 0 : byId[l.product_id]?.price || 0);
   const subtotal = chosen.reduce((sum, l) => sum + unitPrice(l) * Number(l.quantity), 0);
@@ -105,6 +125,7 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
   };
 
   // Gạo hay đặt của khách (các loại có giá cố định, còn hàng, chưa có trong đơn): bấm là thêm vào đơn.
+  // Loại không còn ở kho đang chọn vẫn hiện (mờ, không bấm được) để nhân viên biết vì sao không thêm được.
   const usual = ws ? products.filter((p) => ws.prices.has(p.id) && !lines.some((l) => String(l.product_id) === String(p.id))) : [];
   const addUsual = (product) => setLines((cur) => {
     const line = { product_id: String(product.id), quantity: 1, price: String(ws.prices.get(product.id)) };
@@ -136,6 +157,7 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
         shipper_id: form.shipper_id ? Number(form.shipper_id) : null,
         customer_type: kind,
         wholesale_customer_id: wholesale ? ws.customer.id : null,
+        ...(wholesale ? { warehouse } : {}),
         items: chosen.map((l) => ({
           product_id: Number(l.product_id), quantity: Number(l.quantity), ...(wholesale ? { price: Number(l.price) } : {}),
         })),
@@ -211,6 +233,15 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
           )}
         </div>
       )}
+      {wholesale && mainStock && (
+        <div className="warehouse-pick" role="group" aria-label="Kho xuất hàng">
+          <span>Xuất hàng từ:</span>
+          {[['KH_BS', 'Kho Bồ Sơn'], ['KH_NC', 'Cửa hàng Nguyễn Cao']].map(([code, label]) => (
+            <button key={code} type="button" className={warehouse === code ? 'active' : ''} onClick={() => pickWarehouse(code)}>{label}</button>
+          ))}
+          {errors.warehouse && <small className="err">{errors.warehouse}</small>}
+        </div>
+      )}
 
       <div className="about-admin-row">
         <label>{wholesale ? 'Người nhận hàng' : 'Họ tên khách'}
@@ -243,7 +274,9 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
           <div className="usual-rice" aria-label="Gạo khách hay đặt">
             <span>Gạo hay đặt:</span>
             {usual.map((p) => (
-              <button key={p.id} type="button" onClick={() => addUsual(p)}>+ {p.name} · {formatVND(ws.prices.get(p.id))}</button>
+              <button key={p.id} type="button" disabled={avail(p) <= 0} onClick={() => addUsual(p)}>
+                + {p.name} · {formatVND(ws.prices.get(p.id))}{avail(p) <= 0 ? ` · hết ở ${fromMain ? 'Bồ Sơn' : 'Nguyễn Cao'}` : ''}
+              </button>
             ))}
           </div>
         )}
@@ -255,7 +288,7 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
                 <option value="">— Chọn loại gạo —</option>
                 {selectable.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name} · {p.unit} · {wholesale && fixedPrice(p.id) ? `giá riêng ${formatVND(fixedPrice(p.id))}` : formatVND(p.price)} (còn {p.stock})
+                    {p.name} · {p.unit} · {wholesale && fixedPrice(p.id) ? `giá riêng ${formatVND(fixedPrice(p.id))}` : formatVND(p.price)} (còn {avail(p)})
                   </option>
                 ))}
               </select>
