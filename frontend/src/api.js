@@ -426,8 +426,10 @@ export const DELIVERY_SLOTS = [
 /**
  * Giờ làm việc của cửa hàng (phút trong ngày, giờ Việt Nam):
  * sáng 07h00–11h30, nghỉ trưa 11h30–13h30, chiều 13h30–18h00, nghỉ từ 18h00.
+ * Hạn nhận đơn giao trong ngày: 17h30 (cửa hàng chốt 13/11/2026). Đặt sau 17h30 thì giao sáng hôm sau,
+ * hoặc khách ghé cửa hàng lấy.
  */
-export const SHOP_HOURS = { open: 7 * 60, lunchStart: 11 * 60 + 30, lunchEnd: 13 * 60 + 30, close: 18 * 60 };
+export const SHOP_HOURS = { open: 7 * 60, lunchStart: 11 * 60 + 30, lunchEnd: 13 * 60 + 30, cutoff: 17 * 60 + 30, close: 18 * 60 };
 const VN_OFFSET_MIN = 7 * 60;
 
 /*
@@ -481,7 +483,8 @@ export function vietnamClock(date = shopNow()) {
  *  - trước 07h00: buổi sáng hôm nay
  *  - 07h00–11h30: trong buổi sáng
  *  - 11h30–13h30 (nghỉ trưa): buổi chiều, từ 13h30
- *  - 13h30–18h00: trong buổi chiều
+ *  - 13h30–17h30: trong buổi chiều
+ *  - 17h30–18h00 (hết nhận đơn giao trong ngày, cửa hàng còn mở): sáng hôm sau, hoặc ghé cửa hàng lấy
  *  - từ 18h00: sáng hôm sau
  */
 export function deliveryPlan(date = shopNow()) {
@@ -489,7 +492,8 @@ export function deliveryPlan(date = shopNow()) {
   if (m < SHOP_HOURS.open) return { phase: 'early', slot: 'sang' };
   if (m < SHOP_HOURS.lunchStart) return { phase: 'morning', slot: 'sang' };
   if (m < SHOP_HOURS.lunchEnd) return { phase: 'lunch', slot: 'chieu' };
-  if (m < SHOP_HOURS.close) return { phase: 'afternoon', slot: 'chieu' };
+  if (m < SHOP_HOURS.cutoff) return { phase: 'afternoon', slot: 'chieu' };
+  if (m < SHOP_HOURS.close) return { phase: 'late', slot: 'sang' };
   return { phase: 'closed', slot: 'sang' };
 }
 
@@ -542,7 +546,7 @@ export function promoNextTier(kg, promotion) {
 /** Chọn khung `slot` lúc `date` thì giao hôm nay hay ngày mai. */
 export function slotDay(slot, date = shopNow()) {
   const m = vietnamMinutes(date);
-  if (m >= SHOP_HOURS.close) return 'tomorrow';
+  if (m >= SHOP_HOURS.cutoff) return 'tomorrow';
   if (slot === 'sang' && m >= SHOP_HOURS.lunchStart) return 'tomorrow';
   return 'today';
 }
@@ -568,16 +572,17 @@ export function parseServerTime(value) {
 /**
  * Lời hẹn giao cho đơn vừa đặt (24/10/2026). Đặt trong giờ làm, còn ít nhất 1 tiếng rưỡi trước giờ
  * nghỉ (và khách không chọn buổi khác) thì giao trong 1 – 1 tiếng rưỡi: { fast: true }. Còn lại hẹn
- * buổi kế tiếp: { fast: false, slot, date } — đặt trưa → chiều nay, đặt muộn chiều/tối → sáng mai.
+ * { fast: false, slot, date }: đặt trưa hoặc chiều trước 17h30 → chiều nay, sau 17h30 → sáng mai.
  */
 export function deliveryEta(createdAt, chosenSlot = null) {
   const placed = parseServerTime(createdAt) || shopNow();
   const m = vietnamMinutes(placed);
   const current = m >= SHOP_HOURS.open && m < SHOP_HOURS.lunchStart ? 'sang'
-    : m >= SHOP_HOURS.lunchEnd && m < SHOP_HOURS.close ? 'chieu' : null;
+    : m >= SHOP_HOURS.lunchEnd && m < SHOP_HOURS.cutoff ? 'chieu' : null;
   const sessionEnd = current === 'sang' ? SHOP_HOURS.lunchStart : SHOP_HOURS.close;
   if (current && m + 90 <= sessionEnd && (!chosenSlot || chosenSlot === current)) return { fast: true };
-  const slot = chosenSlot || (m < SHOP_HOURS.open ? 'sang' : m < SHOP_HOURS.lunchEnd ? 'chieu' : 'sang');
+  // Đặt trước 17h30 mà không kịp giao nhanh thì vẫn giao trong buổi chiều nay; sau 17h30 thì sáng mai.
+  const slot = chosenSlot || (m < SHOP_HOURS.open ? 'sang' : m < SHOP_HOURS.cutoff ? 'chieu' : 'sang');
   return { fast: false, slot, date: deliveryDateLabel(placed.toISOString(), slot) };
 }
 

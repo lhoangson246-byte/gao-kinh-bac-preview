@@ -1088,12 +1088,12 @@ router.get('/revenue', (req, res, next) => {
 
     // Chi tiết theo từng ngày để thấy ngày nào bán được nhiều.
     const daily = db.prepare(`
-      SELECT day, SUM(online) online, SUM(retail) retail FROM (
-        SELECT ${localDate('created_at')} day, total online, 0 retail
+      SELECT day, SUM(online) online, SUM(retail) retail, SUM(online_n) online_orders, SUM(retail_n) retail_invoices FROM (
+        SELECT ${localDate('created_at')} day, total online, 0 retail, 1 online_n, 0 retail_n
         FROM orders
         WHERE status = 'completed' AND ${localDate('created_at')} BETWEEN ? AND ?
         UNION ALL
-        SELECT ${localDate('created_at')} day, 0 online, total retail
+        SELECT ${localDate('created_at')} day, 0 online, total retail, 0 online_n, 1 retail_n
         FROM retail_invoices
         WHERE ${localDate('created_at')} BETWEEN ? AND ?
       )
@@ -1126,7 +1126,7 @@ router.get('/revenue', (req, res, next) => {
       retail: { revenue: retail.s, invoices: retail.c, discount: retail.d },
       total: { revenue, transactions: online.c + retail.c },
       profit: { cost, gross: revenue - cost, missingCostProducts: missingCost },
-      daily: daily.map((d) => ({ ...d, total: d.online + d.retail })),
+      daily: daily.map((d) => ({ ...d, total: d.online + d.retail, orders: d.online_orders + d.retail_invoices })),
     });
   } catch (err) {
     next(err);

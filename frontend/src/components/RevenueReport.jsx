@@ -183,6 +183,7 @@ export default function RevenueReport() {
                 <thead>
                   <tr>
                     <th scope="col">Ngày</th>
+                    <th scope="col">Số đơn</th>
                     <th scope="col">Online</th>
                     <th scope="col">Tại quầy</th>
                     <th scope="col">Tổng</th>
@@ -193,6 +194,10 @@ export default function RevenueReport() {
                   {data.daily.map((d) => (
                     <tr key={d.day}>
                       <th scope="row">{dayLabel(d.day)}</th>
+                      <td className="revenue-count">
+                        <strong>{d.orders}</strong>
+                        <small>{[d.online_orders > 0 && `${d.online_orders} online`, d.retail_invoices > 0 && `${d.retail_invoices} tại quầy`].filter(Boolean).join(' · ')}</small>
+                      </td>
                       <td>{d.online > 0 ? formatVND(d.online) : '—'}</td>
                       <td>{d.retail > 0 ? formatVND(d.retail) : '—'}</td>
                       <td><strong>{formatVND(d.total)}</strong></td>
@@ -207,6 +212,7 @@ export default function RevenueReport() {
                 <tfoot>
                   <tr>
                     <th scope="row">Cộng</th>
+                    <td className="revenue-count"><strong>{data.total.transactions}</strong><small>{data.online.orders} online · {data.retail.invoices} tại quầy</small></td>
                     <td>{formatVND(data.online.revenue)}</td>
                     <td>{formatVND(data.retail.revenue)}</td>
                     <td><strong>{formatVND(data.total.revenue)}</strong></td>

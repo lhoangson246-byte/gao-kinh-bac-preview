@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useI18n } from '../i18n/index.jsx';
 import { deliveryPlan, onShopClock, shopNow, syncShopClock, vietnamClock } from '../api';
 
@@ -6,7 +7,8 @@ import { deliveryPlan, onShopClock, shopNow, syncShopClock, vietnamClock } from 
 const ROWS = [
   { phase: 'morning', icon: '☀️', time: '07h00 – 11h30' },
   { phase: 'lunch', icon: '🍚', time: '11h30 – 13h30' },
-  { phase: 'afternoon', icon: '🌤️', time: '13h30 – 18h00' },
+  { phase: 'afternoon', icon: '🌤️', time: '13h30 – 17h30' },
+  { phase: 'late', icon: '🏪', time: '17h30 – 18h00' },
   { phase: 'closed', icon: '🌙', time: '18h00 – 07h00' },
 ];
 
@@ -53,6 +55,7 @@ export default function DeliveryHours({ now, compact = false }) {
         <span>
           <small>{t('hours.nowLabel', { time: vietnamClock(now) })}</small>
           <strong>{t(`hours.now.${plan.phase}`)}</strong>
+          {['late', 'closed'].includes(plan.phase) && <Link className="delivery-store-link" to="/ve-chung-toi">{t('hours.storeLink')}</Link>}
         </span>
       </p>
       {compact ? (

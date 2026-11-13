@@ -2109,6 +2109,41 @@ label b { color: var(--danger); }
   .cart-upsell-item .btn { grid-column: 1 / -1; width: 100%; }
 }
 
+/* --- In đơn theo mẫu hoá đơn cửa hàng, giờ chốt 17h30, số đơn mỗi ngày (13/11/2026) --- */
+.order-print-root { display: none; }
+.delivery-store-link { display: inline-block; margin-top: 4px; font-size: .82rem; font-weight: 750; }
+.revenue-count strong { display: block; font-size: .95rem; }
+.revenue-count small { display: block; color: var(--muted); font-size: .7rem; font-weight: 600; }
+@media print {
+  html.printing-orders body > *:not(.order-print-root) { display: none !important; }
+  html.printing-orders .order-print-root { display: block; position: static; color: #000; background: #fff; }
+  html.printing-orders .order-print-root, html.printing-orders .order-print-root * { visibility: visible !important; }
+  .order-sheet { break-after: page; page-break-after: always; font-family: 'Times New Roman', Times, serif; font-size: 13pt; line-height: 1.3; }
+  .order-sheet:last-child { break-after: auto; page-break-after: auto; }
+  .order-sheet-head { display: grid; grid-template-columns: minmax(0, 1fr) 34mm; gap: 6mm; align-items: start; }
+  .order-sheet-head h1 { margin: 0 0 2mm; font-size: 19pt; font-weight: 700; }
+  .order-sheet-head p { margin: 0; font-size: 12.5pt; }
+  .order-sheet-qr { margin: 0; padding: 1.5mm; border: 1px solid #000; text-align: center; }
+  .order-sheet-qr img { display: block; width: 100%; height: auto; }
+  .order-sheet-qr figcaption { margin-top: 1mm; font-family: Arial, sans-serif; font-size: 7.5pt; line-height: 1.25; }
+  .order-sheet h2 { margin: 5mm 0 3mm; text-align: center; font-size: 18pt; }
+  .order-sheet h2 small { display: block; font-size: 11pt; font-weight: 400; }
+  .order-sheet-customer { display: grid; grid-template-columns: 1.4fr 1fr; gap: 1mm 8mm; margin-bottom: 4mm; }
+  .order-sheet-customer p { margin: 0; }
+  .order-sheet-customer .wide { grid-column: 1 / -1; }
+  .order-sheet table { width: 100%; border-collapse: collapse; }
+  .order-sheet th, .order-sheet td { padding: 2mm 3mm; border: 1.2px solid #000; text-align: center; font-weight: 400; }
+  .order-sheet td.name { text-align: center; }
+  .order-sheet td small { color: #333; font-size: 10pt; }
+  .order-sheet td:nth-child(n+4) { text-align: right; white-space: nowrap; }
+  .order-sheet-totals { width: 46%; margin: 3mm 0 0 auto; }
+  .order-sheet-totals p { display: flex; justify-content: space-between; margin: 0 0 1mm; }
+  .order-sheet-totals .grand { padding-top: 1mm; border-top: 1.5px solid #000; font-size: 14pt; font-weight: 700; }
+  .order-sheet-totals .pay { justify-content: flex-end; font-size: 11pt; font-style: italic; }
+  .order-sheet-note { margin: 3mm 0 0; font-size: 11.5pt; }
+  .order-sheet-sign { display: grid; grid-template-columns: 1fr 1fr; margin-top: 6mm; min-height: 30mm; text-align: center; font-weight: 700; }
+}
+
 /* --- Giỏ hàng: ảnh sản phẩm, mỗi dòng gọn hơn (12/11/2026) --- */
 .cart-grain.has-image { overflow: hidden; border-radius: 12px; background: var(--cream); }
 .cart-grain picture, .cart-grain img { display: block; width: 100%; height: 100%; object-fit: cover; }

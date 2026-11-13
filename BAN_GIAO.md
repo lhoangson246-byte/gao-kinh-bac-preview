@@ -1531,6 +1531,26 @@ Kiểm thử: `npm --prefix backend run test:inventory` (55 kiểm tra).
 
 Kiểm thử: `npm --prefix backend run test:upsell` (24 kiểm tra).
 
+## Hạn nhận đơn giao trong ngày 17h30, in đơn theo mẫu hoá đơn, số đơn mỗi ngày (13/11/2026)
+
+### Hạn nhận đơn giao trong ngày: 17h30
+
+- Đặt trước 17h30: giao trong ngày như cũ (đặt buổi chiều mà không kịp giao nhanh 1 – 1,5 tiếng thì vẫn hẹn chiều nay).
+- Đặt từ 17h30: đơn hẹn **sáng hôm sau từ 7h00**. Khung giờ ở trang đặt hàng có dòng mới "17h30 – 18h00: hết nhận đơn giao trong ngày, giao sáng mai hoặc ghé cửa hàng lấy ngay", kèm link "Xem địa chỉ cửa hàng". Từ 18h00 lời nhắc như cũ (cửa hàng nghỉ, giao sáng mai), thêm gợi ý ghé cửa hàng khi mở cửa.
+- Giờ giao buổi chiều vẫn là 13h30 – 18h00. Mốc 17h30 nằm ở `SHOP_HOURS.cutoff` trong `frontend/src/api.js`. Đơn nhân viên tạo bằng tay không bị giới hạn giờ.
+
+### In đơn theo mẫu hoá đơn bán hàng
+
+- Thẻ đơn **Đã xác nhận / Đang giao** có nút **🖨️ In đơn**. Ở mục **Đã xác nhận** có thêm nút **🖨️ In N đơn đã xác nhận** để in hết các đơn đang xem, mỗi đơn một trang.
+- Bản in theo đúng mẫu hoá đơn giấy cửa hàng gửi: tên công ty, CS1, CS2, số tài khoản Vietcombank, số điện thoại, ngày, "Hóa đơn bán hàng" kèm mã đơn, tên khách, SĐT, địa chỉ, bảng STT / Tên sản phẩm / Số lượng / Giá tiền / Thành Tiền, Tổng tiền, chỗ ký Khách hàng / Người bán.
+- Góc phải là **mã QR chuyển khoản** (ảnh QR ở cài đặt trang chủ, mặc định `bank-qr.png`) kèm dòng "Nội dung: DH…" để khách ghi khi chuyển. Đơn đã xác nhận nhận tiền thì ghi "Đã nhận chuyển khoản"; đơn trả tiền mặt ghi "Thu khi giao hàng: …".
+- Thông tin công ty, địa chỉ, số tài khoản, số điện thoại chép từ hoá đơn mẫu, nằm ở `INVOICE_HEADER` trong `frontend/src/components/OrderPrint.jsx`; đổi thông tin thì sửa ở đó.
+- Bấm in là mở hộp in của trình duyệt (chọn máy in hoặc lưu PDF), dùng được trên máy tính và điện thoại.
+
+### Số đơn mỗi ngày ở trang Doanh thu
+
+- Bảng doanh thu theo ngày có thêm cột **Số đơn** (đơn online đã hoàn thành + hoá đơn tại quầy, ghi rõ bao nhiêu online, bao nhiêu tại quầy), dòng Cộng có tổng số đơn. Đếm cùng quy tắc với tiền doanh thu.
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

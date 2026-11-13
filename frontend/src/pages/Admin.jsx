@@ -20,6 +20,7 @@ const WholesaleManager = lazy(() => import('../components/WholesaleManager.jsx')
 import ProductImage from '../components/ProductImage.jsx';
 import OrdersExportButton from '../components/OrdersExportButton.jsx';
 import OrdersTable from '../components/OrdersTable.jsx';
+import OrderPrint from '../components/OrderPrint.jsx';
 const ManualOrderForm = lazy(() => import('../components/ManualOrderForm.jsx'));
 import PageLoadBoundary from '../components/PageLoadBoundary.jsx';
 
@@ -86,6 +87,7 @@ export default function Admin() {
   const view = focusCards || transferOnly || ACTIVE_STATUSES.includes(filter) ? 'cards' : 'table';
   const [stats, setStats] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [printing, setPrinting] = useState(null);   // các đơn đang in
   const [offset, setOffset] = useState(0);
   const [orderTotal, setOrderTotal] = useState(0);
   const [counts, setCounts] = useState({});
@@ -668,6 +670,11 @@ export default function Admin() {
                       {dateFrom && <button type="button" className="link-button" onClick={() => { setDateFrom(''); setDateTo(''); setOffset(0); }}>Mọi ngày</button>}
                     </div>
                     <div className="orders-actions">
+                      {filter === 'confirmed' && !transferOnly && orders.some((o) => o.status === 'confirmed') && (
+                        <button type="button" className="btn btn-secondary" onClick={() => setPrinting(orders.filter((o) => o.status === 'confirmed'))}>
+                          🖨️ In {orders.filter((o) => o.status === 'confirmed').length} đơn đã xác nhận
+                        </button>
+                      )}
                       {can('orders.export') && (
                         <OrdersExportButton filters={exportFilters}
                                             title={`Xuất Excel các đơn đang xem: ${FILTERS.find(([v]) => v === filter)?.[1].toLowerCase()}`}>
@@ -682,6 +689,7 @@ export default function Admin() {
                       )}
                     </div>
                   </div>
+                  {printing && <OrderPrint orders={printing} onDone={() => setPrinting(null)} />}
                   {showCreate && (
                     <ManualOrderForm shippers={shippers} onClose={() => setShowCreate(false)}
                                      onCreated={(order) => { setShowCreate(false); notify(`Đã tạo đơn ${order.code}.`); reload({ refreshProducts: false }); }} />
@@ -825,6 +833,9 @@ export default function Admin() {
                                       {shippers.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
                                     </select>
                                   </label>
+                                )}
+                                {['confirmed', 'shipping', 'completed'].includes(order.status) && (
+                                  <button type="button" className="btn btn-secondary" onClick={() => setPrinting([order])}>🖨️ In đơn</button>
                                 )}
                                 {order.delivery_photo && (
                                   <a className="shipper-tag photo" href={order.delivery_photo} target="_blank" rel="noopener noreferrer">📷 Ảnh giao hàng</a>
