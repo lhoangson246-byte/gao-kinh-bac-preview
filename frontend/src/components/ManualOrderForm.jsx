@@ -32,7 +32,8 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
   const [wsOpen, setWsOpen] = useState(false);
   const [ws, setWs] = useState(null);              // { customer, prices: Map }
   const [custForm, setCustForm] = useState(null);  // null | { customer: null } (thêm) | { customer } (sửa)
-  const [warehouse, setWarehouse] = useState('KH_NC');   // kho xuất hàng của đơn khách buôn
+  // Kho xuất hàng (13/11/2026): mặc định Kho Bồ Sơn, nhân viên đổi bằng tay ở góc form nếu lấy ở cửa hàng.
+  const [warehouse, setWarehouse] = useState('KH_BS');
   const [mainStock, setMainStock] = useState(null);       // Map id → tồn Kho Bồ Sơn
   const [mapFromAddress, setMapFromAddress] = useState(false);
   const { can } = useAuth();
@@ -42,15 +43,12 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
   useEffect(() => {
     api.products().then((d) => setProducts(d.products || [])).catch(() => {});
   }, []);
-  // Khách buôn: chọn kho xuất hàng. Kho Bồ Sơn đã có hàng thì mặc định xuất từ đó (kho tổng, hàng sỉ).
+  // Tồn Kho Bồ Sơn để biết còn bao nhiêu khi xuất từ kho.
   useEffect(() => {
-    if (!wholesale || mainStock) return;
-    api.inventoryStock().then((d) => {
-      const map = new Map(d.products.map((p) => [p.id, p.stock_bs]));
-      setMainStock(map);
-      if ([...map.values()].some((n) => n > 0)) setWarehouse('KH_BS');
-    }).catch(() => setMainStock(new Map()));
-  }, [wholesale, mainStock]);
+    api.inventoryStock()
+      .then((d) => setMainStock(new Map(d.products.map((p) => [p.id, p.stock_bs]))))
+      .catch(() => setMainStock(new Map()));
+  }, []);
   useEffect(() => {
     if (!wholesale || wsList) return;
     api.adminWholesaleList().then((d) => setWsList(d.customers)).catch((err) => setErrors({ form: err.message }));
@@ -62,14 +60,16 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
   const defaultPrice = (productId) => fixedPrice(productId) ?? byId[productId]?.price ?? '';
   const setLine = (index, patch) => setLines((cur) => cur.map((line, i) => (i === index ? { ...line, ...patch } : line)));
   const pickProduct = (index, productId) => setLine(index, { product_id: productId, price: wholesale && productId ? String(defaultPrice(productId)) : '' });
-  const fromMain = wholesale && warehouse === 'KH_BS';
-  // Số còn bán được ở kho xuất hàng của đơn: khách lẻ luôn là Cửa hàng Nguyễn Cao.
-  const avail = (p) => (fromMain ? mainStock?.get(p.id) ?? 0 : p.stock);
-  const selectable = products.filter((p) => avail(p) > 0 && (p.price > 0 || (wholesale && fixedPrice(p.id))));
+  const fromMain = warehouse === 'KH_BS';
+  const whName = fromMain ? 'Kho Bồ Sơn' : 'Cửa hàng';
+  // Số còn ở kho xuất hàng của đơn; kho kia còn bao nhiêu để nhân viên biết mà đổi.
+  const stockAt = (p, code) => (code === 'KH_BS' ? mainStock?.get(p.id) ?? 0 : Math.max(p.stock, 0));
+  const avail = (p) => stockAt(p, warehouse);
+  const otherStock = (p) => stockAt(p, fromMain ? 'KH_NC' : 'KH_BS');
+  const selectable = products.filter((p) => p.price > 0 || (wholesale && fixedPrice(p.id)));
   const pickWarehouse = (code) => {
     if (code === warehouse) return;
-    setWarehouse(code);
-    setLines([{ ...EMPTY_LINE }]);     // tồn hai kho khác nhau nên chọn lại hàng
+    setWarehouse(code);                // giữ nguyên các dòng hàng; dòng nào kho mới không đủ sẽ báo đỏ
     setErrors({});
   };
   const chosen = lines.filter((l) => l.product_id && Number(l.quantity) > 0);
@@ -137,6 +137,12 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
     event.preventDefault();
     if (wholesale && !ws) { setErrors({ wholesale: 'Chọn khách buôn trong danh sách.' }); return; }
     if (!chosen.length) { setErrors({ items: 'Chọn ít nhất một loại gạo.' }); return; }
+    const short = chosen.find((l) => byId[l.product_id] && Number(l.quantity) > avail(byId[l.product_id]));
+    if (short) {
+      const p = byId[short.product_id];
+      setErrors({ items: `“${p.name}” ở ${whName} chỉ còn ${avail(p)} ${p.unit}${otherStock(p) > 0 ? `. Bấm “${fromMain ? 'Cửa hàng' : 'Kho'}” ở góc trên để xuất từ ${fromMain ? 'cửa hàng' : 'kho'} (còn ${otherStock(p)}).` : '.'}` });
+      return;
+    }
     if (wholesale && chosen.some((l) => !(Number.isInteger(Number(l.price)) && Number(l.price) > 0))) {
       setErrors({ items: 'Nhập giá bán (số nguyên lớn hơn 0) cho từng loại gạo.' });
       return;
@@ -157,7 +163,7 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
         shipper_id: form.shipper_id ? Number(form.shipper_id) : null,
         customer_type: kind,
         wholesale_customer_id: wholesale ? ws.customer.id : null,
-        ...(wholesale ? { warehouse } : {}),
+        warehouse,
         items: chosen.map((l) => ({
           product_id: Number(l.product_id), quantity: Number(l.quantity), ...(wholesale ? { price: Number(l.price) } : {}),
         })),
@@ -181,6 +187,13 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
     <form className="form-card flat manual-order" onSubmit={submit} noValidate style={custForm ? { display: 'none' } : undefined}>
       <div className="manual-order-head">
         <h2>Tạo đơn (khách gọi điện, nhắn Zalo)</h2>
+        <div className="warehouse-switch" role="radiogroup" aria-label="Xuất hàng từ">
+          <span>Xuất từ</span>
+          {[['KH_BS', '🏭 Kho'], ['KH_NC', '🏪 Cửa hàng']].map(([code, label]) => (
+            <button key={code} type="button" role="radio" aria-checked={warehouse === code} className={warehouse === code ? 'active' : ''}
+                    title={code === 'KH_BS' ? 'Kho Bồ Sơn' : 'Cửa hàng Nguyễn Cao'} onClick={() => pickWarehouse(code)}>{label}</button>
+          ))}
+        </div>
         <button type="button" className="icon-close" onClick={onClose} aria-label="Đóng">×</button>
       </div>
 
@@ -233,15 +246,7 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
           )}
         </div>
       )}
-      {wholesale && mainStock && (
-        <div className="warehouse-pick" role="group" aria-label="Kho xuất hàng">
-          <span>Xuất hàng từ:</span>
-          {[['KH_BS', 'Kho Bồ Sơn'], ['KH_NC', 'Cửa hàng Nguyễn Cao']].map(([code, label]) => (
-            <button key={code} type="button" className={warehouse === code ? 'active' : ''} onClick={() => pickWarehouse(code)}>{label}</button>
-          ))}
-          {errors.warehouse && <small className="err">{errors.warehouse}</small>}
-        </div>
-      )}
+      {errors.warehouse && <p className="alert error" role="alert">{errors.warehouse}</p>}
 
       <div className="about-admin-row">
         <label>{wholesale ? 'Người nhận hàng' : 'Họ tên khách'}
@@ -275,7 +280,7 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
             <span>Gạo hay đặt:</span>
             {usual.map((p) => (
               <button key={p.id} type="button" disabled={avail(p) <= 0} onClick={() => addUsual(p)}>
-                + {p.name} · {formatVND(ws.prices.get(p.id))}{avail(p) <= 0 ? ` · hết ở ${fromMain ? 'Bồ Sơn' : 'Nguyễn Cao'}` : ''}
+                + {p.name} · {formatVND(ws.prices.get(p.id))}{avail(p) <= 0 ? ` · hết ở ${whName.toLowerCase()}` : ''}
               </button>
             ))}
           </div>
@@ -287,8 +292,9 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
               <select className="input" value={line.product_id} onChange={(e) => pickProduct(index, e.target.value)} aria-label={`Loại gạo ${index + 1}`}>
                 <option value="">— Chọn loại gạo —</option>
                 {selectable.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} · {p.unit} · {wholesale && fixedPrice(p.id) ? `giá riêng ${formatVND(fixedPrice(p.id))}` : formatVND(p.price)} (còn {avail(p)})
+                  <option key={p.id} value={p.id} disabled={avail(p) <= 0 && String(p.id) !== line.product_id}>
+                    {p.name} · {p.unit} · {wholesale && fixedPrice(p.id) ? `giá riêng ${formatVND(fixedPrice(p.id))}` : formatVND(p.price)}
+                    {avail(p) > 0 ? ` (còn ${avail(p)})` : ` (${whName.toLowerCase()} hết${otherStock(p) > 0 ? `, ${fromMain ? 'cửa hàng' : 'kho'} còn ${otherStock(p)}` : ''})`}
                   </option>
                 ))}
               </select>
@@ -305,6 +311,9 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
               )}
               {lines.length > 1 && (
                 <button type="button" className="icon-close" onClick={() => setLines((cur) => cur.filter((_, i) => i !== index))} aria-label="Bỏ dòng">×</button>
+              )}
+              {product && Number(line.quantity) > avail(product) && (
+                <small className="err manual-short">{whName} chỉ còn {avail(product)} {product.unit}{otherStock(product) > 0 ? ` · ${fromMain ? 'cửa hàng' : 'kho'} còn ${otherStock(product)}` : ''}</small>
               )}
             </div>
           );

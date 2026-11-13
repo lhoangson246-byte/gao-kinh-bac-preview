@@ -110,7 +110,13 @@ try {
   check('Đơn khách lẻ trừ tồn Nguyễn Cao, không đụng Bồ Sơn', retail.status === 201 && retail.data.order.warehouse === 'KH_NC' && r.stock_nc === 210 && r.stock_bs === 400, short(r));
   led = await ledgerSum(gao.id, 'KH_NC');
   check('Nhật ký kho ghi đơn hàng kèm mã đơn và người tạo', led.last.kind === 'order' && led.last.quantity === -5 && led.last.ref_code === retail.data.order.code && !!led.last.actor_name, short(led.last));
-  check('Đơn khách lẻ không được xuất từ Kho Bồ Sơn (400)', (await order({ phone: phone('09', 2), warehouse: 'KH_BS' })).status === 400);
+  // Nhân viên tạo đơn khách lẻ cũng chọn được Kho Bồ Sơn (mặc định ở form từ 13/11/2026); huỷ thì trả về đúng kho.
+  const retailBs = await order({ phone: phone('09', 2), warehouse: 'KH_BS' });
+  const bsAfterRetail = (await row(gao.id)).stock_bs;
+  await call(`/admin/orders/${retailBs.data.order?.id}/status`, { method: 'PATCH', token: owner, body: { status: 'cancelled' } });
+  check('Đơn khách lẻ nhân viên tạo xuất được từ Kho Bồ Sơn, huỷ trả về Bồ Sơn', retailBs.status === 201 && retailBs.data.order.warehouse === 'KH_BS'
+    && bsAfterRetail === 395 && (await row(gao.id)).stock_bs === 400 && (await row(gao.id)).stock_nc === 210, short(retailBs.data).slice(0, 200));
+  check('Kho lạ bị từ chối (400)', (await order({ phone: phone('09', 2), warehouse: 'KH_XX' })).status === 400);
   const ws = (await call('/admin/wholesale', { method: 'POST', token: owner, body: { company: 'Bếp ăn Kho', contact_name: 'Cô Lan', phone: phone('08', 3) } })).data.customer;
   const wsOrder = (body) => order({ phone: phone('08', 3), receiver_name: 'Cô Lan', customer_type: 'wholesale', wholesale_customer_id: ws.id, ...body });
   const sỉ = await wsOrder({ warehouse: 'KH_BS', items: [{ product_id: gao.id, quantity: 40 }] });

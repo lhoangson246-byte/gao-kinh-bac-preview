@@ -2183,3 +2183,57 @@ label b { color: var(--danger); }
   .transfer-box { justify-content: center; }
   .transfer-qr { flex-basis: 180px; width: 180px; height: 180px; }
 }
+
+/* --- Giỏ hàng gọn, nút đặt hàng cố định; chọn kho xuất ở form tạo đơn (13/11/2026) --- */
+.cart-summary { position: sticky; top: 92px; padding: 18px 20px; }
+.cart-summary h2 { margin: 0 0 6px; font-size: 1.3rem; }
+.cart-summary .summary-row { padding: 6px 0; }
+.cart-summary .grand-total { margin-top: 4px; }
+.cart-summary .ship-notice, .cart-summary .promo-progress { margin: 8px 0; }
+.ship-notice.compact { padding: 8px 10px; font-size: .84rem; }
+.ship-notice.compact p strong { display: inline; }
+.ship-notice.compact .ship-bar { margin: 6px 0 0; }
+.cart-perks { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 6px 0 10px; color: var(--muted); font-size: .78rem; font-weight: 650; }
+.cart-cta-total { display: none; margin: 0; }
+.cart-summary .quick-cta { min-height: 56px; font-size: 1.1rem; }
+.cart-summary .quick-login { margin-top: 8px; font-size: .86rem; }
+.cart-upsell-title small { margin-left: 4px; color: var(--muted); font-size: .78rem; font-weight: 600; }
+.cart-upsell { padding: 10px 12px; }
+.cart-upsell-item { padding: 6px 0 0; margin-top: 6px; }
+.warehouse-switch { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; margin-right: 8px; padding: 3px; border: 1px solid var(--border); border-radius: 99px; background: var(--white); font-size: .78rem; font-weight: 750; }
+.warehouse-switch > span { padding: 0 4px 0 8px; color: var(--muted); }
+.warehouse-switch button { min-height: 32px; padding: 4px 11px; border: 0; border-radius: 99px; background: transparent; color: var(--green-950); font-weight: 800; cursor: pointer; }
+.warehouse-switch button.active { background: var(--green-950); color: var(--white); }
+.manual-short { flex-basis: 100%; }
+@media (max-width: 920px) {
+  .cart-summary { position: static; }
+  /* Nút đặt hàng và tổng tiền cố định ở đáy màn hình. */
+  .cart-page { padding-bottom: 120px; }
+  .cart-cta { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--paper); box-shadow: 0 -8px 24px rgba(23, 61, 44, .14); }
+  .cart-cta-total { display: grid; line-height: 1.15; }
+  .cart-cta-total small { color: var(--muted); font-size: .72rem; font-weight: 700; }
+  .cart-cta-total strong { color: var(--green-950); font-size: 1.15rem; white-space: nowrap; }
+  .cart-cta .btn { min-height: 52px; margin: 0; }
+  .cart-cta .quick-cta { min-height: 52px; font-size: 1.02rem; }
+  .cart-cta .quick-cta small { font-size: .7rem; }
+  body:has(.cart-cta) .mascot { bottom: 92px; }
+  body:has(.cart-cta) .floating-cart { display: none; }
+  .cart-page .page-heading { margin-bottom: 12px; }
+  .cart-page .page-heading .eyebrow { display: none; }
+  .cart-page .page-heading h1 { font-size: 1.9rem; }
+  .cart-page .cart-layout { gap: 12px; }
+}
+@media (max-width: 780px) {
+  /* Điện thoại có thanh tab ở đáy (cao khoảng 71px): đặt thanh đặt hàng ngay trên nó. */
+  .cart-cta { left: 10px; right: 10px; bottom: 78px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 16px; }
+  .cart-page { padding-bottom: 80px; }
+  body:has(.cart-cta) .mascot { bottom: 158px; }
+}
+.warehouse-switch { flex: 0 0 auto; white-space: nowrap; }
+.manual-order-head h2 { min-width: 0; }
+@media (max-width: 640px) {
+  .manual-order-head { flex-wrap: wrap; }
+  .manual-order-head h2 { flex: 1 1 100%; order: -1; font-size: 1.5rem; }
+  .warehouse-switch { margin-left: 0; }
+}

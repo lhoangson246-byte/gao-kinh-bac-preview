@@ -3,11 +3,20 @@ import { formatVND, FREE_SHIPPING_MIN, SHIPPING_FEE } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 
 /** Báo phí giao và nhắc khách mua thêm cho đủ mức freeship. `subtotal` là tiền hàng trước giảm giá. */
-export default function ShippingNotice({ subtotal }) {
+export default function ShippingNotice({ subtotal, compact = false }) {
   const { t } = useI18n();
   if (subtotal <= 0) return null;
   if (subtotal >= FREE_SHIPPING_MIN) {
     return <div className="ship-notice free" role="status">🎉 {t('ship.free')}</div>;
+  }
+  if (compact) {
+    // Giỏ hàng: phí giao đã có ở dòng riêng, chỉ cần nhắc mua thêm bao nhiêu để freeship.
+    return (
+      <div className="ship-notice compact" role="status">
+        <p><strong>🚚 {t('ship.need', { amount: formatVND(FREE_SHIPPING_MIN - subtotal) })}</strong> <Link to="/">{t('ship.add')} →</Link></p>
+        <div className="ship-bar" aria-hidden="true"><span style={{ width: `${Math.round((subtotal / FREE_SHIPPING_MIN) * 100)}%` }}></span></div>
+      </div>
+    );
   }
   return (
     <div className="ship-notice" role="status">

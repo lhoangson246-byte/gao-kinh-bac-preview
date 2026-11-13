@@ -274,7 +274,7 @@ export const vi = {
   'mascot.step': 'Bước {n}/{total}',
   'mascot.next': 'Tiếp ›',
   'mascot.restart': 'Xem lại từ đầu',
-  'mascot.cart1': 'Mình kéo xuống rồi chọn “Đặt hàng” nhé.',
+  'mascot.cart1': 'Mình bấm nút “Đặt hàng” màu vàng ở cuối màn hình nhé.',
   'mascot.cart2': 'Thêm tên, số điện thoại và địa chỉ để nhà em ship đến ạ.',
   'mascot.cart3': 'Mình nhập mã giảm giá trong nhóm Zalo nếu có nhé.',
   'mascot.cart4': 'Rồi ấn “Đặt hàng ngay” là xong ạ!',
@@ -284,6 +284,8 @@ export const vi = {
   'cart.deliveryBody': 'Giao hoả tốc trong ngày. Đơn từ {min} được freeship, đơn dưới {min} phí giao {fee}. Cửa hàng gọi xác nhận địa chỉ trước khi giao.',
   'cart.total': 'Tạm tính',
   'cart.points': 'Đơn này cộng {n} điểm tích luỹ khi giao xong. Đơn bị huỷ không được cộng điểm.',
+  'cart.pointsShort': 'Cộng {n} điểm khi giao xong',
+  'cart.firstShort': 'Đơn đầu tiên giảm {amount}',
   'cart.continue': 'Tiếp tục đặt hàng',
 
   // Đặt hàng
@@ -805,7 +807,7 @@ export const en = {
   'mascot.step': 'Step {n}/{total}',
   'mascot.next': 'Next ›',
   'mascot.restart': 'Start again',
-  'mascot.cart1': 'Scroll down and tap “Order”.',
+  'mascot.cart1': 'Tap the yellow “Order” button at the bottom of the screen.',
   'mascot.cart2': 'Add your name, phone number and address so we can deliver to you.',
   'mascot.cart3': 'Have a discount code from our Zalo group? Enter it here.',
   'mascot.cart4': 'Then tap “Order now” and you are done!',
@@ -815,6 +817,8 @@ export const en = {
   'cart.deliveryBody': 'Same-day express delivery. Free on orders from {min}; orders under {min} pay a {fee} fee. The shop calls to confirm your address first.',
   'cart.total': 'Total',
   'cart.points': 'This order earns {n} loyalty points once delivered. Cancelled orders earn no points.',
+  'cart.pointsShort': 'Earn {n} points on delivery',
+  'cart.firstShort': 'First order {amount} off',
   'cart.continue': 'Continue to checkout',
 
   'checkout.emptyTitle': 'Nothing to order yet',
@@ -1330,7 +1334,7 @@ export const zh = {
   'mascot.step': '第 {n}/{total} 步',
   'mascot.next': '下一步 ›',
   'mascot.restart': '从头再看',
-  'mascot.cart1': '往下滑，点击“下单”。',
+  'mascot.cart1': '点击屏幕底部黄色的“下单”按钮。',
   'mascot.cart2': '填写姓名、电话和地址，我们好送货上门。',
   'mascot.cart3': '如果有 Zalo 群里的优惠码，记得填写哦。',
   'mascot.cart4': '然后点击“立即下单”就完成啦！',
@@ -1340,6 +1344,8 @@ export const zh = {
   'cart.deliveryBody': '当日极速送达。订单满 {min} 免配送费，不满 {min} 收取配送费 {fee}。送货前店铺会致电确认地址。',
   'cart.total': '合计',
   'cart.points': '订单送达后可获得 {n} 积分。已取消的订单不累积积分。',
+  'cart.pointsShort': '送达后积 {n} 分',
+  'cart.firstShort': '首单立减 {amount}',
   'cart.continue': '去下单',
 
   'checkout.emptyTitle': '暂无可下单的商品',

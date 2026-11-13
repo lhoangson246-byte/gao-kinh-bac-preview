@@ -194,11 +194,10 @@ router.post('/orders', async (req, res, next) => {
     } else if (items.some((line) => line?.price != null)) {
       errors.items = 'Khách lẻ tính đúng giá web, không sửa giá được.';
     }
-    // Kho xuất hàng: khách lẻ luôn lấy ở Cửa hàng Nguyễn Cao; khách buôn do nhân viên chọn (thường là
-    // Kho Bồ Sơn). Không gửi lên thì là Cửa hàng Nguyễn Cao như trước nay.
+    // Kho xuất hàng do nhân viên chọn ở góc form (mặc định Kho Bồ Sơn từ 13/11/2026), cho cả khách lẻ và
+    // khách buôn. Không gửi lên thì là Cửa hàng Nguyễn Cao. Đơn khách tự đặt trên web luôn là cửa hàng.
     const warehouse = body.warehouse || STORE;
     if (!isWarehouse(warehouse)) errors.warehouse = 'Chọn kho xuất hàng.';
-    else if (warehouse !== STORE && body.customer_type !== 'wholesale') errors.warehouse = 'Đơn khách lẻ xuất từ Cửa hàng Nguyễn Cao.';
     if (Object.keys(errors).length) throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', errors);
 
     const orderId = placeOrder({

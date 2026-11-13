@@ -1551,6 +1551,22 @@ Kiểm thử: `npm --prefix backend run test:upsell` (24 kiểm tra).
 
 - Bảng doanh thu theo ngày có thêm cột **Số đơn** (đơn online đã hoàn thành + hoá đơn tại quầy, ghi rõ bao nhiêu online, bao nhiêu tại quầy), dòng Cộng có tổng số đơn. Đếm cùng quy tắc với tiền doanh thu.
 
+## Xuất từ Kho / Cửa hàng ở form tạo đơn, giỏ hàng gọn với nút đặt hàng cố định (13/11/2026)
+
+### Form tạo đơn: xuất từ Kho hoặc Cửa hàng
+- Góc trên form **Tạo đơn** có nút **Xuất từ: 🏭 Kho | 🏪 Cửa hàng**, **mặc định Kho (Kho Bồ Sơn)** cho cả khách lẻ và khách buôn. Hàng lấy ở cửa hàng thì nhân viên bấm "Cửa hàng".
+- Danh sách gạo ghi số còn ở kho đang chọn. Loại hết ở kho đó thì mờ, kèm "cửa hàng còn N" (hoặc ngược lại) để biết mà đổi. Nhập quá số còn thì báo đỏ ngay dưới dòng và không cho tạo đơn.
+- Đổi kho không xoá các dòng hàng đã nhập. Huỷ đơn thì hàng trả về đúng kho đã xuất.
+- Máy chủ: đơn nhân viên tạo cho khách lẻ giờ xuất được từ Kho Bồ Sơn (trước chỉ khách buôn). Không gửi kho thì vẫn là Cửa hàng Nguyễn Cao; đơn khách tự đặt trên web luôn là cửa hàng.
+- **Lưu ý**: Kho Bồ Sơn chưa nhập tồn đầu kỳ thì mọi loại đều báo "kho hết"; nhập tồn ở Kho hàng → Kiểm kê, hoặc bấm "Cửa hàng".
+
+### Giỏ hàng
+- Bỏ ô xanh "Giao hàng tại Bắc Ninh". Khung tóm tắt gọn lại: Tiền hàng, Giảm giá (nếu có), **Phí giao hàng chỉ hiện khi phải trả**, Tạm tính.
+- Phí giao: đủ 100.000đ thì chỉ **một dòng "Đơn của bạn được FREESHIP"**. Chưa đủ thì có dòng phí giao 10.000đ và một dòng "Mua thêm X để được FREESHIP" kèm thanh tiến độ.
+- Điểm tích luỹ và ưu đãi đơn đầu thu thành hai dòng chữ nhỏ.
+- **Nút "Đặt hàng ngay" cố định**: trên điện thoại là thanh có tổng tiền nằm ngay trên thanh tab dưới đáy màn hình, cuộn thế nào cũng thấy. Trên máy tính, khung tóm tắt dính theo khi cuộn.
+- Khung mua kèm (HOT) gọn hơn: tiêu đề và mô tả trên một dòng.
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

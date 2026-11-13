@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { api, formatVND, pointsForLines, shippingFeeFor, FIRST_ORDER_DISCOUNT, FREE_SHIPPING_MIN, SHIPPING_FEE } from '../api';
+import { api, formatVND, pointsForLines, shippingFeeFor, FIRST_ORDER_DISCOUNT } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 import { PromoGiftRow, PromoProgress } from '../components/Promotion.jsx';
 import ProductImage from '../components/ProductImage.jsx';
@@ -20,6 +20,7 @@ export default function Cart() {
   const [firstOrder, setFirstOrder] = useState(null);
   const discount = firstOrder?.available ? Math.min(firstOrder.amount, total) : 0;
   const shippingFee = shippingFeeFor(total);
+  const grandTotal = total - discount + shippingFee;
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -58,7 +59,7 @@ export default function Cart() {
   }
 
   return (
-    <div className="page-shell">
+    <div className="page-shell cart-page">
       <div className="page-heading">
         <div><p className="eyebrow dark"><span></span>{t('cart.eyebrow')}</p><h1>{t('cart.title')}</h1></div>
         <Link to="/" className="text-link">{t('cart.addMore')}</Link>
@@ -124,8 +125,7 @@ export default function Cart() {
           <button className="link-button danger clear-cart" onClick={clear}>{t('cart.clear')}</button>
           {upsell.length > 0 && (
             <div className="cart-upsell" role="region" aria-label={t('upsell.aria')}>
-              <p className="cart-upsell-title"><i className="upsell-hot">HOT</i> {t('upsell.title')}</p>
-              <p className="cart-upsell-body">{t('upsell.body')}</p>
+              <p className="cart-upsell-title"><i className="upsell-hot">HOT</i> {t('upsell.title')} <small>{t('upsell.body')}</small></p>
               {upsell.map((p) => (
                 <div className="cart-upsell-item" key={p.id}>
                   <div className={`cart-grain${p.image_url ? ' has-image' : ''}`} aria-hidden="true">
@@ -145,7 +145,6 @@ export default function Cart() {
         </section>
 
         <aside className="summary cart-summary">
-          <p className="eyebrow dark"><span></span>{t('cart.summaryEyebrow')}</p>
           <h2>{t('cart.summaryTitle')}</h2>
           <div className="summary-row"><span>{t('cart.subtotal')}</span><strong>{formatVND(total)}</strong></div>
           {discount > 0 && (
@@ -154,40 +153,34 @@ export default function Cart() {
               <strong className="free-tag">− {formatVND(discount)}</strong>
             </div>
           )}
-          <div className="summary-row"><span>{t('cart.shipping')}</span>{shippingFee > 0 ? <strong>{formatVND(shippingFee)}</strong> : <strong className="free-tag">{t('common.free')}</strong>}</div>
-          <div className="summary-note">
-            <strong>{t('cart.deliveryTitle')}</strong>
-            <p>{t('cart.deliveryBody', { min: formatVND(FREE_SHIPPING_MIN), fee: formatVND(SHIPPING_FEE) })}</p>
-          </div>
+          {/* Phí giao chỉ hiện khi phải trả; freeship thì chỉ một dòng báo bên dưới. */}
+          {shippingFee > 0 && <div className="summary-row"><span>{t('cart.shipping')}</span><strong>{formatVND(shippingFee)}</strong></div>}
           <PromoGiftRow items={items} />
-          <div className="summary-row grand-total"><span>{t('cart.total')}</span><strong>{formatVND(total - discount + shippingFee)}</strong></div>
-          <ShippingNotice subtotal={total} />
-          <PromoProgress items={items} />
-          <p className="pos-hint">{t('cart.points', { n: pointsForLines(items.filter((item) => item.stock > 0), total - discount) })}</p>
-          {user ? (
-            <button
-              className="btn btn-primary btn-block btn-large"
-              disabled={hasUnavailable || count === 0}
-              onClick={() => navigate('/dat-hang')}
-            >
-              {t('cart.continue')}
-            </button>
-          ) : (
-            <>
-              {/* Chưa đăng nhập: đặt ngay không cần tài khoản là lựa chọn chính. */}
-              <p className="quick-promo">🎁 {t('quick.firstOrder', { amount: formatVND(FIRST_ORDER_DISCOUNT) })}</p>
-              <button
-                className="btn btn-primary btn-block btn-large quick-cta"
-                disabled={hasUnavailable || count === 0}
-                onClick={() => navigate('/dat-nhanh')}
-              >
+          <div className="summary-row grand-total"><span>{t('cart.total')}</span><strong>{formatVND(grandTotal)}</strong></div>
+          <ShippingNotice subtotal={total} compact />
+          <PromoProgress items={items} compact />
+          <p className="cart-perks">
+            <span>★ {t('cart.pointsShort', { n: pointsForLines(items.filter((item) => item.stock > 0), total - discount) })}</span>
+            {!user && <span>🎁 {t('cart.firstShort', { amount: formatVND(FIRST_ORDER_DISCOUNT) })}</span>}
+          </p>
+          {/* Nút đặt hàng: trên điện thoại cố định ở đáy màn hình để không trôi mất khi cuộn. */}
+          <div className="cart-cta">
+            <p className="cart-cta-total"><small>{t('cart.total')}</small><strong>{formatVND(grandTotal)}</strong></p>
+            {user ? (
+              <button className="btn btn-primary btn-block btn-large" disabled={hasUnavailable || count === 0} onClick={() => navigate('/dat-hang')}>
+                {t('cart.continue')}
+              </button>
+            ) : (
+              <button className="btn btn-primary btn-block btn-large quick-cta" disabled={hasUnavailable || count === 0} onClick={() => navigate('/dat-nhanh')}>
                 {t('quick.cta')}
                 <small>{t('quick.ctaHint')}</small>
               </button>
-              <p className="quick-login">
-                {t('quick.haveAccount')} <Link to="/dang-nhap" state={{ from: '/dat-hang' }}>{t('quick.login')}</Link>
-              </p>
-            </>
+            )}
+          </div>
+          {!user && (
+            <p className="quick-login">
+              {t('quick.haveAccount')} <Link to="/dang-nhap" state={{ from: '/dat-hang' }}>{t('quick.login')}</Link>
+            </p>
           )}
         </aside>
       </div>
