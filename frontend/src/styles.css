@@ -2052,6 +2052,63 @@ label b { color: var(--danger); }
   .inv-table td.inv-row-actions { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 2px; }
 }
 
+/* --- Mua kèm (upsale) ở giỏ hàng, nhãn HOT, tìm khách cho nhân viên giao hàng (13/11/2026) --- */
+.upsell-hot { display: inline-block; padding: 2px 7px; border-radius: 99px; background: #e0241b; color: #fff; font-size: .66rem; font-style: normal; font-weight: 900; letter-spacing: .05em; vertical-align: middle; }
+.product-hot { position: absolute; top: 13px; left: 13px; z-index: 1; padding: 5px 9px; border-radius: 99px; background: #e0241b; color: #fff; font-size: .72rem; font-weight: 900; letter-spacing: .05em; box-shadow: 0 0 0 0 rgba(224, 36, 27, .45); animation: product-hot-pulse 2.4s ease-out infinite; }
+.product-hot.below { top: 46px; }
+@keyframes product-hot-pulse { 0% { box-shadow: 0 0 0 0 rgba(224, 36, 27, .45); } 70%, 100% { box-shadow: 0 0 0 9px rgba(224, 36, 27, 0); } }
+@media (prefers-reduced-motion: reduce) { .product-hot { animation: none; } }
+.admin-hot-tag { padding: 2px 8px; border-radius: 99px; background: #fde4e2; color: #b3201a; font-size: .68rem; font-weight: 800; }
+.cart-upsell { margin: 14px 16px 16px; padding: 14px; border: 1.5px dashed #e7a29d; border-radius: 14px; background: #fff7f5; }
+.cart-upsell-title { margin: 0; color: var(--green-950); font-size: 1.02rem; font-weight: 800; }
+.cart-upsell-body { margin: 2px 0 10px; color: var(--muted); font-size: .82rem; }
+.cart-upsell-item { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px 0; border-top: 1px solid #f1d6d2; }
+.cart-upsell-item .cart-grain { width: 56px; height: 56px; }
+.cart-upsell-item h3 { margin: 0; font-size: .95rem; }
+.cart-upsell-item p { margin: 2px 0 0; color: var(--muted); font-size: .84rem; }
+.cart-upsell-item p strong { color: var(--green-950); }
+.cart-upsell-item .btn { min-height: 40px; padding: 6px 14px; white-space: nowrap; }
+.upsell-manager { margin-bottom: 22px; }
+.upsell-manager h2 { display: flex; align-items: center; gap: 8px; }
+.upsell-list { display: grid; gap: 5px; margin: 0 0 12px; padding: 0; list-style: none; }
+.upsell-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--white); }
+.upsell-list li.upsell-off { background: var(--cream); }
+.upsell-name { display: grid; flex: 1 1 220px; min-width: 0; }
+.upsell-name small { color: var(--muted); font-size: .76rem; }
+.upsell-off .upsell-name small { color: #8a5a00; }
+.upsell-actions { display: flex; gap: 6px; }
+.upsell-actions .btn { min-height: 34px; padding: 4px 11px; }
+.upsell-add { display: flex; flex-wrap: wrap; gap: 8px; }
+.upsell-add .input { flex: 1 1 260px; margin: 0; }
+.finder { position: relative; margin-bottom: 14px; }
+.finder-label { display: block; margin-bottom: 6px; color: var(--green-950); font-weight: 800; }
+.finder-box { position: relative; }
+.finder-box .input { margin: 0; min-height: 48px; font-size: 1rem; }
+.finder-list { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30; max-height: min(60vh, 420px); overflow-y: auto; margin: 0; padding: 4px; list-style: none; border: 1px solid var(--border); border-radius: 12px; background: var(--white); box-shadow: 0 14px 30px rgba(23, 61, 44, .18); }
+.finder-option { display: grid; gap: 1px; padding: 9px 10px; border-radius: 8px; cursor: pointer; }
+.finder-option + .finder-option { border-top: 1px solid #f0ece3; }
+.finder-option.active, .finder-option:hover { background: var(--green-100); }
+.finder-option.maps { color: var(--green-900); font-weight: 750; }
+.finder-name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.finder-name em { padding: 1px 6px; border-radius: 6px; background: var(--cream-deep); color: var(--green-950); font-size: .7rem; font-style: normal; font-weight: 750; }
+.finder-name em.finder-pin { background: var(--success-light); color: var(--success); }
+.finder-option small { color: var(--muted); font-size: .8rem; }
+.finder-option .finder-address { color: #3d453f; }
+.finder-empty { padding: 10px; color: var(--muted); font-size: .86rem; }
+.finder-card { margin-top: 10px; padding: 14px; border: 2px solid var(--green-800); border-radius: 14px; background: var(--paper); }
+.finder-card header { display: flex; justify-content: space-between; gap: 10px; }
+.finder-card h3 { margin: 0; font-size: 1.15rem; }
+.finder-card header small { color: var(--muted); }
+.finder-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.finder-actions .btn { min-height: 46px; }
+@media (max-width: 520px) {
+  .finder-actions { grid-template-columns: 1fr; }
+  .cart-upsell { margin: 12px 10px 14px; padding: 12px; }
+  .cart-upsell-item { grid-template-columns: 48px minmax(0, 1fr); }
+  .cart-upsell-item .cart-grain { width: 48px; height: 48px; }
+  .cart-upsell-item .btn { grid-column: 1 / -1; width: 100%; }
+}
+
 /* --- Giỏ hàng: ảnh sản phẩm, mỗi dòng gọn hơn (12/11/2026) --- */
 .cart-grain.has-image { overflow: hidden; border-radius: 12px; background: var(--cream); }
 .cart-grain picture, .cart-grain img { display: block; width: 100%; height: 100%; object-fit: cover; }

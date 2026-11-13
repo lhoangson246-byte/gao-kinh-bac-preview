@@ -38,7 +38,7 @@ router.use(requireAuth, requireStaff, accessTable([
   ['GET', /^\/stats\/?$/, ['orders.view', 'products.manage']],
   ['GET', /^\/export\/orders\/?$/, ['orders.export']],
   ['GET', /^\/revenue\/?$/, ['revenue.view']],
-  ['*', /^\/(products|groups|stock-entries)(\/|$)/, ['products.manage']],
+  ['*', /^\/(products|groups|stock-entries|upsell)(\/|$)/, ['products.manage']],
 ]));
 router.use(validateRoutes('admin'));
 
@@ -583,6 +583,30 @@ router.post('/products/order', (req, res, next) => {
       order.forEach((id, index) => update.run(index + 1, id));
     })();
     writeAdminAudit(req, { action: 'reorder', entityType: 'product', entityId: null, before: { ids: current }, after: { ids: order } });
+    const groups = groupIdsByProduct();
+    res.json({ products: db.prepare('SELECT * FROM products ORDER BY sort_order, id').all().map((p) => ({ ...p, group_ids: groups.get(p.id) || [] })) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PUT /api/admin/upsell { ids } — sản phẩm mua kèm (upsale): hiện ở giỏ hàng của khách và gắn nhãn HOT,
+ * theo đúng thứ tự gửi lên. Danh sách rỗng = không mời mua kèm.
+ */
+router.put('/upsell', (req, res, next) => {
+  try {
+    const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).map((v) => toInteger(v, { min: 1 }));
+    if (ids.some((v) => !v) || new Set(ids).size !== ids.length) throw new HttpError(400, 'Danh sách sản phẩm mua kèm không hợp lệ.');
+    const before = db.prepare('SELECT id FROM products WHERE upsell_rank IS NOT NULL ORDER BY upsell_rank').all().map((r) => r.id);
+    db.transaction(() => {
+      const exists = db.prepare('SELECT 1 FROM products WHERE id = ?');
+      if (ids.some((id) => !exists.get(id))) throw new HttpError(400, 'Có sản phẩm không còn trong cửa hàng. Vui lòng tải lại trang.');
+      db.prepare('UPDATE products SET upsell_rank = NULL WHERE upsell_rank IS NOT NULL').run();
+      const set = db.prepare('UPDATE products SET upsell_rank = ? WHERE id = ?');
+      ids.forEach((id, index) => set.run(index + 1, id));
+    })();
+    writeAdminAudit(req, { action: 'set_upsell', entityType: 'product', entityId: null, before: { ids: before }, after: { ids } });
     const groups = groupIdsByProduct();
     res.json({ products: db.prepare('SELECT * FROM products ORDER BY sort_order, id').all().map((p) => ({ ...p, group_ids: groups.get(p.id) || [] })) });
   } catch (err) {

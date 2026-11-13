@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 const ImagePicker = lazy(() => import('../components/ImagePicker.jsx'));
 const BannerSettings = lazy(() => import('../components/BannerSettings.jsx'));
 const GroupManager = lazy(() => import('../components/GroupManager.jsx'));
+const UpsellManager = lazy(() => import('../components/UpsellManager.jsx'));
 const ProductsByGroup = lazy(() => import('../components/ProductsByGroup.jsx'));
 import OrderAlerts from '../components/OrderAlerts.jsx';
 import PushSettings from '../components/PushSettings.jsx';
@@ -454,8 +455,9 @@ export default function Admin() {
             <span className="margin-tag"> · lãi {formatVND(product.price - product.cost_price)}</span>
           )}
         </p>
-        {(salePercent(product) > 0 || product.category === 'do-kho' || product.points_per_unit != null || !!product.is_reward || product.group_ids?.length > 0) && (
+        {(salePercent(product) > 0 || product.category === 'do-kho' || product.points_per_unit != null || !!product.is_reward || product.group_ids?.length > 0 || product.upsell_rank != null) && (
           <p className="product-tags">
+            {product.upsell_rank != null && <span className="admin-hot-tag">HOT · mua kèm ở giỏ hàng</span>}
             {groups.filter((g) => product.group_ids?.includes(g.id)).map((g) => (
               <span key={g.id} className="admin-group-tag">{g.name}</span>
             ))}
@@ -862,6 +864,7 @@ export default function Admin() {
                 <section>
                   <GroupManager groups={groups} products={products} notify={notify}
                                 onChanged={() => reload({ refreshProducts: true })} onReordered={setGroups} />
+                  <UpsellManager products={products} notify={notify} onSaved={setProducts} />
                   <BannerSettings notify={notify} />
                   {showForm && (
                     <div className="product-form-wrap">

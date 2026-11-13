@@ -272,6 +272,7 @@ add('staff', 'PATCH', /^\/[^/]+\/lock\/?$/, obj({ is_locked: flag }));
 add('staff', 'POST', /^\/[^/]+\/reset-password\/?$/, obj({ password: newPassword }));
 // Nhân viên giao hàng: chỉ hai bước của chính mình.
 add('delivery', 'GET', /^\/orders\/?$/);
+add('delivery', 'GET', /^\/search\/?$/, empty, obj({ q: z.string().max(80) }));
 add('delivery', 'PATCH', /^\/orders\/[^/]+\/status\/?$/, obj({ status: z.enum(['shipping', 'completed']), photo: z.string().max(40).optional() }));
 add('delivery', 'POST', /^\/orders\/[^/]+\/debt\/?$/, obj({
   delivered_photo: z.string().max(40), invoice_photo: z.string().max(40), company: optionalText(160), comment: optionalText(1000),
@@ -286,6 +287,8 @@ add('debts', 'PUT', /^\/accounts\/[^/]+\/?$/, obj({
 }), obj({ scope: z.enum(['open', 'settled']).optional() }));
 add('closing', 'GET', /^\/?$/, empty, obj({ day: z.string().max(10).optional() }));
 // Chấm công: giờ vào / ra do máy chủ ghi, nên chấm vào / ra không nhận dữ liệu nào.
+// Sản phẩm mua kèm (upsale) ở giỏ hàng, theo thứ tự gửi lên.
+add('admin', 'PUT', /^\/upsell\/?$/, obj({ ids: z.array(id).max(12) }));
 // Kho hàng: hai kho, phiếu nhập, điều chuyển, kiểm kê, nhật ký kho.
 const warehouseCode = z.enum(['KH_NC', 'KH_BS']);
 const stockQty = integer(0, 100_000).or(z.literal('')).nullable().optional();

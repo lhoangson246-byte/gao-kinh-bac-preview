@@ -9,6 +9,7 @@ import { localDate } from '../constants.js';
 import { changeOrderStatus } from '../order-status.js';
 import { debtAccountFor, logDebtEvent, todayVN } from '../debts.js';
 import { notifyDebtStage } from '../push.js';
+import { searchCustomers } from '../customer-search.js';
 
 /**
  * /api/delivery — nhân viên giao hàng (quyền "delivery"). Chỉ thấy và chỉ cập nhật đơn được phân
@@ -28,6 +29,14 @@ function ownPhoto(id, user, field) {
   if (!ok) throw new HttpError(400, 'Chưa có ảnh. Vui lòng chụp ảnh rồi thử lại.', { [field]: 'Chụp ảnh trước.' });
   return id;
 }
+
+/**
+ * GET /search?q= — tìm khách theo tên, số điện thoại, địa chỉ hoặc mã khách buôn để gọi và chỉ đường,
+ * kể cả khách không có đơn đang giao cho mình (13/11/2026). Tối đa 12 kết quả, gõ ít nhất 2 ký tự.
+ */
+router.get('/search', (req, res) => {
+  res.json({ results: searchCustomers(String(req.query.q || '')) });
+});
 
 /** GET /orders — đơn cần giao của tôi + đơn đã xong / bị huỷ hôm nay. */
 router.get('/orders', (req, res) => {

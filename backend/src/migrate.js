@@ -1250,5 +1250,17 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(deleteTestOrd
     db.prepare("INSERT OR IGNORE INTO app_migrations (name) VALUES ('stock-opening-2026-11-13')").run();
   }
 
+  // Mua kèm / upsale (13/11/2026): sản phẩm có upsell_rank hiện ở giỏ hàng khách, gắn nhãn HOT, xếp theo số
+  // này (NULL = không upsale). Lần đầu: trứng gà (cửa hàng yêu cầu "thêm trứng gà vào giỏ hàng, 30 quả 92k").
+  if (!db.prepare('PRAGMA table_info(products)').all().some((c) => c.name === 'upsell_rank')) {
+    db.exec('ALTER TABLE products ADD COLUMN upsell_rank INTEGER');
+  }
+  if (!db.prepare("SELECT 1 FROM app_migrations WHERE name = 'upsell-eggs-2026-11-13'").get()) {
+    if (!db.prepare('SELECT 1 FROM products WHERE upsell_rank IS NOT NULL').get()) {
+      db.prepare("UPDATE products SET upsell_rank = 1 WHERE id = (SELECT id FROM products WHERE is_active = 1 AND LOWER(name) LIKE '%trứng gà%' ORDER BY id LIMIT 1)").run();
+    }
+    db.prepare("INSERT OR IGNORE INTO app_migrations (name) VALUES ('upsell-eggs-2026-11-13')").run();
+  }
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

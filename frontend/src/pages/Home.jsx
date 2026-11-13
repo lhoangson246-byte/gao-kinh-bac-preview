@@ -264,6 +264,7 @@ export default function Home() {
                 <div className="product-image">
                   <ProductImage src={product.image_url || FALLBACK_IMAGE} alt={product.name} first={index === 0} eager={index < 3} />
                   {sale > 0 && <span className="sale-tag" aria-label={t('card.saleAria', { n: sale })}>−{sale}%</span>}
+                  {product.upsell_rank != null && <span className={`product-hot${sale > 0 ? ' below' : ''}`}>HOT</span>}
                   {unpriced
                     ? <span className="stock-tag pending">{t('card.pricePending')}</span>
                     : soldOut

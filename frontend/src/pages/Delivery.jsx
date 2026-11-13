@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import PushSettings from '../components/PushSettings.jsx';
 import ProofPhoto from '../components/ProofPhoto.jsx';
 import StaffNav from '../components/StaffNav.jsx';
+import CustomerFinder from '../components/CustomerFinder.jsx';
 
 const REFRESH_MS = 30_000;
 const formatPhone = (phone) => String(phone || '').replace(/^(\d{4})(\d{3})(\d{3})$/, '$1 $2 $3');
@@ -98,6 +99,7 @@ export default function Delivery() {
       <StaffNav />
 
       <main className="delivery-main">
+        <CustomerFinder />
         <div className="delivery-summary">
           <div><strong>{active.length}</strong><span>đơn cần giao</span></div>
           <div><strong>{formatVND(toCollect)}</strong><span>tiền mặt cần thu</span></div>

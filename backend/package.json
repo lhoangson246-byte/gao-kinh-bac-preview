@@ -25,6 +25,7 @@
     "test:transfer": "node test/transfer.mjs",
     "test:map": "node test/map-link.mjs",
     "test:inventory": "node test/inventory.mjs",
+    "test:upsell": "node test/upsell-search.mjs",
     "test:wholesale": "node test/wholesale.mjs",
     "test:group-order": "node test/group-order.mjs",
     "test:attendance": "node test/attendance.mjs",

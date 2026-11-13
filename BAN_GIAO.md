@@ -1511,6 +1511,26 @@ Mẫu "Kế toán" và "Nhân viên bán hàng" có sẵn ba quyền đầu cho 
 
 Kiểm thử: `npm --prefix backend run test:inventory` (55 kiểm tra).
 
+## Mua kèm (upsale) ở giỏ hàng, nhãn HOT, tìm khách cho nhân viên giao hàng (13/11/2026)
+
+### Mua kèm và nhãn HOT
+
+- **Quản trị → Sản phẩm → "Sản phẩm mua kèm (upsale)"**: chọn sản phẩm trong danh sách thả xuống rồi bấm "+ Thêm vào mua kèm"; mũi tên ↑ ↓ đổi thứ tự, "Bỏ" để gỡ. Lưu ngay mỗi lần bấm (quyền quản lý sản phẩm). Tối đa 12 sản phẩm.
+- Sản phẩm mua kèm hiện ở **giỏ hàng của khách** (khung "Mua kèm cho tiện", nút "+ Thêm vào giỏ") và có **nhãn HOT** trên thẻ sản phẩm ở trang chủ. Dòng sản phẩm trong quản trị có nhãn "HOT · mua kèm ở giỏ hàng".
+- Khách đã có sản phẩm đó trong giỏ thì không mời lại; hàng hết, đang ẩn hoặc chưa có giá thì khách không thấy.
+- Lúc cập nhật, **Trứng gà Dabaco - 30 quả (92.000đ/khay)** được tự đặt làm mua kèm, đúng yêu cầu của cửa hàng.
+- Danh sách sản phẩm của khách được lưu đệm ngắn như trước nay (khoảng 30 giây), nên đổi mua kèm, giá hay nhãn HOT có thể mất chừng đó mới hiện ở trang khách.
+- Dữ liệu: cột `products.upsell_rank` (để trống = không mua kèm; số = thứ tự). API: `PUT /api/admin/upsell { ids }`.
+
+### Tìm khách, địa chỉ cho nhân viên giao hàng
+
+- Trang **Giao hàng** (`/quan-tri/giao-hang`) có ô **"Tìm khách, địa chỉ để chỉ đường"** ở trên cùng: gõ tên, số điện thoại, địa chỉ hoặc mã khách buôn (gõ không dấu cũng được), chọn trong danh sách thả xuống, rồi bấm **Gọi** hoặc **Chỉ đường** (mở định vị đã lưu; chưa có định vị thì tìm địa chỉ trên Google Maps). Mục cuối danh sách luôn là "Tìm … trên Google Maps" cho địa chỉ chưa có trong dữ liệu.
+- Tìm được **cả khách không có đơn giao cho mình**. Nguồn: khách buôn, địa chỉ khách đã từng nhận hàng (đơn chưa huỷ, giao tận nơi), sổ địa chỉ của tài khoản khách. Cùng số điện thoại và địa chỉ thì gộp một dòng, lấy định vị gần nhất từng có.
+- Chỉ người có quyền **Giao hàng** (và chủ cửa hàng) dùng được. Kết quả chỉ có tên, số điện thoại, địa chỉ, định vị, số đơn; không có ghi chú hay tiền. Tối đa 12 kết quả, gõ ít nhất 2 ký tự.
+- Mã: `backend/src/customer-search.js`, `GET /api/delivery/search?q=`, giao diện `frontend/src/components/CustomerFinder.jsx`.
+
+Kiểm thử: `npm --prefix backend run test:upsell` (24 kiểm tra).
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

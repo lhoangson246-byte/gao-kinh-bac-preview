@@ -157,6 +157,8 @@ export const api = {
   inventoryCount: (body) => request('/admin/inventory/count', { method: 'POST', body, auth: true }),
   adminAssignShipper: (orderId, shipperId) => request(`/admin/orders/${orderId}/shipper`, { method: 'PATCH', auth: true, body: { shipper_id: shipperId } }),
   deliveryOrders: () => request('/delivery/orders', { auth: true }),
+  /** Tìm khách / địa chỉ để chỉ đường, kể cả khách không có đơn giao cho mình. */
+  deliverySearch: (q, signal) => request(`/delivery/search?${new URLSearchParams({ q })}`, { auth: true, signal }),
   attendanceMe: (month) => request(`/attendance/me${month ? `?month=${encodeURIComponent(month)}` : ''}`, { auth: true }),
   attendanceClockIn: () => request('/attendance/clock-in', { method: 'POST', auth: true }),
   attendanceClockOut: () => request('/attendance/clock-out', { method: 'POST', auth: true }),
@@ -224,6 +226,8 @@ export const api = {
   adminUpdateGroup: (id, payload) => request(`/admin/groups/${id}`, { method: 'PUT', body: payload, auth: true }),
   adminReorderGroups: (ids) => request('/admin/groups/reorder', { method: 'POST', body: { ids }, auth: true }),
   adminReorderProducts: (ids) => request('/admin/products/order', { method: 'POST', body: { ids }, auth: true }),
+  /** Sản phẩm mua kèm (upsale) ở giỏ hàng khách, theo thứ tự. */
+  adminSetUpsell: (ids) => request('/admin/upsell', { method: 'PUT', body: { ids }, auth: true }),
   adminReorderGroupProducts: (id, productIds) => request(`/admin/groups/${id}/order`, { method: 'POST', body: { product_ids: productIds }, auth: true }),
   adminDeleteGroup: (id) => request(`/admin/groups/${id}`, { method: 'DELETE', auth: true }),
   adminCreateProduct: (payload) => request('/admin/products', { method: 'POST', body: payload, auth: true }),

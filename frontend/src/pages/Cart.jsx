@@ -9,8 +9,9 @@ import ProductImage from '../components/ProductImage.jsx';
 import ShippingNotice from '../components/ShippingNotice.jsx';
 
 export default function Cart() {
-  const { items, total, count, hasUnavailable, setQuantity, remove, clear, syncWithProducts } = useCart();
+  const { items, total, count, hasUnavailable, setQuantity, remove, clear, syncWithProducts, add } = useCart();
   const [syncError, setSyncError] = useState(false);
+  const [catalog, setCatalog] = useState([]);
   const { t, unit } = useI18n();
   const { user } = useAuth();
 
@@ -34,10 +35,16 @@ export default function Cart() {
   useEffect(() => {
     let cancelled = false;
     api.products()
-      .then(({ products }) => { if (!cancelled) syncWithProducts(products); })
+      .then(({ products }) => { if (!cancelled) { syncWithProducts(products); setCatalog(products); } })
       .catch(() => { if (!cancelled) setSyncError(true); });
     return () => { cancelled = true; };
   }, [syncWithProducts]);
+
+  // Mua kèm (cửa hàng chọn ở Quản trị → Sản phẩm): còn hàng, có giá, chưa nằm trong giỏ.
+  const inCart = new Set(items.map((item) => item.id));
+  const upsell = catalog
+    .filter((p) => p.upsell_rank != null && p.stock > 0 && p.price > 0 && !inCart.has(p.id))
+    .sort((a, b) => a.upsell_rank - b.upsell_rank);
 
   if (items.length === 0) {
     return (
@@ -115,6 +122,26 @@ export default function Cart() {
             );
           })}
           <button className="link-button danger clear-cart" onClick={clear}>{t('cart.clear')}</button>
+          {upsell.length > 0 && (
+            <div className="cart-upsell" role="region" aria-label={t('upsell.aria')}>
+              <p className="cart-upsell-title"><i className="upsell-hot">HOT</i> {t('upsell.title')}</p>
+              <p className="cart-upsell-body">{t('upsell.body')}</p>
+              {upsell.map((p) => (
+                <div className="cart-upsell-item" key={p.id}>
+                  <div className={`cart-grain${p.image_url ? ' has-image' : ''}`} aria-hidden="true">
+                    {p.image_url ? <ProductImage src={p.image_url} sizes="64px" /> : '🛒'}
+                  </div>
+                  <div className="cart-item-main">
+                    <h3>{p.name}</h3>
+                    <p><strong>{formatVND(p.price)}</strong> / {unit(p.unit)}</p>
+                  </div>
+                  <button type="button" className="btn btn-primary" onClick={() => add(p, 1)} aria-label={t('upsell.addAria', { name: p.name })}>
+                    {t('upsell.add')}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <aside className="summary cart-summary">
