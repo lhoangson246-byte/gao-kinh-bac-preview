@@ -17,7 +17,7 @@ import { attachItems } from '../order-lists.js';
 import { STORE, moveStock, stockColumn, warehouseName } from '../inventory.js';
 import { loyaltyProfile, refundPoints, spendPoints } from '../loyalty.js';
 import { notifyNewOrder, notifyTransferReported, siteOrigin } from '../push.js';
-import { trackOrder } from '../order-tracking.js';
+import { trackOrder, trackOrdersByPhone } from '../order-tracking.js';
 import { findUsableCode, normalizeCode, publicCode } from '../discount-codes.js';
 import { wholesaleOfUser } from '../wholesale.js';
 
@@ -330,13 +330,20 @@ router.post('/guest', validateRoutes('guest-orders'), async (req, res, next) => 
 
 /**
  * POST /api/orders/track — khách tra cứu tiến độ đơn, không cần đăng nhập.
- *  body: { phone, code }. Dùng POST để số điện thoại không nằm trong URL / nhật ký truy cập.
+ *  body: { phone, code? }. Có mã đơn thì xem đúng đơn đó; chỉ số điện thoại thì các đơn gần đây.
+ *  Dùng POST để số điện thoại không nằm trong URL / nhật ký truy cập. Trả { orders, order (mới nhất) }.
  */
 router.post('/track', validateRoutes('guest-orders'), (req, res, next) => {
   try {
-    const order = trackOrder(req.body.phone, req.body.code);
-    if (!order) throw new HttpError(404, 'Không tìm thấy đơn. Vui lòng kiểm tra lại số điện thoại và mã đơn.');
-    res.json({ order });
+    if (String(req.body.code || '').trim()) {
+      const order = trackOrder(req.body.phone, req.body.code);
+      if (!order) throw new HttpError(404, 'Không tìm thấy đơn. Vui lòng kiểm tra lại số điện thoại và mã đơn.');
+      res.json({ order, orders: [order] });
+      return;
+    }
+    const orders = trackOrdersByPhone(req.body.phone);
+    if (!orders.length) throw new HttpError(404, 'Không tìm thấy đơn nào của số điện thoại này trong 60 ngày gần đây.');
+    res.json({ order: orders[0], orders });
   } catch (err) {
     next(err);
   }

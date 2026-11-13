@@ -310,6 +310,22 @@ export const api = {
  */
 export const FIRST_ORDER_DISCOUNT = 20000;
 
+/*
+ * Khách cũ (13/11/2026): máy này đã từng đặt hàng thì không quảng cáo "đơn đầu tiên giảm 20.000đ" nữa.
+ * Chỉ dùng để ẩn lời mời; máy chủ vẫn tự quyết ai được giảm theo số điện thoại / tài khoản.
+ */
+const RETURNING_KEY = 'gao_returning';
+export function isReturningCustomer() {
+  try {
+    return localStorage.getItem(RETURNING_KEY) === '1' || !!localStorage.getItem('gao_quick_info');
+  } catch {
+    return false;
+  }
+}
+export function markReturningCustomer() {
+  try { localStorage.setItem(RETURNING_KEY, '1'); } catch { /* chế độ riêng tư */ }
+}
+
 /** 1.000đ khách trả = 1 điểm tích luỹ. Giống nhau ở cả đơn online và mua tại quầy. */
 export const VND_PER_POINT = 1000;
 

@@ -43,11 +43,9 @@ export default function Login() {
           <p className="login-guest-title" id="login-guest-title">
             <span aria-hidden="true">🛒</span> {t('login.guestTitle')}
           </p>
-          <p className="login-guest-body">{t('login.guestBody')}</p>
           <Link className="btn btn-primary btn-large btn-block" to={count > 0 ? '/dat-nhanh' : '/'}>
             {count > 0 ? t('login.guestCheckout', { count }) : t('login.guestBrowse')}
           </Link>
-          <p className="login-guest-perk"><span aria-hidden="true">🎁</span> {t('login.guestPerk')}</p>
         </section>
       )}
       {sessionExpired && !error && <p className="alert warning" role="status">{t('login.expired')}</p>}

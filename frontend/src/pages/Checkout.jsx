@@ -5,7 +5,7 @@ import AddressBook from '../components/AddressBook.jsx';
 import DeliveryHours, { useNow } from '../components/DeliveryHours.jsx';
 import { PromoGiftChoice, PromoGiftRow, PromoProgress } from '../components/Promotion.jsx';
 import {
-  api, formatNumber, formatVND, pointsForLines, shippingFeeFor, DELIVERY_AREA_CODE, DELIVERY_SLOTS, deliveryPlan, slotDay,
+  api, formatNumber, formatVND, markReturningCustomer, pointsForLines, shippingFeeFor, DELIVERY_AREA_CODE, DELIVERY_SLOTS, deliveryPlan, slotDay,
 } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 import DiscountCodeField from '../components/DiscountCodeField.jsx';
@@ -121,6 +121,7 @@ export default function Checkout() {
           : undefined,
       });
       clear();
+      markReturningCustomer();
       navigate('/don-hang', { replace: true, state: { justOrdered: true, code: order?.code } });
     } catch (err) {
       setError(err.message);

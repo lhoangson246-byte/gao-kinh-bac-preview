@@ -2237,3 +2237,54 @@ label b { color: var(--danger); }
   .manual-order-head h2 { flex: 1 1 100%; order: -1; font-size: 1.5rem; }
   .warehouse-switch { margin-left: 0; }
 }
+
+/* --- Tra cứu đơn bằng số điện thoại, gọn một màn hình; nhóm gạo một hàng trên điện thoại (13/11/2026) --- */
+.track-page { padding-bottom: 12px; }
+.track-card { margin: 8px auto; padding: 18px 20px; }
+.track-card h1 { margin: 0 0 6px; font-size: 1.6rem; }
+.track-form .muted { margin: 0 0 8px; font-size: .9rem; }
+.track-form-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.track-form-row .input { margin: 0; min-height: 50px; font-size: 1.1rem; }
+.track-form-row .btn { min-height: 50px; white-space: nowrap; }
+.track-login { margin: 10px 0 0; font-size: .86rem; }
+.track-count { margin: 0 0 6px; font-size: .84rem; }
+.track-orders { display: grid; gap: 8px; margin: 0 0 10px; padding: 0; list-style: none; }
+.track-order { border: 1px solid var(--border); border-radius: 12px; background: var(--white); }
+.track-order.open { border-color: var(--green-800); }
+.track-order-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
+.track-order-head > span:first-child { display: grid; min-width: 0; }
+.track-order-head strong { color: var(--green-950); font-size: 1.02rem; }
+.track-order-head small { overflow: hidden; color: var(--muted); font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }
+.track-chip { flex: 0 0 auto; padding: 3px 9px; border-radius: 99px; background: #fff3d6; color: #7a5410; font-size: .74rem; font-weight: 800; }
+.track-chip.confirmed, .track-chip.shipping { background: #eaf2fb; color: #1f4f8a; }
+.track-chip.completed { background: var(--success-light); color: var(--success); }
+.track-chip.cancelled { background: var(--danger-light); color: var(--danger); }
+.track-detail { padding: 0 12px 10px; }
+.track-detail .track-steps { margin: 2px 0 4px; }
+.track-detail .track-steps li { gap: 10px; padding-bottom: 8px; }
+.track-detail .track-steps li:not(:last-child)::before { left: 11px; top: 24px; }
+.track-detail .track-dot { flex: 0 0 25px; width: 25px; height: 25px; border-width: 2px; font-size: .74rem; }
+.track-detail .track-steps li > div { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding-top: 2px; }
+.track-detail .track-steps strong { font-size: .92rem; }
+.track-detail .track-steps small { font-size: .76rem; }
+.track-detail .track-done, .track-detail .track-cancelled { margin-bottom: 8px; padding: 8px 10px; }
+.track-detail .delivery-promise { flex-direction: row; gap: 10px; margin: 6px 0; padding: 8px 10px; border-width: 1.5px; }
+.track-detail .delivery-promise img { flex: 0 0 64px; width: 64px; animation: none; }
+.track-detail .delivery-promise-text { font-size: .88rem; line-height: 1.35; text-align: left; }
+ul.track-items { margin: 6px 0 0; padding: 0; list-style: none; font-size: .88rem; }
+ul.track-items li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--border); }
+.track-detail .track-total { padding-top: 6px; font-size: .98rem; }
+.track-detail .track-total small { color: var(--muted); font-size: .76rem; }
+.track-result .track-updated { margin: 0 0 8px; }
+@media (max-width: 560px) {
+  /* Nhóm gạo: một hàng vuốt ngang thay vì nhiều hàng chồng nhau. */
+  .group-strip-title { margin-bottom: 0; font-size: .8rem; }
+  .group-chips { flex-wrap: nowrap; gap: 6px; margin: 0 -14px; padding: 11px 14px 6px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
+  .group-chips::-webkit-scrollbar { display: none; }
+  .group-chips button { flex: 0 0 auto; min-height: 34px; padding: 4px 10px; font-size: .78rem; white-space: nowrap; }
+  .group-chips button span { min-width: 18px; height: 18px; font-size: .64rem; }
+  .group-chips button:last-child { margin-right: 24px; }
+  .track-card { padding: 14px; }
+  .track-card h1 { font-size: 1.4rem; }
+}

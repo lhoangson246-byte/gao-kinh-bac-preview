@@ -1567,6 +1567,23 @@ Kiểm thử: `npm --prefix backend run test:upsell` (24 kiểm tra).
 - **Nút "Đặt hàng ngay" cố định**: trên điện thoại là thanh có tổng tiền nằm ngay trên thanh tab dưới đáy màn hình, cuộn thế nào cũng thấy. Trên máy tính, khung tóm tắt dính theo khi cuộn.
 - Khung mua kèm (HOT) gọn hơn: tiêu đề và mô tả trên một dòng.
 
+## Tra cứu đơn chỉ bằng số điện thoại, khách cũ không thấy ưu đãi đơn đầu, các trang khách gọn hơn (13/11/2026)
+
+### Tra cứu đơn chỉ bằng số điện thoại
+- Trang **Tra cứu đơn** (`/tra-cuu-don`) chỉ còn ô số điện thoại, không cần mã đơn. Kết quả là các đơn trong **60 ngày gần đây** (tối đa 5 đơn), đơn mới nhất mở sẵn tiến độ; bấm đơn khác để xem. Đơn chưa xong thì trang tự cập nhật mỗi phút.
+- **Đánh đổi riêng tư**: ai biết số điện thoại cũng tra được, nên máy chủ **che tên người nhận** ("Chị L***") và **không bao giờ trả địa chỉ, số điện thoại** hay mã nội bộ; chỉ có tiến độ, tên hàng, số lượng, tổng tiền. Mỗi IP tra tối đa 30 lần / 15 phút. Muốn chặt hơn thì quay lại bắt buộc mã đơn (`backend/src/order-tracking.js`).
+- Màn hình đặt hàng thành công vẫn mở thẳng đúng đơn vừa đặt (số điện thoại + mã đơn).
+- Trang gọn vừa một màn hình điện thoại: hình giao hàng thu nhỏ, bỏ chân trang.
+
+### Khách cũ không thấy "đơn đầu tiên giảm 20.000đ"
+- Máy đã từng đặt hàng (khách mua nhanh hoặc có tài khoản) thì giỏ hàng và trang đặt nhanh **không mời** "đơn đầu tiên giảm 20.000đ" nữa. Khách có tài khoản đã mua thì vốn không hiện.
+- Chỉ là ẩn lời mời trên máy đó (`isReturningCustomer` trong `frontend/src/api.js`); ai được giảm vẫn do máy chủ quyết theo số điện thoại / tài khoản, như trước.
+
+### Giao diện
+- Trang đăng nhập: bỏ dòng "Chỉ cần tên, số điện thoại và địa chỉ nhận hàng…" và dòng "Đăng nhập (không bắt buộc) để dễ nhận mã giảm giá…".
+- Bỏ chân trang ở **giỏ hàng** và **tra cứu đơn**.
+- Điện thoại: **Chọn nhóm gạo** thành một hàng vuốt ngang, nút nhỏ hơn, thay vì nhiều hàng chồng nhau.
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

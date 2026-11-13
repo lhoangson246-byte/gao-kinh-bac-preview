@@ -111,7 +111,7 @@ add('guest-orders', 'POST', /^\/guest\/?$/, obj({
   discount_code: z.string().max(40).nullable().optional(),
 }));
 add('guest-orders', 'POST', /^\/discount-code\/?$/, obj({ code: z.string().max(40), subtotal: integer(0).optional() }));
-add('guest-orders', 'POST', /^\/track\/?$/, obj({ phone: text(LIMITS.phone), code: text(20) }));
+add('guest-orders', 'POST', /^\/track\/?$/, obj({ phone: text(LIMITS.phone), code: optionalText(20) }));
 add('orders', 'GET', /^\/?$/);
 add('orders', 'GET', /^\/[^/]+\/?$/);
 add('orders', 'PATCH', /^\/[^/]+\/cancel\/?$/);

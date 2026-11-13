@@ -157,7 +157,8 @@ export default function App() {
         </Suspense>
         </PageLoadBoundary>
       </main>
-      <Footer />
+      {/* Giỏ hàng và tra cứu đơn: bỏ chân trang cho ngắn, khách không phải cuộn. */}
+      {!['/gio-hang', '/tra-cuu-don'].includes(location.pathname) && <Footer />}
       {!MASCOT_HIDDEN.includes(location.pathname) && (
         <Mascot key={MASCOT_SCENE[location.pathname] || 'greet'} scene={MASCOT_SCENE[location.pathname] || 'greet'} />
       )}

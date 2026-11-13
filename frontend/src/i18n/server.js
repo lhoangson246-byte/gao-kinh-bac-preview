@@ -77,6 +77,7 @@ const EXACT = {
     en: 'Some rice in your cart is no longer sold. Please update your cart.', zh: '购物车中有大米已停售，请更新购物车。',
   },
   'Không tìm thấy đơn hàng.': { en: 'Order not found.', zh: '找不到该订单。' },
+  'Không tìm thấy đơn nào của số điện thoại này trong 60 ngày gần đây.': { en: 'No orders for this phone number in the last 60 days.', zh: '该电话号码近 60 天内没有订单。' },
   'Chỉ có thể tự huỷ đơn đang chờ xác nhận. Vui lòng liên hệ cửa hàng.': {
     en: 'Only orders awaiting confirmation can be cancelled. Please contact the shop.', zh: '只能取消待确认的订单，请联系店铺。',
   },

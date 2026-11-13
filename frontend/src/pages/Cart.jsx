@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { api, formatVND, pointsForLines, shippingFeeFor, FIRST_ORDER_DISCOUNT } from '../api';
+import { api, formatVND, isReturningCustomer, pointsForLines, shippingFeeFor, FIRST_ORDER_DISCOUNT } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 import { PromoGiftRow, PromoProgress } from '../components/Promotion.jsx';
 import ProductImage from '../components/ProductImage.jsx';
@@ -161,7 +161,7 @@ export default function Cart() {
           <PromoProgress items={items} compact />
           <p className="cart-perks">
             <span>★ {t('cart.pointsShort', { n: pointsForLines(items.filter((item) => item.stock > 0), total - discount) })}</span>
-            {!user && <span>🎁 {t('cart.firstShort', { amount: formatVND(FIRST_ORDER_DISCOUNT) })}</span>}
+            {!user && !isReturningCustomer() && <span>🎁 {t('cart.firstShort', { amount: formatVND(FIRST_ORDER_DISCOUNT) })}</span>}
           </p>
           {/* Nút đặt hàng: trên điện thoại cố định ở đáy màn hình để không trôi mất khi cuộn. */}
           <div className="cart-cta">

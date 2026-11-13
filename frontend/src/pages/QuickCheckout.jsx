@@ -13,7 +13,7 @@ import { PromoGiftChoice, PromoGiftRow, PromoProgress } from '../components/Prom
 import { passwordErrorKey } from '../password';
 import {
   api, formatVND, isPhone, mapLink, mentionsOtherProvince, normalizePhone, pointsForLines, shippingFeeFor, FREE_SHIPPING_MIN,
-  DELIVERY_AREA_CODE, DELIVERY_SLOTS, FIRST_ORDER_DISCOUNT, deliveryPlan, slotDay,
+  DELIVERY_AREA_CODE, DELIVERY_SLOTS, FIRST_ORDER_DISCOUNT, deliveryPlan, slotDay, isReturningCustomer, markReturningCustomer,
 } from '../api';
 
 /** Thông tin nhận hàng lần trước, chỉ lưu trên máy của khách để lần sau khỏi gõ lại. */
@@ -67,6 +67,7 @@ export default function QuickCheckout() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(null);        // { order, token }
+  const [returning] = useState(isReturningCustomer);
   const fieldRefs = { receiver_name: useRef(null), phone: useRef(null), address: useRef(null) };
   // Khung giờ chọn sẵn theo giờ hiện tại; tự chỉnh khi đồng bộ giờ máy chủ hoặc qua mốc giờ,
   // trừ khi khách đã tự chọn.
@@ -159,6 +160,7 @@ export default function QuickCheckout() {
         ...(location || {}),
       });
       writeSaved({ name: form.receiver_name.trim(), phone: normalizePhone(form.phone), address: form.address.trim() });
+      markReturningCustomer();
       clear();
       setDone({ order, token });
       window.scrollTo(0, 0);
@@ -300,8 +302,9 @@ export default function QuickCheckout() {
           <ShippingNotice subtotal={total} />
           <PromoProgress items={orderable} compact />
           <PromoGiftChoice items={orderable} value={promoGift} onChange={setPromoGift} />
-          <p className="quick-promo">🎁 {t('quick.firstOrder', { amount: formatVND(FIRST_ORDER_DISCOUNT) })}</p>
-          {promoCode && <p className="discount-code-note">{t('code.guestNote', { first: formatVND(FIRST_ORDER_DISCOUNT) })}</p>}
+          {/* Khách cũ (máy này đã từng đặt) không mời "đơn đầu tiên giảm 20.000đ" nữa. */}
+          {!returning && <p className="quick-promo">🎁 {t('quick.firstOrder', { amount: formatVND(FIRST_ORDER_DISCOUNT) })}</p>}
+          {promoCode && !returning && <p className="discount-code-note">{t('code.guestNote', { first: formatVND(FIRST_ORDER_DISCOUNT) })}</p>}
           <ul className="quick-trust">
             <li>✓ {t('quick.trustCall')}</li>
             <li>✓ {t('quick.trustFree', { min: formatVND(FREE_SHIPPING_MIN) })}</li>

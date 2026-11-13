@@ -44,6 +44,26 @@ try {
   check('Sai mã đơn: 404', (await track(guestPhone, 'DH999999')).status === 404);
   check('Dữ liệu lạ bị từ chối (400)', (await call('/orders/track', { method: 'POST', body: { phone: guestPhone, code: placed.code, x: 1 } })).status === 400);
 
+  // Chỉ số điện thoại (13/11/2026): các đơn gần đây, mới nhất trước, tên người nhận che bớt.
+  const second = (await call('/orders/guest', {
+    method: 'POST',
+    body: {
+      receiver_name: 'Cô Nguyễn Thị Mai', phone: guestPhone, address: 'Số 5 đường Lý Thái Tổ, phường Suối Hoa',
+      delivery_area: 'bac-ninh', payment_method: 'cod', items: [{ product_id: product.id, quantity: 1 }],
+    },
+  })).data.order;
+  const byPhone = await call('/orders/track', { method: 'POST', body: { phone: guestPhone } });
+  check('Chỉ cần số điện thoại: ra các đơn gần đây, mới nhất trước', byPhone.status === 200 && byPhone.data.orders?.length === 2
+    && byPhone.data.orders[0].code === second.code && byPhone.data.orders[1].code === placed.code && byPhone.data.order?.code === second.code, JSON.stringify(byPhone.data).slice(0, 300));
+  check('Tra bằng số điện thoại: tên người nhận che bớt, không có địa chỉ, SĐT, mã nội bộ',
+    byPhone.data.orders[0].receiver_name === 'Cô M***' && byPhone.data.orders[1].receiver_name === 'Cô M***'
+    && !/Lý Thái Tổ|Nguyễn|address|"phone"|"id"|cost_price|guest_token/.test(JSON.stringify(byPhone.data)), JSON.stringify(byPhone.data.orders.map((o) => o.receiver_name)));
+  check('Mã đơn để trống cũng là tra bằng số điện thoại', (await call('/orders/track', { method: 'POST', body: { phone: guestPhone, code: '' } })).data.orders?.length === 2);
+  check('Số điện thoại dạng +84 cũng tra được', (await call('/orders/track', { method: 'POST', body: { phone: guestPhone.replace(/^0/, '+84') } })).status === 200);
+  const nobody = await call('/orders/track', { method: 'POST', body: { phone: '0399999999' } });
+  check('Số chưa từng đặt: 404, không lộ gì', nobody.status === 404 && !nobody.data.orders);
+  check('Số điện thoại sai định dạng: 404', (await call('/orders/track', { method: 'POST', body: { phone: '12345' } })).status === 404);
+
   for (const status of ['confirmed', 'shipping', 'completed']) {
     await call(`/admin/orders/${placed.id}/status`, { method: 'PATCH', token: admin, body: { status } });
   }
