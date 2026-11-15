@@ -1,3 +1,4 @@
+import useScrollTabs from '../components/useScrollTabs.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, formatDateTime, formatVND, isPhone, normalizePhone, pointsForLines, CUSTOMER_SEGMENTS, promoGiftKg, promoNextTier, riceKg } from '../api';
@@ -13,6 +14,7 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 
 export default function Retail() {
   const [tab, setTab] = useState('sell');
+  const tabsRef = useScrollTabs(tab);
   const { user, logout, can } = useAuth();
   const navigate = useNavigate();
 
@@ -66,7 +68,7 @@ export default function Retail() {
       </header>
 
       <div className="admin-layout">
-        <aside className="admin-sidebar">
+        <aside className="admin-sidebar" ref={tabsRef}>
           <p className="admin-nav-label">Tại quầy</p>
           <button className={tab === 'sell' ? 'active' : ''} onClick={() => setTab('sell')}>
             <span aria-hidden="true">◧</span><span>Bán hàng<small>Tạo hoá đơn mới</small></span>
@@ -293,6 +295,7 @@ function SellTab({ products, policy, onDone, notify }) {
           <p className="eyebrow dark"><span></span>Tại quầy</p>
           <h1>Bán hàng</h1>
           <p>Nhập số điện thoại để tích điểm, chọn gạo rồi lưu hoá đơn.</p>
+          <p className="wh-chip KH_NC pos-warehouse">🏪 Bán tại Cửa hàng Nguyễn Cao · hoá đơn trừ tồn kho cửa hàng</p>
         </div>
         {lines.length > 0 && (
           <button type="button" className="btn btn-secondary" onClick={resetBill}>Huỷ hoá đơn</button>

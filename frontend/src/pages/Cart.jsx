@@ -7,6 +7,7 @@ import { useI18n } from '../i18n/index.jsx';
 import { PromoGiftRow, PromoProgress } from '../components/Promotion.jsx';
 import ProductImage from '../components/ProductImage.jsx';
 import ShippingNotice from '../components/ShippingNotice.jsx';
+import { toast } from '../components/Toasts.jsx';
 
 export default function Cart() {
   const { items, total, count, hasUnavailable, setQuantity, remove, clear, syncWithProducts, add } = useCart();
@@ -40,6 +41,17 @@ export default function Cart() {
       .catch(() => { if (!cancelled) setSyncError(true); });
     return () => { cancelled = true; };
   }, [syncWithProducts]);
+
+  // Xoá nhanh nhưng không sợ bấm nhầm: thông báo nổi có nút Hoàn tác đưa món (hoặc cả giỏ) trở lại.
+  const removeWithUndo = (item) => {
+    remove(item.id);
+    toast(t('cart.removed', { name: item.name }), { action: { label: t('common.undo'), onClick: () => add(item, item.quantity) }, duration: 7000 });
+  };
+  const clearWithUndo = () => {
+    const before = items;
+    clear();
+    toast(t('cart.cleared'), { action: { label: t('common.undo'), onClick: () => before.forEach((item) => add(item, item.quantity)) }, duration: 7000 });
+  };
 
   // Mua kèm (cửa hàng chọn ở Quản trị → Sản phẩm): còn hàng, có giá, chưa nằm trong giỏ.
   const inCart = new Set(items.map((item) => item.id));
@@ -86,7 +98,7 @@ export default function Cart() {
                   <h2>{item.name}</h2>
                   <p>
                     {formatVND(item.price)} / {unit(item.unit)}
-                    <button className="link-button danger cart-remove" onClick={() => remove(item.id)}>{t('cart.remove')}</button>
+                    <button className="link-button danger cart-remove" onClick={() => removeWithUndo(item)}>{t('cart.remove')}</button>
                   </p>
                   {soldOut
                     ? <p className="cart-warning">{t('cart.itemSoldOut')}</p>
@@ -122,7 +134,7 @@ export default function Cart() {
               </article>
             );
           })}
-          <button className="link-button danger clear-cart" onClick={clear}>{t('cart.clear')}</button>
+          <button className="link-button danger clear-cart" onClick={clearWithUndo}>{t('cart.clear')}</button>
           {upsell.length > 0 && (
             <div className="cart-upsell" role="region" aria-label={t('upsell.aria')}>
               <p className="cart-upsell-title"><i className="upsell-hot">HOT</i> {t('upsell.title')} <small>{t('upsell.body')}</small></p>

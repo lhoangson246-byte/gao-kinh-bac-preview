@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
+import useScrollTabs from './useScrollTabs.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const ADMIN_TAB_PERMISSIONS = ['orders.view', 'products.manage', 'customers.manage', 'revenue.view'];
@@ -10,6 +11,7 @@ const INVENTORY_PERMISSIONS = ['inventory.view', 'inventory.receive', 'inventory
  */
 export default function StaffNav() {
   const { user, can } = useAuth();
+  const tabsRef = useScrollTabs(useLocation().pathname);
   const isAdmin = user?.role === 'admin';
   const links = [
     !isAdmin && can('delivery') && ['/quan-tri/giao-hang', '🛵 Giao hàng'],
@@ -20,7 +22,7 @@ export default function StaffNav() {
   ].filter(Boolean);
   if (links.length < 2) return null;
   return (
-    <nav className="staff-nav" aria-label="Trang làm việc">
+    <nav className="staff-nav" aria-label="Trang làm việc" ref={tabsRef}>
       {links.map(([to, label]) => <NavLink key={to} to={to} end>{label}</NavLink>)}
     </nav>
   );

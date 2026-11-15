@@ -1584,6 +1584,45 @@ Kiểm thử: `npm --prefix backend run test:upsell` (24 kiểm tra).
 - Bỏ chân trang ở **giỏ hàng** và **tra cứu đơn**.
 - Điện thoại: **Chọn nhóm gạo** thành một hàng vuốt ngang, nút nhỏ hơn, thay vì nhiều hàng chồng nhau.
 
+## Nâng cấp giao diện toàn diện (14–15/11/2026)
+
+Giữ nguyên toàn bộ nghiệp vụ, API, đường dẫn, quyền, ba ngôn ngữ và in ấn; chỉ đổi cách trình bày và thao tác.
+
+### Cấu trúc CSS
+- `frontend/src/styles/tokens.css` (nạp trước): font (`--font-display`, `--font-sans`; **không dùng Georgia**), cỡ chữ, khoảng cách, bóng đổ, **thang z-index** (`--z-mascot` 24 → `--z-modal` 200), vùng bấm tối thiểu `--tap: 44px`, và chiều cao các thanh cố định ở đáy điện thoại (`--nav-h`, `--stack`).
+- `frontend/src/styles.css`: giao diện gốc, **giữ nguyên thứ tự** (các luật đan xen theo thời gian, đổi thứ tự là đổi hiển thị). Mọi luật `@media print` vẫn ở đây.
+- Ba module mới nạp sau: `styles/chrome.css` (dùng chung: focus, hiệu ứng bấm, khung xương, thông báo nổi, đáy màn hình), `styles/storefront.css` (trang khách), `styles/staff.css` (trang nội bộ). Sửa giao diện mới thì viết vào đúng module, không chắp thêm vào cuối `styles.css`.
+
+### Dùng chung
+- Thanh tab dưới đáy điện thoại dùng icon SVG (`components/Icons.jsx`) thay ký tự Unicode.
+- `components/Toasts.jsx`: thông báo nổi dùng chung, gọi `toast(message, { action, tone })`; thay `window.alert`.
+- `components/Skeleton.jsx`: khung xương khi tải ở lưới sản phẩm trang chủ, lúc mở trang quản trị, trang kho, trang giao hàng.
+- **Đáy màn hình điện thoại**: mọi thanh cố định (thanh tab, giỏ nổi, thanh đặt hàng, thông báo nổi, cô bé linh vật) tính vị trí từ biến `--stack`, không còn các con số 76 / 92 / 134 / 158px rải rác. Linh vật thu nhỏ vào góc khi khách cuộn xuống, và không tự bật lời nhắc ở giỏ hàng.
+- Tôn trọng "giảm chuyển động" của máy và vùng an toàn đáy màn hình (`env(safe-area-inset-bottom)`).
+
+### Trang khách
+- Trang chủ điện thoại: lưới **2 cột** ở màn ≤ 480px, ảnh vuông, mỗi ảnh **một nhãn** (hết hàng / chưa có giá > giảm giá > HOT > sắp hết), nút thêm cao 44px. Món đã trong giỏ thì nút thành **bộ đếm − / +** ngay trên thẻ.
+- Giỏ hàng: xoá món (hoặc xoá cả giỏ) có nút **Hoàn tác** trong 7 giây; khung mua kèm theo tông kem – vàng.
+- Đặt nhanh: thanh tiến trình 3 bước; khung giờ giao đổi tông vàng sau 17h30; vị trí đã ghim thành thẻ xanh; khung chuyển khoản có **số tài khoản** và nút **Sao chép số tài khoản / Sao chép nội dung** báo "Đã chép!".
+- Tra cứu đơn: nút **Gọi cửa hàng để sửa đơn** (khi cửa hàng đã nhập số tư vấn).
+- Tên công ty, địa chỉ, số tài khoản dùng cho bản in và khung chuyển khoản nằm một chỗ: `frontend/src/shopInfo.js`.
+
+### Trang nội bộ
+- Thanh tab quản trị / trang làm việc trên điện thoại: tab đang chọn tự cuộn vào giữa, mép có mũi tên báo còn tab khuất (`components/useScrollTabs.js`).
+- Bảng đơn theo ngày, bảng doanh thu, bảng mã giảm giá thành **thẻ** trên điện thoại (class `responsive-table` + `data-label`).
+- Kho: hai kho hai màu (Nguyễn Cao vàng nâu, Bồ Sơn xanh dương) ở cột bảng, nhật ký, lệnh chuyển; dòng hết hàng / sắp hết có vạch màu; khung "Đang chuyển" nổi bật.
+- Bán tại quầy: ô gạo cao hơn, 2 cột trên điện thoại, ghi rõ "Bán tại Cửa hàng Nguyễn Cao".
+- Giao hàng: địa chỉ chữ đậm to, hai nút **Gọi** và **Chỉ đường** cao 64px cạnh nhau, tiền thu hộ cỡ chữ lớn.
+
+### Sửa lỗi có sẵn
+- **In trang Đóng ngày ra giấy trắng** (từ 01/11): luật in hoá đơn quầy ẩn mọi thứ khác. Đã cho trang Đóng ngày hiện lại khi in.
+- Số KPI trang Kho rơi về font Georgia vì thiếu biến `--font-display`.
+
+### Chưa làm trong đợt này
+- Chưa tách vật lý `styles.css` thành nhiều file (lý do ở trên).
+- Khung xương chưa thay hết mọi vòng xoay (doanh thu, khách hàng, công nợ… vẫn vòng xoay).
+- Thanh tab quản trị dùng chỉ báo cuộn, chưa làm menu ngăn kéo.
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

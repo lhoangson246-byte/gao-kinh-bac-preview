@@ -5,7 +5,13 @@ import App from './App.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { CartProvider } from './context/CartContext.jsx';
 import { LanguageProvider } from './i18n/index.jsx';
+import Toasts from './components/Toasts.jsx';
+// Thứ tự nạp: biến dùng chung → giao diện gốc → các module mới (dùng chung, trang khách, trang nội bộ).
+import './styles/tokens.css';
 import './styles.css';
+import './styles/chrome.css';
+import './styles/storefront.css';
+import './styles/staff.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -14,6 +20,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <AuthProvider>
           <CartProvider>
             <App />
+            <Toasts />
           </CartProvider>
         </AuthProvider>
       </LanguageProvider>

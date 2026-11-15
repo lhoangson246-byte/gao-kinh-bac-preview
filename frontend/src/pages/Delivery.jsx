@@ -6,6 +6,7 @@ import PushSettings from '../components/PushSettings.jsx';
 import ProofPhoto from '../components/ProofPhoto.jsx';
 import StaffNav from '../components/StaffNav.jsx';
 import CustomerFinder from '../components/CustomerFinder.jsx';
+import { ListSkeleton } from '../components/Skeleton.jsx';
 
 const REFRESH_MS = 30_000;
 const formatPhone = (phone) => String(phone || '').replace(/^(\d{4})(\d{3})(\d{3})$/, '$1 $2 $3');
@@ -106,7 +107,7 @@ export default function Delivery() {
           <div><strong>{finished.filter((o) => o.status === 'completed').length}</strong><span>đã giao hôm nay · thu {formatVND(collected)}</span></div>
         </div>
         {error && <p className="alert error" role="alert">{error} <button type="button" className="link-button" onClick={load}>Thử lại</button></p>}
-        {!orders && !error && <div className="loading-state" role="status"><span></span>Đang tải đơn…</div>}
+        {!orders && !error && <ListSkeleton rows={2} label="Đang tải đơn…" />}
         {orders && active.length === 0 && (
           <div className="admin-empty"><span>✓</span><h2>Chưa có đơn nào cần giao</h2><p>Khi cửa hàng giao đơn cho bạn, điện thoại sẽ báo và đơn hiện ở đây.</p></div>
         )}
@@ -119,17 +120,16 @@ export default function Delivery() {
                 <span className={`status ${order.status}`}>{order.status === 'shipping' ? 'Đang giao' : 'Chờ giao'}</span>
               </header>
               <h2>{order.receiver_name}</h2>
-              <a className="btn btn-primary btn-block delivery-call" href={`tel:${order.phone}`}>📞 Gọi {formatPhone(order.phone)}</a>
-              {order.fulfillment === 'pickup' ? (
-                <p className="delivery-address">🏬 Khách lấy tại cửa hàng</p>
-              ) : (
-                <>
-                  <p className="delivery-address">🏠 {order.address}</p>
-                  <a className="btn btn-secondary btn-block" href={directions(order)} target="_blank" rel="noopener noreferrer">
-                    🗺️ {order.map_url ? 'Chỉ đường tới định vị khách gửi' : order.delivery_lat ? 'Chỉ đường tới vị trí khách ghim' : 'Tìm địa chỉ trên Google Maps'}
+              <p className="delivery-address">{order.fulfillment === 'pickup' ? '🏬 Khách lấy tại cửa hàng' : `🏠 ${order.address}`}</p>
+              {/* Hai nút to cạnh nhau, bấm được bằng một ngón khi đang cầm lái. */}
+              <div className={`delivery-quick${order.fulfillment === 'pickup' ? ' one' : ''}`}>
+                <a className="btn btn-primary delivery-call" href={`tel:${order.phone}`}>📞 Gọi<small>{formatPhone(order.phone)}</small></a>
+                {order.fulfillment !== 'pickup' && (
+                  <a className="btn btn-secondary delivery-map" href={directions(order)} target="_blank" rel="noopener noreferrer">
+                    🗺️ Chỉ đường<small>{order.map_url ? 'tới định vị khách gửi' : order.delivery_lat ? 'tới vị trí khách ghim' : 'tìm theo địa chỉ'}</small>
                   </a>
-                </>
-              )}
+                )}
+              </div>
               {order.warehouse === 'KH_BS' && <p className="delivery-meta">📦 Lấy hàng ở Kho Bồ Sơn</p>}
               {order.delivery_slot && <p className="delivery-meta">🕒 {DELIVERY_SLOT_LABEL[order.delivery_slot]}</p>}
               {order.note && <p className="delivery-note">📝 {order.note}</p>}

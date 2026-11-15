@@ -49,7 +49,7 @@ export default function DeliveryHours({ now, compact = false }) {
   );
 
   return (
-    <section className={`delivery-hours${compact ? ' compact' : ''}`} aria-label={t('hours.title')}>
+    <section className={`delivery-hours${compact ? ' compact' : ''} phase-${plan.phase}`} aria-label={t('hours.title')}>
       <p className="delivery-now" role="status">
         <span aria-hidden="true">🚚</span>
         <span>

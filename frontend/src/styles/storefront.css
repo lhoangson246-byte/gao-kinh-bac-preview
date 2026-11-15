@@ -1,0 +1,101 @@
+/*
+ * Trang khách (14/11/2026): trang chủ, giỏ hàng, đặt nhanh, tra cứu đơn. Khách chính là người 40+ mua gạo
+ * gia đình trên điện thoại: chữ đủ to, nút hành động chính cao từ 44px, ít thao tác. Nạp SAU styles.css.
+ */
+
+/* ---------- Thẻ sản phẩm ---------- */
+.product-image { background: var(--cream); }
+.product-image img { object-fit: contain; }
+.product-card.in-cart { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), var(--shadow-sm); }
+.add-button { min-height: var(--tap); }
+
+/* Đã có trong giỏ: bộ đếm − / + thay cho nút thêm. */
+.card-stepper { display: grid; grid-template-columns: var(--tap) minmax(52px, 1fr) var(--tap); align-items: stretch; min-height: var(--tap); overflow: hidden; border: 2px solid var(--green-900); border-radius: 12px; background: var(--white); }
+.card-stepper button { border: 0; background: var(--green-900); color: #fff; font-size: 1.35rem; font-weight: 700; line-height: 1; cursor: pointer; }
+.card-stepper button:disabled { background: var(--cream-deep); color: var(--muted); cursor: not-allowed; }
+.card-stepper span { display: grid; place-items: center; align-content: center; line-height: 1.05; color: var(--green-950); }
+.card-stepper b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.card-stepper small { color: var(--muted); font-size: .62rem; font-weight: 700; white-space: nowrap; }
+
+@media (max-width: 560px) {
+  /* Vùng đầu trang gọn lại để khách thấy gạo ngay. */
+  .catalog-controls { gap: 10px; margin: 8px 0 14px; padding: 10px; border-radius: 14px; }
+  .catalog-controls .search { min-height: 46px; }
+  .catalog-heading { margin-bottom: 8px; }
+  .points-info { margin: 0 0 10px; font-size: .74rem; line-height: 1.35; }
+  .group-strip { margin: 10px 0 4px; }
+
+  /* Ảnh vuông, vừa khung dù ảnh gốc khác tỉ lệ; mỗi ảnh chỉ một nhãn nổi bật nhất. */
+  .product-image { height: auto; aspect-ratio: 1; }
+  .product-image > span:not(.badge-main) { display: none; }
+  .sale-tag, .product-hot, .product-hot.below { top: 6px; left: 6px; padding: 3px 7px; font-size: .64rem; }
+  .stock-tag { top: 6px; right: 6px; left: auto; max-width: calc(100% - 12px); padding: 3px 7px; font-size: .62rem; }
+  .product-body { padding: 9px; }
+  .product-body h3 { min-height: 2.5em; margin: 0 0 4px; font-size: .9rem; line-height: 1.25; }
+  .points-tag { margin: 0 0 4px; font-size: .66rem; }
+  .product-bottom { padding-top: 6px; }
+  .product-price { margin-bottom: 7px; }
+  .product-price strong { font-size: .98rem; }
+  .product-price .was-price { font-size: .68rem; }
+  .product-price span { font-size: .66rem; }
+  .product-bottom .add-button { min-height: var(--tap); padding: 6px 4px; font-size: .84rem; }
+  .card-stepper { grid-template-columns: 40px minmax(0, 1fr) 40px; }
+}
+/* Màn hình nhỏ: hai cột cho chữ và nút đủ to. Từ 481px mới về ba cột. */
+@media (max-width: 480px) {
+  .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .product-body h3 { font-size: .98rem; }
+  .product-price strong { font-size: 1.05rem; }
+  .product-bottom .add-button { font-size: .92rem; }
+}
+
+/* ---------- Giỏ hàng ---------- */
+.cart-item-end > strong { color: var(--green-950); font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.cart-item .qty-stepper button { min-width: 40px; }
+/* Mua kèm: cùng tông kem – vàng của thương hiệu, nhãn HOT vẫn đỏ nhưng nhỏ gọn. */
+.cart-upsell { border: 1.5px solid #ecd9a8; border-style: solid; background: linear-gradient(180deg, #fff8e6 0%, var(--paper) 100%); }
+.cart-upsell-title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.cart-upsell-item { border-top: 1px solid #f0e2bf; }
+.cart-upsell-item .btn { min-height: var(--tap); }
+@media (max-width: 640px) {
+  .cart-item .qty-stepper { height: 42px; grid-template-columns: 42px 44px 42px; }
+  .cart-item-end > strong { font-size: 1.02rem; }
+}
+/* Thanh đặt hàng cố định: màn 781–920px nằm sát đáy, nội dung canh giữa cho chắc tay. */
+@media (min-width: 781px) and (max-width: 920px) {
+  .cart-cta { padding-inline: max(20px, calc((100% - 720px) / 2)); border-top: 2px solid var(--gold); }
+}
+@media (max-width: 780px) {
+  .cart-cta { box-shadow: var(--shadow-md); border-color: #e3d3a8; }
+  .cart-cta .btn { border-radius: 12px; }
+}
+
+/* ---------- Đặt hàng nhanh ---------- */
+.quick-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin: 4px 0 14px; padding: 0; list-style: none; counter-reset: none; }
+.quick-steps li { position: relative; display: grid; justify-items: center; gap: 4px; padding: 0 4px; color: var(--muted); text-align: center; }
+.quick-steps li::before { content: ''; position: absolute; top: 14px; left: -50%; right: 50%; height: 3px; background: var(--border); }
+.quick-steps li:first-child::before { display: none; }
+.quick-steps li.done::before, .quick-steps li.current::before { background: var(--green-800); }
+.quick-steps li > span { position: relative; z-index: 1; display: grid; place-items: center; width: 30px; height: 30px; border: 2px solid var(--border); border-radius: 50%; background: var(--paper); font-size: .86rem; font-weight: 800; }
+.quick-steps li.current > span { border-color: var(--gold-dark); background: var(--gold); color: #2b2110; box-shadow: 0 0 0 4px rgba(217, 167, 62, .25); }
+.quick-steps li.done > span { border-color: var(--green-800); background: var(--green-800); color: #fff; }
+.quick-steps li small { font-size: .76rem; font-weight: 750; line-height: 1.2; }
+.quick-steps li.current small, .quick-steps li.done small { color: var(--green-950); }
+
+/* Khung giờ giao: sau 17h30 (hết nhận đơn giao trong ngày) đổi sang tông vàng cho khách để ý. */
+.quick-hours .delivery-hours, .delivery-hours { border-width: 2px; }
+.delivery-hours.phase-late, .delivery-hours.phase-closed { border-color: var(--gold); background: #fff7e2; }
+.delivery-hours.phase-late .delivery-now strong, .delivery-hours.phase-closed .delivery-now strong { color: #5b3f08; }
+.delivery-store-link { display: inline-flex; align-items: center; min-height: 36px; margin-top: 6px; padding: 4px 12px; border: 1.5px solid var(--green-900); border-radius: 99px; background: var(--white); color: var(--green-950); font-size: .82rem; font-weight: 800; text-decoration: none; }
+/* Vị trí đã ghim: thành thẻ xanh rõ ràng thay cho dòng chữ. */
+.quick-locate.pinned { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding: 9px 12px; border: 1.5px solid #b9dcc6; border-radius: 12px; background: var(--success-light); color: var(--success); font-weight: 750; }
+
+/* Chuyển khoản: số tài khoản, nội dung, mỗi dòng một nút sao chép báo "Đã chép!". */
+.transfer-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; padding: 8px 10px; border-radius: 10px; background: #fff; font-size: .9rem; }
+.transfer-row b { font-size: 1.02rem; letter-spacing: .03em; font-variant-numeric: tabular-nums; }
+.copy-button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 12px; border: 1.5px solid #0b3a82; border-radius: 99px; background: #fff; color: #0b3a82; font-size: .82rem; font-weight: 800; cursor: pointer; }
+.copy-button.done { border-color: var(--success); background: var(--success); color: #fff; }
+
+/* ---------- Tra cứu đơn ---------- */
+.track-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.track-actions .btn { min-height: 46px; gap: 6px; }

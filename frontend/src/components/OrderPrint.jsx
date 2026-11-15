@@ -1,19 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api, formatVND, DELIVERY_SLOT_LABEL, deliveryDateLabel, parseServerTime } from '../api';
+import { INVOICE_HEADER } from '../shopInfo.js';
 
-/**
- * Đầu hoá đơn in, chép đúng theo hoá đơn giấy cửa hàng đang dùng (ảnh mẫu chị Linh gửi 13/11/2026).
- * Đổi thông tin công ty, địa chỉ, số tài khoản, số điện thoại thì sửa ở đây.
- */
-export const INVOICE_HEADER = {
-  company: 'Công Ty CP Lương Thực Lúa Vàng Châu Á',
-  lines: [
-    ['CS1: 51A Nguyễn Cao - Kinh Bắc - Bắc Ninh', 'STK Vietcombank: 1204372888'],
-    ['CS2: Đ.Triệu Việt Vương - Bồ Sơn 4 - Võ Cường - TP.BN'],
-    ['Điện thoại: 02223.813.566 - 0979.848.405'],
-  ],
-};
+export { INVOICE_HEADER };
+
+// Đầu hoá đơn (tên công ty, địa chỉ, số tài khoản, số điện thoại) nằm ở ../shopInfo.js.
 const DEFAULT_QR = '/bank-qr.png';
 
 const pad = (n) => String(n).padStart(2, '0');

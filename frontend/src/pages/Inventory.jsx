@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, formatDateTime } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
 import StaffNav from '../components/StaffNav.jsx';
+import { DashboardSkeleton } from '../components/Skeleton.jsx';
 import {
   CountForm, MAIN, ReceiptForm, STORE, TransferForm, WAREHOUSE_NAME, WAREHOUSE_SHORT, formatQty,
 } from '../components/InventoryForms.jsx';
@@ -59,7 +60,7 @@ function TransferCard({ transfer, canAct, onDone }) {
     <article className="inv-transfer">
       <header>
         <strong>{transfer.code}</strong>
-        <span>{WAREHOUSE_NAME[transfer.from_warehouse]} ➔ {WAREHOUSE_NAME[transfer.to_warehouse]}</span>
+        <span className="inv-route"><i className={`wh-chip ${transfer.from_warehouse}`}>{WAREHOUSE_NAME[transfer.from_warehouse]}</i> ➔ <i className={`wh-chip ${transfer.to_warehouse}`}>{WAREHOUSE_NAME[transfer.to_warehouse]}</i></span>
         <small>{formatDateTime(transfer.created_at)} · {transfer.actor_name || 'Không rõ'} tạo</small>
       </header>
       <ul>
@@ -195,7 +196,7 @@ export default function Inventory() {
       <main className="inventory-main" ref={topRef}>
         {error && <p className="alert error" role="alert">{error}</p>}
         {message && <p className="alert success" role="status">{message}</p>}
-        {!data ? <div className="loading-state" role="status"><span></span>Đang tải tồn kho…</div> : (
+        {!data ? <DashboardSkeleton label="Đang tải tồn kho…" /> : (
           <>
             <section className="inv-kpis" aria-label="Tổng quan tồn kho">
               <div className={`inv-kpi total${alerts.out ? ' warn' : ''}`}>
@@ -228,7 +229,7 @@ export default function Inventory() {
             )}
 
             {data.transfers?.length > 0 && (
-              <section className="inv-section" aria-label="Lệnh đang chuyển">
+              <section className="inv-section inv-transit" aria-label="Lệnh đang chuyển">
                 <h2>🔄 Đang chuyển ({data.transfers.length} lệnh) <small>Bên nhận đếm hàng rồi bấm xác nhận</small></h2>
                 <div className="inv-transfers">
                   {data.transfers.map((t) => <TransferCard key={t.id} transfer={t} canAct={canTransfer} onDone={applyResult} />)}
@@ -251,7 +252,7 @@ export default function Inventory() {
                   <thead>
                     <tr>
                       <th>Mã SP</th><th>Tên sản phẩm</th>
-                      {showNc && <th>Tồn Nguyễn Cao</th>}{showBs && <th>Tồn Bồ Sơn</th>}
+                      {showNc && <th className="wh-col KH_NC">Tồn Nguyễn Cao</th>}{showBs && <th className="wh-col KH_BS">Tồn Bồ Sơn</th>}
                       {showNc && showBs && <th>Tổng tồn</th>}
                       <th>Đang chuyển</th><th>Cảnh báo</th><th>Thao tác nhanh</th>
                     </tr>
@@ -260,7 +261,7 @@ export default function Inventory() {
                     {rows.map((p) => {
                       const moving = (showNc ? p.moving_to_nc : 0) + (showBs ? p.moving_to_bs : 0);
                       return (
-                        <tr key={p.id} className={p.is_active ? '' : 'inv-hidden'}>
+                        <tr key={p.id} className={`inv-row-${p.status.level}${p.is_active ? '' : ' inv-hidden'}`}>
                           <td data-label="Mã SP">
                             {canManageProducts
                               ? <button type="button" className="link-button inv-sku-edit" onClick={() => editSku(p)}>{p.sku || '+ mã'}</button>
@@ -317,7 +318,7 @@ export default function Inventory() {
                 {groupMovements(log.movements).map((entry) => (
                   <li key={entry.id} className={`inv-log-entry ${entry.quantity < 0 || entry.lines.some((l) => l.quantity < 0) ? 'out' : 'in'}`}>
                     <p className="inv-log-head"><time>{formatDateTime(entry.created_at)}</time> — <strong>{entry.actor_name || (entry.kind === 'order' ? 'Khách đặt trên web' : 'Hệ thống')}</strong></p>
-                    <p className="inv-log-what"><b>{entry.kind_label}</b> · {entry.warehouse_name}{entry.ref_code ? ` · ${entry.ref_code}` : ''}</p>
+                    <p className="inv-log-what"><b>{entry.kind_label}</b> <i className={`wh-chip ${entry.warehouse}`}>{entry.warehouse_name}</i>{entry.ref_code ? ` · ${entry.ref_code}` : ''}</p>
                     <ul>
                       {entry.lines.map((line) => (
                         <li key={line.id}>

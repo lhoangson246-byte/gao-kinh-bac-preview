@@ -119,22 +119,22 @@ export default function DiscountCodeManager() {
         <h2>Các mã đã tạo</h2>
         {codes.length === 0 ? <p className="muted">Chưa có mã nào.</p> : (
           <div className="table-scroll">
-            <table className="data-table">
+            <table className="data-table responsive-table">
               <thead><tr><th>Mã</th><th>Giảm</th><th>Thời gian</th><th>Điều kiện</th><th>Đã dùng</th><th>Trạng thái</th><th></th></tr></thead>
               <tbody>
                 {codes.map((c) => {
                   const [state, label] = codeState(c, today);
                   return (
                     <tr key={c.id}>
-                      <td><strong>{c.code}</strong>{c.note && <small className="cell-note">{c.note}</small>}</td>
-                      <td>{formatVND(c.amount)}</td>
-                      <td>{c.starts_on || c.ends_on ? `${formatDay(c.starts_on) || '…'} – ${formatDay(c.ends_on) || '…'}` : 'Không hạn'}</td>
-                      <td>
+                      <td data-label="Mã"><strong>{c.code}</strong>{c.note && <small className="cell-note">{c.note}</small>}</td>
+                      <td data-label="Giảm">{formatVND(c.amount)}</td>
+                      <td data-label="Thời gian">{c.starts_on || c.ends_on ? `${formatDay(c.starts_on) || '…'} – ${formatDay(c.ends_on) || '…'}` : 'Không hạn'}</td>
+                      <td data-label="Điều kiện">
                         {[c.min_subtotal > 0 && `Đơn từ ${formatVND(c.min_subtotal)}`, c.per_phone_limit > 0 && `${c.per_phone_limit} lần/SĐT`,
                           c.max_uses > 0 && `Tối đa ${c.max_uses} lượt`].filter(Boolean).join(' · ') || '—'}
                       </td>
-                      <td>{c.uses} đơn<small className="cell-note">đã giảm {formatVND(c.discounted)}</small></td>
-                      <td><span className={`code-state ${state}`}>{label}</span></td>
+                      <td data-label="Đã dùng">{c.uses} đơn<small className="cell-note">đã giảm {formatVND(c.discounted)}</small></td>
+                      <td data-label="Trạng thái"><span className={`code-state ${state}`}>{label}</span></td>
                       <td className="cell-actions">
                         <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => edit(c)}>Sửa</button>
                         <button type="button" className="btn btn-secondary" disabled={busy}

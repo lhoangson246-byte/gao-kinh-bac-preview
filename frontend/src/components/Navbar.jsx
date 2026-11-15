@@ -4,6 +4,8 @@ import { useCart } from '../context/CartContext.jsx';
 import { useI18n } from '../i18n/index.jsx';
 import InstallButton from './InstallButton.jsx';
 import LanguageSwitcher from './LanguageSwitcher.jsx';
+import { toast } from './Toasts.jsx';
+import { AboutIcon, AccountIcon, AdminIcon, CartIcon, HomeIcon, OrdersIcon } from './Icons.jsx';
 
 export default function Navbar() {
   const { user, isStaff, logout } = useAuth();
@@ -41,7 +43,7 @@ export default function Navbar() {
                   <Link to="/tai-khoan" className="hello">
                     {user.full_name.split(' ').pop()}
                   </Link>
-                  <button className="btn btn-ghost" onClick={async () => { try { await logout(); navigate('/'); } catch (err) { window.alert(err.message); } }}>
+                  <button className="btn btn-ghost" onClick={async () => { try { await logout(); navigate('/'); } catch (err) { toast(err.message, { tone: 'error' }); } }}>
                     {t('nav.logout')}
                   </button>
                 </>
@@ -62,15 +64,15 @@ export default function Navbar() {
           thành khối chứa cho mọi con position:fixed — khiến thanh điều hướng dưới
           bị neo vào header thay vì đáy màn hình điện thoại. */}
       {!quickCheckout && <nav className="mobile-nav" aria-label={t('nav.app')}>
-        <NavLink to="/" end><span aria-hidden="true">⌂</span><small>{t('nav.tabStore')}</small></NavLink>
-        <NavLink to="/gio-hang"><span aria-hidden="true">⌑</span><small>{t('nav.tabCart')}</small>{count > 0 && <b>{count}</b>}</NavLink>
-        {/* Chưa đăng nhập thì "Đơn hàng" mở trang tra cứu bằng SĐT + mã đơn. */}
-        <NavLink to={user ? '/don-hang' : '/tra-cuu-don'}><span aria-hidden="true">▤</span><small>{t('nav.tabOrders')}</small></NavLink>
-        <NavLink to="/ve-chung-toi"><span aria-hidden="true">✦</span><small>{t('nav.tabAbout')}</small></NavLink>
+        <NavLink to="/" end><HomeIcon /><small>{t('nav.tabStore')}</small></NavLink>
+        <NavLink to="/gio-hang"><CartIcon /><small>{t('nav.tabCart')}</small>{count > 0 && <b>{count}</b>}</NavLink>
+        {/* Chưa đăng nhập thì "Đơn hàng" mở trang tra cứu đơn bằng số điện thoại. */}
+        <NavLink to={user ? '/don-hang' : '/tra-cuu-don'}><OrdersIcon /><small>{t('nav.tabOrders')}</small></NavLink>
+        <NavLink to="/ve-chung-toi"><AboutIcon /><small>{t('nav.tabAbout')}</small></NavLink>
         {isStaff ? (
-          <NavLink to="/quan-tri"><span aria-hidden="true">⚙</span><small>{t('nav.tabAdmin')}</small></NavLink>
+          <NavLink to="/quan-tri"><AdminIcon /><small>{t('nav.tabAdmin')}</small></NavLink>
         ) : (
-          <NavLink to={user ? '/tai-khoan' : '/dang-nhap'}><span aria-hidden="true">○</span><small>{t('nav.tabAccount')}</small></NavLink>
+          <NavLink to={user ? '/tai-khoan' : '/dang-nhap'}><AccountIcon /><small>{t('nav.tabAccount')}</small></NavLink>
         )}
       </nav>}
     </>

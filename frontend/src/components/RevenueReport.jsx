@@ -178,7 +178,7 @@ export default function RevenueReport() {
             </div>
           ) : (
             <div className="revenue-table-wrap">
-              <table className="revenue-table">
+              <table className="revenue-table responsive-table">
                 <caption className="sr-only">Doanh thu theo từng ngày</caption>
                 <thead>
                   <tr>
@@ -194,13 +194,13 @@ export default function RevenueReport() {
                   {data.daily.map((d) => (
                     <tr key={d.day}>
                       <th scope="row">{dayLabel(d.day)}</th>
-                      <td className="revenue-count">
+                      <td className="revenue-count" data-label="Số đơn">
                         <strong>{d.orders}</strong>
                         <small>{[d.online_orders > 0 && `${d.online_orders} online`, d.retail_invoices > 0 && `${d.retail_invoices} tại quầy`].filter(Boolean).join(' · ')}</small>
                       </td>
-                      <td>{d.online > 0 ? formatVND(d.online) : '—'}</td>
-                      <td>{d.retail > 0 ? formatVND(d.retail) : '—'}</td>
-                      <td><strong>{formatVND(d.total)}</strong></td>
+                      <td data-label="Online">{d.online > 0 ? formatVND(d.online) : '—'}</td>
+                      <td data-label="Tại quầy">{d.retail > 0 ? formatVND(d.retail) : '—'}</td>
+                      <td data-label="Tổng"><strong>{formatVND(d.total)}</strong></td>
                       <td className="revenue-bar-col">
                         <span className="revenue-bar" aria-hidden="true">
                           <i style={{ width: `${maxDay ? (d.total / maxDay) * 100 : 0}%` }} />
@@ -212,10 +212,10 @@ export default function RevenueReport() {
                 <tfoot>
                   <tr>
                     <th scope="row">Cộng</th>
-                    <td className="revenue-count"><strong>{data.total.transactions}</strong><small>{data.online.orders} online · {data.retail.invoices} tại quầy</small></td>
-                    <td>{formatVND(data.online.revenue)}</td>
-                    <td>{formatVND(data.retail.revenue)}</td>
-                    <td><strong>{formatVND(data.total.revenue)}</strong></td>
+                    <td className="revenue-count" data-label="Số đơn"><strong>{data.total.transactions}</strong><small>{data.online.orders} online · {data.retail.invoices} tại quầy</small></td>
+                    <td data-label="Online">{formatVND(data.online.revenue)}</td>
+                    <td data-label="Tại quầy">{formatVND(data.retail.revenue)}</td>
+                    <td data-label="Tổng"><strong>{formatVND(data.total.revenue)}</strong></td>
                     <td className="revenue-bar-col"></td>
                   </tr>
                 </tfoot>

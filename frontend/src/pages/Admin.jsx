@@ -21,6 +21,8 @@ import ProductImage from '../components/ProductImage.jsx';
 import OrdersExportButton from '../components/OrdersExportButton.jsx';
 import OrdersTable from '../components/OrdersTable.jsx';
 import OrderPrint from '../components/OrderPrint.jsx';
+import { ListSkeleton } from '../components/Skeleton.jsx';
+import useScrollTabs from '../components/useScrollTabs.js';
 const ManualOrderForm = lazy(() => import('../components/ManualOrderForm.jsx'));
 import PageLoadBoundary from '../components/PageLoadBoundary.jsx';
 
@@ -72,6 +74,7 @@ export default function Admin() {
   const canProducts = can('products.manage');
   const canManageOrders = can('orders.manage');
   const [tab, setTab] = useState(firstTab || 'orders');
+  const tabsRef = useScrollTabs(tab);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   // Mở đơn từ thông báo: tạm xem dạng thẻ ở mục "Tất cả" để thấy đúng đơn đó.
@@ -518,7 +521,7 @@ export default function Admin() {
       </header>
 
       <div className="admin-layout">
-        <aside className="admin-sidebar">
+        <aside className="admin-sidebar" ref={tabsRef}>
           <p className="admin-nav-label">Công việc</p>
           {allowed('orders') && <button className={tab === 'orders' ? 'active' : ''} onClick={() => setTab('orders')}>
             <span aria-hidden="true">▤</span><span>Đơn hàng<small>Xác nhận và giao hàng</small></span>
@@ -568,7 +571,7 @@ export default function Admin() {
         </aside>
 
         <main className="admin-content">
-          {loading ? <div className="loading-state page-loading"><span></span>Đang mở trang quản trị…</div> : (
+          {loading ? <ListSkeleton rows={5} label="Đang mở trang quản trị…" /> : (
             <PageLoadBoundary key={tab}>
             <Suspense fallback={<div className="loading-state" role="status"><span></span>Đang mở chức năng…</div>}>
             <>

@@ -4,6 +4,8 @@ import { api, formatDateTime, formatVND, isPhone, vietnamClock } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../i18n/index.jsx';
 import DeliveryPromise from '../components/DeliveryPromise.jsx';
+import { useStorefront } from '../components/Footer.jsx';
+import { PhoneIcon } from '../components/Icons.jsx';
 
 const STEPS = [['pending', 'created_at'], ['confirmed', 'confirmed_at'], ['shipping', 'shipping_at'], ['completed', 'completed_at']];
 const STEP_INDEX = { pending: 0, confirmed: 1, shipping: 2, completed: 3 };
@@ -61,6 +63,7 @@ function OrderDetail({ order }) {
 export default function TrackOrder() {
   const { t } = useI18n();
   const { user } = useAuth();
+  const hotline = useStorefront()?.contact_phone || '';
   const location = useLocation();
   const [params] = useSearchParams();
   const [phone, setPhone] = useState(location.state?.phone || '');
@@ -152,9 +155,14 @@ export default function TrackOrder() {
                 {' · '}<button type="button" className="link-button" onClick={() => lookup(query.current)}>{t('track.refresh')}</button>
               </p>
             )}
-            <button type="button" className="btn btn-secondary btn-block" onClick={() => { setOrders(null); setError(''); }}>
-              {t('track.another')}
-            </button>
+            <div className="track-actions">
+              {hotline && (
+                <a className="btn btn-primary" href={`tel:${hotline}`}><PhoneIcon size={18} /> {t('track.call')}</a>
+              )}
+              <button type="button" className="btn btn-secondary" onClick={() => { setOrders(null); setError(''); }}>
+                {t('track.another')}
+              </button>
+            </div>
           </div>
         )}
       </section>

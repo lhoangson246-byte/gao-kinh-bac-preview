@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, formatVND, salePercent } from '../api';
 import { useCart } from '../context/CartContext.jsx';
 import ProductImage from '../components/ProductImage.jsx';
+import { ProductGridSkeleton } from '../components/Skeleton.jsx';
 import HeroSlider from '../components/HeroSlider.jsx';
 import { PromoBanner } from '../components/Promotion.jsx';
 import { useI18n } from '../i18n/index.jsx';
@@ -54,7 +55,8 @@ export default function Home() {
   const [retry, setRetry] = useState(0);
   const previousQuery = useRef('');
   const addedTimer = useRef(null);
-  const { add, count, total, syncWithProducts } = useCart();
+  const { items, add, setQuantity, remove, count, total, syncWithProducts } = useCart();
+  const inCart = new Map(items.map((item) => [item.id, item.quantity]));
   const { t, unit } = useI18n();
 
   // Ảnh banner và số tư vấn do cửa hàng tự đổi trong trang quản trị.
@@ -243,7 +245,7 @@ export default function Home() {
             <button className="link-button" onClick={() => setRetry((value) => value + 1)}>{t('common.retry')}</button>
           </div>
         )}
-        {loading && <div className="loading-state" role="status"><span></span>{t('home.loading')}</div>}
+        {loading && products.length === 0 && <ProductGridSkeleton label={t('home.loading')} />}
         {!loading && !error && products.length === 0 && (
           <div className="empty compact">
             <p>{q || inStockOnly ? t('home.noMatch') : emptyText}</p>
@@ -259,17 +261,22 @@ export default function Home() {
             const soldOut = product.stock <= 0;
             const canBuy = !unpriced && !soldOut;
             const sale = unpriced ? 0 : salePercent(product);
+            const hot = product.upsell_rank != null;
+            const low = canBuy && product.stock <= 10;
+            // Ảnh nhỏ trên điện thoại chỉ giữ MỘT nhãn: hết hàng / chưa có giá > giảm giá > HOT > sắp hết.
+            const badge = !canBuy ? 'stock' : sale > 0 ? 'sale' : hot ? 'hot' : low ? 'stock' : '';
+            const quantity = inCart.get(product.id) || 0;
             return (
-              <article key={product.id} className="product-card">
+              <article key={product.id} className={`product-card${quantity > 0 ? ' in-cart' : ''}`}>
                 <div className="product-image">
                   <ProductImage src={product.image_url || FALLBACK_IMAGE} alt={product.name} first={index === 0} eager={index < 3} />
-                  {sale > 0 && <span className="sale-tag" aria-label={t('card.saleAria', { n: sale })}>−{sale}%</span>}
-                  {product.upsell_rank != null && <span className={`product-hot${sale > 0 ? ' below' : ''}`}>HOT</span>}
+                  {sale > 0 && <span className={`sale-tag${badge === 'sale' ? ' badge-main' : ''}`} aria-label={t('card.saleAria', { n: sale })}>−{sale}%</span>}
+                  {hot && <span className={`product-hot${sale > 0 ? ' below' : ''}${badge === 'hot' ? ' badge-main' : ''}`}>HOT</span>}
                   {unpriced
-                    ? <span className="stock-tag pending">{t('card.pricePending')}</span>
+                    ? <span className="stock-tag pending badge-main">{t('card.pricePending')}</span>
                     : soldOut
-                      ? <span className="stock-tag sold-out">{t('card.soldOut')}</span>
-                      : product.stock <= 10 && <span className="stock-tag">{t('card.lowStock')}</span>}
+                      ? <span className="stock-tag sold-out badge-main">{t('card.soldOut')}</span>
+                      : low && <span className={`stock-tag${badge === 'stock' ? ' badge-main' : ''}`}>{t('card.lowStock')}</span>}
                 </div>
                 <div className="product-body">
                   <div className="product-meta">
@@ -293,19 +300,30 @@ export default function Home() {
                       {sale > 0 && <s className="was-price" aria-label={t('card.wasAria', { price: formatVND(product.original_price) })}>{formatVND(product.original_price)}</s>}
                       <span>/ {unit(product.unit)}</span>
                     </div>
-                    <button
-                      type="button"
-                      className="btn btn-primary add-button"
-                      disabled={!canBuy}
-                      onClick={() => handleAdd(product)}
-                      aria-label={
-                        unpriced ? t('card.noPriceAria', { name: product.name })
-                          : soldOut ? t('card.soldOutAria', { name: product.name })
-                          : t('card.addAria', { name: product.name })
-                      }
-                    >
-                      {unpriced ? t('card.notSelling') : soldOut ? t('card.soldOut') : added === product.id ? t('card.added') : t('card.add')}
-                    </button>
+                    {quantity > 0 && canBuy ? (
+                      // Đã có trong giỏ: bộ đếm − / + ngay trên thẻ, khỏi phải mở giỏ hàng.
+                      <div className="card-stepper" role="group" aria-label={t('card.inCart', { n: quantity })}>
+                        <button type="button" onClick={() => (quantity <= 1 ? remove(product.id) : setQuantity(product.id, quantity - 1))}
+                                aria-label={t('cart.decrease', { name: product.name })}>−</button>
+                        <span aria-live="polite"><b>{quantity}</b><small>{t('card.inCartShort')}</small></span>
+                        <button type="button" onClick={() => handleAdd(product)} disabled={quantity >= product.stock}
+                                aria-label={t('cart.increase', { name: product.name })}>+</button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-primary add-button"
+                        disabled={!canBuy}
+                        onClick={() => handleAdd(product)}
+                        aria-label={
+                          unpriced ? t('card.noPriceAria', { name: product.name })
+                            : soldOut ? t('card.soldOutAria', { name: product.name })
+                            : t('card.addAria', { name: product.name })
+                        }
+                      >
+                        {unpriced ? t('card.notSelling') : soldOut ? t('card.soldOut') : added === product.id ? t('card.added') : t('card.add')}
+                      </button>
+                    )}
                   </div>
                 </div>
               </article>

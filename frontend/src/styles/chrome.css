@@ -1,0 +1,74 @@
+/*
+ * Thành phần dùng chung (14/11/2026): chữ, viền focus, hiệu ứng bấm, khung xương khi tải, thông báo nổi,
+ * icon thanh tab, và việc xếp chỗ các thanh cố định ở đáy màn hình điện thoại. Nạp SAU styles.css.
+ */
+
+/* ---------- Chữ ---------- */
+body { font-family: var(--font-sans); }
+h1, h2 { font-family: var(--font-display); }
+
+/* ---------- Focus bàn phím, phản hồi khi bấm ---------- */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+:where(.btn, .add-button, .mobile-nav a, .floating-cart, .group-chips button, .quick-filters button):active:not(:disabled) { transform: scale(.97); }
+.btn { transition: transform .08s ease, background-color .15s ease, box-shadow .15s ease; }
+
+/* Tôn trọng cài đặt "giảm chuyển động" của máy. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+
+/* ---------- Khung xương khi đang tải: giữ đúng chỗ để trang không giật ---------- */
+.skeleton { position: relative; overflow: hidden; border-radius: var(--radius-sm); background: var(--cream-deep); }
+.skeleton::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent); animation: skeleton-sweep 1.3s ease-in-out infinite; }
+@keyframes skeleton-sweep { to { transform: translateX(100%); } }
+.skeleton-card { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--paper); }
+.skeleton-card .skeleton-image { aspect-ratio: 1; border-radius: 0; }
+.skeleton-card .skeleton-body { display: grid; gap: 8px; padding: 12px; }
+.skeleton-line { height: 14px; }
+.skeleton-line.short { width: 55%; }
+.skeleton-line.tall { height: 40px; border-radius: 10px; }
+.skeleton-list { display: grid; gap: 10px; }
+.skeleton-row { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--paper); }
+.skeleton-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+.skeleton-kpis .skeleton { height: 96px; border-radius: 16px; }
+@media (max-width: 720px) { .skeleton-kpis { grid-template-columns: 1fr; } .skeleton-kpis .skeleton { height: 64px; } }
+
+/* ---------- Thông báo nổi dùng chung (thay window.alert), có thể kèm nút Hoàn tác ---------- */
+.app-toasts { position: fixed; left: 50%; bottom: calc(var(--stack) + 16px); z-index: var(--z-toast); display: grid; gap: 8px; width: min(440px, calc(100% - 24px)); transform: translateX(-50%); pointer-events: none; }
+.app-toast { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--green-950); color: #fff; box-shadow: var(--shadow-md); font-size: .92rem; font-weight: 650; pointer-events: auto; animation: toast-in .18s ease-out; }
+.app-toast.error { background: #7c2a22; }
+.app-toast p { flex: 1; margin: 0; }
+.app-toast button { flex: 0 0 auto; min-height: 36px; padding: 4px 12px; border: 1.5px solid rgba(255, 255, 255, .7); border-radius: 99px; background: none; color: #fff; font-weight: 800; cursor: pointer; }
+.app-toast .app-toast-close { width: 32px; min-height: 32px; padding: 0; border: 0; font-size: 1.2rem; opacity: .8; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ---------- Thanh tab dưới đáy điện thoại: icon SVG cùng nét ---------- */
+.mobile-nav a svg { display: block; width: 22px; height: 22px; }
+.mobile-nav a small { font-size: .72rem; }
+
+/* ---------- Xếp chỗ ở đáy màn hình ---------- */
+.navbar { z-index: var(--z-header); }
+.mascot { z-index: var(--z-mascot); bottom: calc(var(--stack) + 16px); transition: transform .25s ease, opacity .25s ease; transform-origin: 100% 100%; }
+/* Khách đang cuộn đọc / điền form: cô bé thu nhỏ vào góc, bấm vào thì hiện lại. */
+.mascot.tucked { transform: scale(.55); opacity: .85; }
+.mascot.tucked .mascot-bubble { display: none; }
+@media (max-width: 920px) {
+  /* Trang có thanh đặt hàng cố định (màn hình 781–920px: thanh nằm sát đáy). */
+  body:has(.cart-cta) { --stack: 84px; }
+  .cart-cta { z-index: var(--z-cta); padding-bottom: calc(10px + var(--safe-bottom)); }
+}
+@media (max-width: 780px) {
+  body { --stack: var(--nav-h); }
+  body:has(.floating-cart) { --stack: calc(var(--nav-h) + 66px); }
+  body:has(.cart-cta) { --stack: calc(var(--nav-h) + 92px); }
+  body:has(.quick-bar) { --stack: calc(84px + var(--safe-bottom)); }
+  .mobile-nav { bottom: calc(9px + var(--safe-bottom)); z-index: var(--z-nav); }
+  .floating-cart { bottom: calc(var(--nav-h) + 8px); z-index: var(--z-float); }
+  .cart-cta { bottom: calc(var(--nav-h) + 8px); padding-bottom: 8px; }
+  .mascot { right: 8px; bottom: calc(var(--stack) + 8px); width: 74px; }
+  /* Có thanh đặt hàng cố định thì cô bé nhỏ lại để không che tổng tiền. */
+  body:has(.cart-cta) .mascot { width: 56px; }
+  main.container { padding-bottom: calc(var(--stack) + 24px); }
+  /* Bong bóng thoại mọc lên từ chân cô bé, không bao giờ tụt xuống đè thanh bên dưới. */
+  .mascot-bubble { top: auto; bottom: 4px; }
+}

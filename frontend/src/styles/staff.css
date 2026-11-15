@@ -1,0 +1,115 @@
+/*
+ * Trang nội bộ (14/11/2026): quản trị, bán tại quầy, kho, giao hàng. Nạp SAU styles.css.
+ * Phần in ấn (@media print của hoá đơn, đơn hàng, đóng ngày) vẫn ở styles.css, file này không đụng tới.
+ */
+
+/* ---------- Hai kho: mỗi kho một màu, dùng ở mọi nơi nhắc tới kho ---------- */
+:root {
+  --wh-store: #8a5a00;        /* Cửa hàng Nguyễn Cao: vàng nâu */
+  --wh-store-bg: #fff3d6;
+  --wh-main: #1f4f8a;         /* Kho Bồ Sơn: xanh dương */
+  --wh-main-bg: #e6effa;
+}
+.wh-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 99px; font-size: .78rem; font-style: normal; font-weight: 800; white-space: nowrap; }
+.wh-chip.KH_NC { background: var(--wh-store-bg); color: var(--wh-store); }
+.wh-chip.KH_BS { background: var(--wh-main-bg); color: var(--wh-main); }
+.inv-table th.wh-col.KH_NC { box-shadow: inset 0 -3px 0 #d9a73e; color: var(--wh-store); }
+.inv-table th.wh-col.KH_BS { box-shadow: inset 0 -3px 0 #6f9fd8; color: var(--wh-main); }
+.inv-table td[data-label="Tồn Nguyễn Cao"] { background: rgba(255, 243, 214, .45); }
+.inv-table td[data-label="Tồn Bồ Sơn"] { background: rgba(230, 239, 250, .55); }
+.pos-warehouse { margin: 8px 0 0; padding: 5px 12px; font-size: .84rem; }
+
+/* ---------- Kho: cảnh báo và lệnh đang chuyển nổi bật ---------- */
+.inv-table tr.inv-row-red > td:first-child { box-shadow: inset 4px 0 0 var(--danger); }
+.inv-table tr.inv-row-yellow > td:first-child { box-shadow: inset 4px 0 0 var(--gold); }
+.inv-table tr.inv-row-red { background: #fdf6f4; }
+@media (max-width: 720px) {
+  /* Dạng thẻ: vạch cảnh báo chạy dọc mép trái cả thẻ. */
+  .inv-table tr.inv-row-red > td:first-child, .inv-table tr.inv-row-yellow > td:first-child { box-shadow: none; }
+  .inv-table tr.inv-row-red { box-shadow: inset 5px 0 0 var(--danger); }
+  .inv-table tr.inv-row-yellow { box-shadow: inset 5px 0 0 var(--gold); }
+}
+.inv-status.red, .inv-status.yellow { font-weight: 850; }
+.inv-status.red { box-shadow: 0 0 0 1.5px #e2b0a8; }
+.inv-transit { padding: 14px 16px; border: 2px solid #6f9fd8; border-radius: 16px; background: #f1f6fc; }
+.inv-transit > h2 { color: var(--wh-main); }
+.inv-route { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.inv-transfer { background: var(--white); }
+.inv-transfer-actions .btn { min-height: var(--tap); }
+.inv-actions button { min-height: 88px; }
+@media (max-width: 720px) {
+  /* Ba nút thao tác thành một hàng ba ô gọn: biểu tượng + tên, bỏ dòng mô tả. */
+  .inv-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .inv-actions button { display: grid; grid-template-columns: 1fr; justify-items: center; align-content: center; gap: 4px; min-height: 84px; padding: 10px 6px; text-align: center; }
+  .inv-actions button span { grid-row: auto; font-size: 1.5rem; }
+  .inv-actions button strong { font-size: .9rem; line-height: 1.2; }
+  .inv-actions button small { display: none; }
+}
+
+/* ---------- Thanh tab cuộn ngang: mép mờ + mũi tên báo còn tab khuất ---------- */
+/* Hai lớp phủ dính ở hai mép (nền vẫn đặc, nội dung trang không lộ ra phía sau thanh dính). */
+.staff-nav::before, .staff-nav::after { content: ''; position: sticky; z-index: 1; flex: 0 0 60px; align-self: stretch; display: grid; align-items: center; color: var(--green-900); font-size: 1.5rem; font-weight: 800; pointer-events: none; opacity: 0; transition: opacity .15s ease; }
+.staff-nav::before { left: 0; margin: -8px -60px -8px 0; background: linear-gradient(90deg, var(--paper) 55%, rgba(255, 253, 248, 0)); }
+.staff-nav::after { content: '›'; right: 0; margin: -8px 0 -8px -60px; justify-items: end; padding-right: 4px; background: linear-gradient(270deg, var(--paper) 55%, rgba(255, 253, 248, 0)); }
+.staff-nav[data-more~="left"]::before, .staff-nav[data-more~="right"]::after { opacity: 1; }
+@media (max-width: 980px) {
+  .admin-sidebar::before, .admin-sidebar::after { content: ''; position: sticky; z-index: 1; flex: 0 0 60px; align-self: stretch; display: grid; align-items: center; color: var(--green-900); font-size: 1.5rem; font-weight: 800; pointer-events: none; opacity: 0; transition: opacity .15s ease; }
+  .admin-sidebar::before { left: 0; margin: -8px -60px -8px 0; background: linear-gradient(90deg, var(--paper) 55%, rgba(255, 253, 248, 0)); }
+  .admin-sidebar::after { content: '›'; right: 0; margin: -8px 0 -8px -60px; justify-items: end; padding-right: 4px; background: linear-gradient(270deg, var(--paper) 55%, rgba(255, 253, 248, 0)); }
+  .admin-sidebar[data-more~="left"]::before, .admin-sidebar[data-more~="right"]::after { opacity: 1; }
+}
+.staff-nav a { display: inline-flex; align-items: center; min-height: 40px; }
+@media (max-width: 980px) {
+  .admin-sidebar { scrollbar-width: none; scroll-behavior: smooth; }
+  .admin-sidebar::-webkit-scrollbar { display: none; }
+  .admin-sidebar > button, .admin-sidebar-link { min-height: var(--tap); }
+  .admin-sidebar > button.active { box-shadow: inset 0 -3px 0 var(--green-800); }
+}
+
+/* ---------- Bảng → thẻ trên điện thoại (đơn theo ngày, doanh thu, mã giảm giá) ---------- */
+@media (max-width: 720px) {
+  .responsive-table { display: block; min-width: 0; }
+  .responsive-table thead { display: none; }
+  .responsive-table tbody, .responsive-table tfoot { display: block; }
+  .responsive-table tr { display: block; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  .responsive-table td, .responsive-table tbody th, .responsive-table tfoot th { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; padding: 3px 0; border: 0; text-align: right; white-space: normal; }
+  .responsive-table td[data-label]::before { content: attr(data-label); flex: 0 0 auto; color: var(--muted); font-size: .76rem; font-weight: 700; text-align: left; }
+  .responsive-table td:first-child, .responsive-table tbody th, .responsive-table tfoot th { font-size: 1.02rem; font-weight: 800; }
+  .responsive-table td .cell-note { display: block; }
+  .responsive-table td.cell-actions { justify-content: flex-end; flex-wrap: wrap; gap: 6px; padding-top: 6px; }
+  .responsive-table tfoot tr { background: var(--cream); font-weight: 700; }
+  .responsive-table .revenue-bar-col { display: none; }
+  .responsive-table .revenue-count { align-items: center; }
+  .responsive-table .revenue-count small { display: inline; margin-left: 6px; }
+  .revenue-table.responsive-table th, .revenue-table.responsive-table td { padding: 3px 0; white-space: normal; }
+  /* Hoá đơn cũ ở quầy: mã + tiền một hàng, khách và giờ hàng dưới. */
+  .pos-invoice-head { grid-template-columns: 1fr auto; gap: 4px 12px; min-height: 56px; }
+  .pos-invoice-head strong { font-size: 1.02rem; }
+}
+
+/* ---------- Bán tại quầy: ô gạo dễ chạm, đang chọn rõ ràng ---------- */
+.pos-item { min-height: 132px; padding: 10px; }
+.pos-item:active { transform: scale(.97); border-color: var(--green-800); background: var(--green-100); }
+.pos-item-name { font-size: .9rem; }
+.pos-item strong { font-size: 1rem; }
+@media (max-width: 560px) {
+  .pos-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+}
+
+/* ---------- Giao hàng: đọc được ngoài nắng, bấm một tay ---------- */
+.delivery-card { border-color: #b9b4a6; background: #fff; }
+.delivery-card.shipping { border-color: var(--gold-dark); box-shadow: 0 0 0 2px rgba(217, 167, 62, .3); }
+.delivery-card h2 { color: #111; font-size: 1.5rem; }
+.delivery-address { color: #111; font-size: 1.15rem; font-weight: 650; line-height: 1.4; }
+.delivery-quick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.delivery-quick.one { grid-template-columns: 1fr; }
+.delivery-quick .btn { display: grid; justify-items: center; align-content: center; gap: 1px; min-height: 64px; padding: 8px 6px; font-size: 1.15rem; font-weight: 850; line-height: 1.15; }
+.delivery-quick .btn small { font-size: .78rem; font-weight: 700; opacity: .9; font-variant-numeric: tabular-nums; }
+.delivery-quick .delivery-map { border: 2px solid var(--green-950); background: var(--green-950); color: #fff; }
+.delivery-money { border: 2px solid var(--green-900); background: #fff; color: #111; font-size: 1.1rem; font-weight: 650; }
+.delivery-money strong { display: block; color: var(--green-950); font-size: 1.75rem; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.delivery-money.bank { border-color: var(--wh-main); background: #fff; color: #111; }
+.delivery-money.bank strong { color: var(--wh-main); }
+.delivery-items li { color: #111; font-size: 1.02rem; }
+.delivery-meta { color: #3b423c; font-weight: 650; }
+.finder-actions .btn { min-height: 56px; font-size: 1.05rem; font-weight: 800; }

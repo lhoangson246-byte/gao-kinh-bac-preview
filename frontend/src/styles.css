@@ -1733,7 +1733,10 @@ label b { color: var(--danger); }
 .print-only { display: none; }
 @media (max-width: 560px) { .closing-summary { grid-template-columns: 1fr 1fr; } }
 @media print {
-  .no-print, .admin-topbar { display: none !important; }
+  /* Luật in hoá đơn quầy ở trên ẩn mọi thứ (body * { visibility: hidden }), nên báo cáo Đóng ngày từng in ra
+     giấy trắng. Cho riêng trang Đóng ngày hiện lại (sửa 14/11/2026). */
+  html:not(.printing-orders) .closing-app, html:not(.printing-orders) .closing-app * { visibility: visible !important; }
+  .no-print, .admin-topbar, .app-toasts { display: none !important; }
   .print-only { display: block; margin-top: 30px; }
   body, .admin-app { background: white !important; }
   .closing-main { max-width: none; padding: 0; }
@@ -1773,8 +1776,6 @@ label b { color: var(--danger); }
 @keyframes mascot-pop { from { opacity: 0; transform: translateY(6px) scale(.94); } to { opacity: 1; transform: none; } }
 @media (max-width: 760px) {
   /* Đứng trên thanh menu dưới cùng; có thanh giỏ hàng nổi thì đứng cao hơn nữa. */
-  .mascot { right: 8px; bottom: 76px; width: 74px; }
-  body:has(.floating-cart) .mascot { bottom: 134px; }
   .mascot-bubble { width: 158px; font-size: .78rem; }
 }
 @media print { .mascot { display: none; } }
@@ -1950,7 +1951,7 @@ label b { color: var(--danger); }
 .inv-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
 .inv-kpi { display: grid; gap: 4px; padding: 16px 18px; border-radius: 16px; border: 1.5px solid; }
 .inv-kpi span { font-size: .8rem; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
-.inv-kpi strong { font-family: var(--font-display, Georgia, serif); font-size: clamp(1.5rem, 3.4vw, 2.2rem); line-height: 1.1; }
+.inv-kpi strong { font-family: var(--font-display); font-size: clamp(1.5rem, 3.4vw, 2.2rem); line-height: 1.1; }
 .inv-kpi small { font-size: .8rem; font-weight: 650; }
 .inv-kpi.total { border-color: #9cc9ad; background: var(--success-light); color: #17472f; }
 .inv-kpi.total.warn { border-color: #e2b0a8; background: var(--danger-light); color: #7a2a22; }
@@ -2208,7 +2209,6 @@ label b { color: var(--danger); }
 @media (max-width: 920px) {
   .cart-summary { position: static; }
   /* Nút đặt hàng và tổng tiền cố định ở đáy màn hình. */
-  .cart-page { padding-bottom: 120px; }
   .cart-cta { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px;
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--paper); box-shadow: 0 -8px 24px rgba(23, 61, 44, .14); }
   .cart-cta-total { display: grid; line-height: 1.15; }
@@ -2217,7 +2217,6 @@ label b { color: var(--danger); }
   .cart-cta .btn { min-height: 52px; margin: 0; }
   .cart-cta .quick-cta { min-height: 52px; font-size: 1.02rem; }
   .cart-cta .quick-cta small { font-size: .7rem; }
-  body:has(.cart-cta) .mascot { bottom: 92px; }
   body:has(.cart-cta) .floating-cart { display: none; }
   .cart-page .page-heading { margin-bottom: 12px; }
   .cart-page .page-heading .eyebrow { display: none; }
@@ -2226,9 +2225,7 @@ label b { color: var(--danger); }
 }
 @media (max-width: 780px) {
   /* Điện thoại có thanh tab ở đáy (cao khoảng 71px): đặt thanh đặt hàng ngay trên nó. */
-  .cart-cta { left: 10px; right: 10px; bottom: 78px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 16px; }
-  .cart-page { padding-bottom: 80px; }
-  body:has(.cart-cta) .mascot { bottom: 158px; }
+  .cart-cta { left: 10px; right: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 16px; }
 }
 .warehouse-switch { flex: 0 0 auto; white-space: nowrap; }
 .manual-order-head h2 { min-width: 0; }

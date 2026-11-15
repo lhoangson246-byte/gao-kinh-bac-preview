@@ -8,7 +8,7 @@ const HIDE_AFTER_MS = 12000;
  * Lời của cô bé theo từng trang:
  *  - greet: chào khách (trang chủ và các trang khác)
  *  - cart: giỏ hàng — mỗi lần bấm là một bước đặt hàng, theo thứ tự
- *  - track: tra cứu đơn — nhắc nhập số điện thoại và mã đơn
+ *  - track: tra cứu đơn — nhắc nhập số điện thoại
  */
 export const MASCOT_SCRIPTS = {
   greet: ['mascot.greeting'],
@@ -35,7 +35,9 @@ export default function Mascot({ scene = 'greet' }) {
   const [step, setStep] = useState(-1);          // -1 = đang im
 
   useEffect(() => {
-    if (alreadySeen(scene)) return undefined;
+    // Giỏ hàng đã có nút "Đặt hàng" cố định ngay trước mắt: cô bé không tự bật lời nhắc lên che tổng tiền,
+    // khách bấm vào cô mới nói.
+    if (scene === 'cart' || alreadySeen(scene)) return undefined;
     const timer = setTimeout(() => { rememberSeen(scene); setStep(0); }, SHOW_AFTER_MS);
     return () => clearTimeout(timer);
   }, [scene]);
@@ -46,11 +48,22 @@ export default function Mascot({ scene = 'greet' }) {
     return () => clearTimeout(timer);
   }, [step]);
 
-  const next = () => setStep((cur) => (steps ? (cur + 1) % lines.length : cur < 0 ? 0 : -1));
+  // Khách cuộn xuống đọc hàng / điền form thì cô bé thu nhỏ vào góc cho khỏi che nội dung và nút mua;
+  // cuộn lên đầu trang hoặc bấm vào cô thì hiện lại.
+  const [scrolled, setScrolled] = useState(false);
+  const [peek, setPeek] = useState(false);       // khách vừa bấm vào cô lúc đang thu nhỏ
+  useEffect(() => {
+    const onScroll = () => { setScrolled(window.scrollY > 140); setPeek(false); };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const next = () => { setPeek(true); setStep((cur) => (steps ? (cur + 1) % lines.length : cur < 0 ? 0 : -1)); };
   const open = step >= 0;
 
   return (
-    <aside className="mascot" aria-label={t('mascot.aria')}>
+    <aside className={`mascot${scrolled && !peek ? ' tucked' : ''}`} aria-label={t('mascot.aria')}>
       {open && (
         <div className="mascot-bubble" role="status">
           {steps && <small className="mascot-step">{t('mascot.step', { n: step + 1, total: lines.length })}</small>}

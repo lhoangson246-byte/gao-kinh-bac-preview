@@ -37,6 +37,21 @@ const clearSaved = () => {
 
 const formatPhone = (phone) => phone.replace(/^(\d{4})(\d{3})(\d{3})$/, '$1 $2 $3');
 
+/** Ba bước đặt hàng, để khách biết mình đang ở đâu: 1 thông tin giao → 2 giờ nhận & thanh toán → 3 hoàn tất. */
+function QuickSteps({ current }) {
+  const { t } = useI18n();
+  return (
+    <ol className="quick-steps" aria-label={t('quick.stepsAria')}>
+      {[1, 2, 3].map((n) => (
+        <li key={n} className={n < current || current === 3 ? 'done' : n === current ? 'current' : ''} aria-current={n === current ? 'step' : undefined}>
+          <span aria-hidden="true">{n < current || current === 3 ? '✓' : n}</span>
+          <small>{t(`quick.step${n}`)}</small>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 /**
  * Đặt hàng nhanh không cần tài khoản: một trang, chữ to, ít ô nhất có thể, cho khách
  * không quen dùng điện thoại. Giỏ hàng → điền tên, số điện thoại, địa chỉ → Đặt hàng ngay.
@@ -178,6 +193,7 @@ export default function QuickCheckout() {
         <h1>{t('quick.title')}</h1>
         <p>{t('quick.subtitle')}</p>
       </div>
+      <QuickSteps current={form.receiver_name.trim().length >= 2 && isPhone(form.phone) && form.address.trim().length >= 8 ? 2 : 1} />
 
       {error && <div className="alert error quick-alert" role="alert">{error}</div>}
 
@@ -221,7 +237,7 @@ export default function QuickCheckout() {
               : <small className="field-help">{t('address.area')}</small>}
           </label>
 
-          <div className="quick-locate">
+          <div className={`quick-locate${location ? ' pinned' : ''}`}>
             {location ? (
               <>
                 <span>📍 {t('location.pinned')}</span>
@@ -364,6 +380,7 @@ function QuickSuccess({ order, token }) {
 
   return (
     <div className="quick-page quick-done">
+      <QuickSteps current={3} />
       <section className="quick-card quick-success" role="status">
         <span className="quick-check" aria-hidden="true">✓</span>
         <h1>{t('quick.successTitle')}</h1>

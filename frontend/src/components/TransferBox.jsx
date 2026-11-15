@@ -2,6 +2,8 @@ import { useEffect, useId, useState } from 'react';
 import { api, formatVND } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 import { shrink } from './ImagePicker.jsx';
+import { BANK_ACCOUNT } from '../shopInfo.js';
+import { CheckIcon, CopyIcon } from './Icons.jsx';
 
 const DEFAULT_QR = '/bank-qr.png';
 let qrPromise = null;
@@ -22,7 +24,7 @@ export default function TransferBox({ amount, order = null, guestToken = null })
   const [qr, setQr] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState('');   // 'account' | 'content' vừa được chép
   const [reportedAt, setReportedAt] = useState(order?.transfer_reported_at || null);
 
   useEffect(() => {
@@ -52,13 +54,30 @@ export default function TransferBox({ amount, order = null, guestToken = null })
     }
   };
 
-  const copy = async () => {
+  /** Chép vào bộ nhớ tạm rồi báo "Đã chép!" ngay trên nút vừa bấm. */
+  const copy = async (what, text) => {
     try {
-      await navigator.clipboard.writeText(order.code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch { /* trình duyệt không cho chép: khách tự gõ mã */ }
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Trình duyệt cũ / không có quyền: chép qua một ô nhập tạm.
+      const field = document.createElement('textarea');
+      field.value = text;
+      field.setAttribute('readonly', '');
+      field.style.position = 'fixed';
+      field.style.opacity = '0';
+      document.body.appendChild(field);
+      field.select();
+      try { document.execCommand('copy'); } catch { /* khách tự gõ */ }
+      field.remove();
+    }
+    setCopied(what);
+    setTimeout(() => setCopied((cur) => (cur === what ? '' : cur)), 2000);
   };
+  const CopyButton = ({ what, text, label }) => (
+    <button type="button" className={`copy-button${copied === what ? ' done' : ''}`} onClick={() => copy(what, text)} aria-live="polite">
+      {copied === what ? <><CheckIcon size={18} /> {t('transfer.copied')}</> : <><CopyIcon size={18} /> {label}</>}
+    </button>
+  );
 
   return (
     <div className="transfer-box">
@@ -68,11 +87,15 @@ export default function TransferBox({ amount, order = null, guestToken = null })
       <div className="transfer-info">
         <strong>{t('transfer.title')}</strong>
         <p>{t('transfer.scan', { amount: formatVND(amount) })}</p>
+        <div className="transfer-row">
+          <span>{t('transfer.account', { bank: BANK_ACCOUNT.bank })} <b>{BANK_ACCOUNT.number}</b></span>
+          <CopyButton what="account" text={BANK_ACCOUNT.number} label={t('transfer.copyAccount')} />
+        </div>
         {order ? (
-          <p className="transfer-content">
-            {t('transfer.content')} <b>{order.code}</b>
-            <button type="button" className="link-button" onClick={copy}>{copied ? t('transfer.copied') : t('transfer.copy')}</button>
-          </p>
+          <div className="transfer-row">
+            <span>{t('transfer.content')} <b>{order.code}</b></span>
+            <CopyButton what="content" text={order.code} label={t('transfer.copyContent')} />
+          </div>
         ) : (
           <p className="muted">{t('transfer.later')}</p>
         )}
