@@ -1,3 +1,4 @@
+import { ListSkeleton } from './Skeleton.jsx';
 import { useEffect, useState } from 'react';
 import { api, formatDateTime } from '../api';
 
@@ -42,7 +43,7 @@ export default function ActivityLog() {
         </button>
       </div>
       {error && <div className="alert error">{error}</div>}
-      {loading ? <div className="loading-state"><span></span>Đang tải nhật ký…</div>
+      {loading ? <ListSkeleton rows={4} label="Đang tải nhật ký…" />
         : view === 'changes' ? (
           <div className="activity-list">
             {data.audit.length === 0 ? <Empty /> : data.audit.map((row) => (

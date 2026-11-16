@@ -1,3 +1,4 @@
+import { ListSkeleton } from '../components/Skeleton.jsx';
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { api } from '../api';
@@ -73,7 +74,7 @@ export default function About() {
 
           <section className="about-card" aria-labelledby="about-docs-title">
             <h2 id="about-docs-title">{t('about.docsTitle')}</h2>
-            {!about ? <div className="loading-state" role="status"><span></span>{t('common.loading')}</div>
+            {!about ? <ListSkeleton rows={2} label={t('common.loading')} />
               : about.documents.length === 0 ? <p className="muted">{t('about.docsEmpty')}</p>
               : (
                 <ul className="about-docs">
@@ -107,7 +108,7 @@ export default function About() {
         <section className="about-card" aria-labelledby="about-reviews-title">
           <h2 id="about-reviews-title">{t('about.reviewsTitle')}</h2>
           <p className="muted">{t('about.reviewsIntro')}</p>
-          {!reviews ? <div className="loading-state" role="status"><span></span>{t('common.loading')}</div>
+          {!reviews ? <ListSkeleton rows={2} label={t('common.loading')} />
             : reviews.reviews.length === 0 ? <p className="muted">{t('about.reviewsEmpty')}</p>
             : (
               <>

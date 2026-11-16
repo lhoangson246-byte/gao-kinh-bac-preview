@@ -1,3 +1,4 @@
+import { ListSkeleton } from '../components/Skeleton.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import DeliveryPromise from '../components/DeliveryPromise.jsx';
@@ -98,7 +99,7 @@ export default function QuickCheckout() {
   const shippingFee = shippingFeeFor(total);
   const payable = total - codeDiscount + shippingFee;
 
-  if (loading) return <div className="loading-state page-loading" role="status"><span></span>{t('common.loading')}</div>;
+  if (loading) return <ListSkeleton rows={4} label={t('common.loading')} />;
   // Đã đăng nhập thì dùng trang đặt hàng có sổ địa chỉ và đổi điểm.
   if (user && !done) return <Navigate to="/dat-hang" replace />;
 

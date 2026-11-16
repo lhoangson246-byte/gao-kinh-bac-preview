@@ -1,3 +1,4 @@
+import { ListSkeleton } from '../components/Skeleton.jsx';
 import useScrollTabs from '../components/useScrollTabs.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -49,7 +50,7 @@ export default function Retail() {
   useEffect(() => { reload(); }, [reload]);
 
   if (loading) {
-    return <div className="loading-state page-loading" role="status"><span></span>Đang mở màn hình bán hàng…</div>;
+    return <ListSkeleton rows={4} label="Đang mở màn hình bán hàng…" />;
   }
 
   return (
@@ -320,14 +321,20 @@ function SellTab({ products, policy, onDone, notify }) {
               <p>Chỉ những loại đã có giá mới bán được tại quầy.</p></div>
           ) : (
             <div className="pos-grid">
-              {visible.map((p) => (
-                <button key={p.id} type="button" className="pos-item" onClick={() => addLine(p)}>
+              {visible.map((p) => {
+                // Món đã nằm trong hoá đơn: viền xanh và số lượng ngay trên ô, thu ngân khỏi dò lại.
+                const inBill = lines.find((l) => l.product.id === p.id)?.quantity || 0;
+                return (
+                <button key={p.id} type="button" className={`pos-item${inBill ? ' in-bill' : ''}`} onClick={() => addLine(p)}
+                        aria-label={`${p.name}, ${p.unit}${inBill ? `, đã có ${inBill} trong hoá đơn` : ''}`}>
+                  {inBill > 0 && <i className="pos-item-qty" aria-hidden="true">×{inBill}</i>}
                   <ProductImage src={p.image_url} sizes="120px" />
                   <span className="pos-item-name">{p.name}</span>
                   <span className="pos-item-unit">{p.unit}</span>
                   <strong>{formatVND(p.price)}</strong>
                 </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
@@ -514,7 +521,7 @@ function SellTab({ products, policy, onDone, notify }) {
             </div>
 
             {/* Giảm giá tại quầy: cửa hàng tự nhập %, chỉ mở khi đủ khối lượng. */}
-            <div className="pos-discount">
+            <div className={`pos-discount${discount > 0 ? ' active' : !canDiscount ? ' locked' : ''}`}>
               <label>
                 Giảm giá <span className="optional">%</span>
                 <input
@@ -825,7 +832,7 @@ function InvoiceLookupTab() {
       {error && <div className="alert error" role="alert">{error}</div>}
 
       {loading ? (
-        <div className="loading-state" role="status"><span></span>Đang tra cứu…</div>
+        <ListSkeleton rows={4} label="Đang tra cứu…" />
       ) : invoices.length === 0 ? (
         <div className="admin-empty">
           <span>?</span><h2>Không tìm thấy hoá đơn nào</h2>

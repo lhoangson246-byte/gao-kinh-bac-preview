@@ -1,3 +1,4 @@
+import { ListSkeleton } from './Skeleton.jsx';
 import { useEffect, useState } from 'react';
 import { api, formatDateTime } from '../api';
 import { generatePassword, passwordError } from '../password';
@@ -69,7 +70,7 @@ export default function StaffManager() {
   };
 
   if (errors.load) return <p className="alert error">{errors.load}</p>;
-  if (!data) return <div className="loading-state" role="status"><span></span>Đang mở…</div>;
+  if (!data) return <ListSkeleton rows={3} label="Đang mở…" />;
 
   return (
     <div className="about-manager">

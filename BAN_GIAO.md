@@ -1618,9 +1618,14 @@ Giữ nguyên toàn bộ nghiệp vụ, API, đường dẫn, quyền, ba ngôn 
 - **In trang Đóng ngày ra giấy trắng** (từ 01/11): luật in hoá đơn quầy ẩn mọi thứ khác. Đã cho trang Đóng ngày hiện lại khi in.
 - Số KPI trang Kho rơi về font Georgia vì thiếu biến `--font-display`.
 
-### Chưa làm trong đợt này
+### Làm nốt ngày 16/11/2026
+- **Khung xương thay nốt vòng xoay** ở doanh thu, khách hàng, nhật ký, mã giảm giá, nhân viên, về chúng tôi, sổ địa chỉ, công nợ, đóng ngày, đơn của tôi, bán tại quầy, đặt nhanh (17 chỗ). Chỉ còn vòng xoay lúc chuyển trang và lúc kiểm tra đăng nhập, vốn rất ngắn.
+- **Bán tại quầy**: loại gạo đã có trong hoá đơn có viền xanh và số lượng "×2" ngay trên ô; ô giảm giá % có ba trạng thái rõ (khoá khi chưa đủ kg, mở, đang áp dụng màu xanh); thẻ khách quen / khách mới có viền; nút − / + và hình thức thanh toán đang chọn rõ hơn.
+- **Hàng nút lọc trạng thái đơn** trên điện thoại: mờ mép báo còn nút khuất, nút đang chọn tự cuộn vào giữa.
+- Đã soát thêm 8 trang (về chúng tôi, đăng ký, đặt hàng có tài khoản, đơn của tôi, tài khoản, công nợ, đóng ngày, chấm công) ở 375×812 và 1280×800: không tràn ngang, không đè nhau.
+
+### Chưa làm
 - Chưa tách vật lý `styles.css` thành nhiều file (lý do ở trên).
-- Khung xương chưa thay hết mọi vòng xoay (doanh thu, khách hàng, công nợ… vẫn vòng xoay).
 - Thanh tab quản trị dùng chỉ báo cuộn, chưa làm menu ngăn kéo.
 
 ## Tự kiểm tra an toàn

@@ -1,3 +1,4 @@
+import { ListSkeleton } from '../components/Skeleton.jsx';
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import DeliveryPromise from '../components/DeliveryPromise.jsx';
@@ -46,7 +47,7 @@ export default function Orders() {
   };
 
   if (loading) {
-    return <div className="loading-state page-loading" role="status"><span></span>{t('orders.loading')}</div>;
+    return <ListSkeleton rows={3} label={t('orders.loading')} />;
   }
 
   if (loadError) {

@@ -1,3 +1,4 @@
+import { ListSkeleton } from './Skeleton.jsx';
 import { useEffect, useState } from 'react';
 import { api, formatVND, vietnamDate } from '../api';
 
@@ -61,7 +62,7 @@ export default function DiscountCodeManager() {
   };
 
   if (errors.load) return <p className="alert error">{errors.load}</p>;
-  if (!codes) return <div className="loading-state" role="status"><span></span>Đang mở…</div>;
+  if (!codes) return <ListSkeleton rows={3} label="Đang mở…" />;
 
   return (
     <div className="about-manager">

@@ -1,3 +1,4 @@
+import { ListSkeleton } from '../components/Skeleton.jsx';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, formatDateTime, formatVND } from '../api';
@@ -192,7 +193,7 @@ export default function Debts() {
           <input className="input" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm tên khách, công ty, SĐT, mã đơn" />
         </div>
         {error && <p className="alert error" role="alert">{error}</p>}
-        {!data && !error && <div className="loading-state" role="status"><span></span>Đang tải công nợ…</div>}
+        {!data && !error && <ListSkeleton rows={3} label="Đang tải công nợ…" />}
         {data && accounts.length === 0 && (
           <div className="admin-empty"><span>✓</span><h2>{scope === 'open' ? 'Không có công nợ đang tồn đọng' : 'Chưa có khoản nào tất toán'}</h2></div>
         )}

@@ -1,3 +1,4 @@
+import { ListSkeleton } from '../components/Skeleton.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, formatDateTime, formatVND, vietnamDate } from '../api';
@@ -48,7 +49,7 @@ export default function DayClosing() {
   }, []);
 
   if (error && !data) return <p className="alert error">{error}</p>;
-  if (!data) return <div className="loading-state page-loading" role="status"><span></span>Đang tính số liệu…</div>;
+  if (!data) return <ListSkeleton rows={5} label="Đang tính số liệu…" />;
 
   const { lines, totals } = data.figures;
   const counted = data.denominations.reduce((sum, value) => sum + value * (Number(counts[value]) || 0), 0);

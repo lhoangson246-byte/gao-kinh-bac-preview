@@ -1,3 +1,4 @@
+import { ListSkeleton } from './Skeleton.jsx';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { api, vietnamDate } from '../api';
 const ImagePicker = lazy(() => import('./ImagePicker.jsx'));
@@ -66,7 +67,7 @@ export default function AboutManager() {
   };
 
   if (loadError) return <p className="alert error">{loadError}</p>;
-  if (!data) return <div className="loading-state" role="status"><span></span>Đang mở…</div>;
+  if (!data) return <ListSkeleton rows={3} label="Đang mở…" />;
 
   return (
     <div className="about-manager">
@@ -125,7 +126,7 @@ export default function AboutManager() {
               {CATEGORIES.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
             </select>
           </label>
-          <Suspense fallback={<div className="loading-state"><span></span>Đang mở…</div>}>
+          <Suspense fallback={<ListSkeleton rows={3} label="Đang mở…" />}>
             <ImagePicker value={doc.image_url} onChange={(url) => setDoc((cur) => ({ ...cur, image_url: url }))}
                          error={errors.image_url} label="Ảnh chụp giấy tờ" subject="giấy tờ này" maxEdge={1800} optional={false} />
           </Suspense>

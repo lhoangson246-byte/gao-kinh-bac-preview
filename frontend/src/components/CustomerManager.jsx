@@ -1,3 +1,4 @@
+import { ListSkeleton } from './Skeleton.jsx';
 import { generatePassword, passwordError } from '../password';
 import { useCallback, useEffect, useState } from 'react';
 import { api, formatDateTime, formatVND, mapLink, CUSTOMER_SEGMENTS } from '../api';
@@ -209,7 +210,7 @@ export default function CustomerManager() {
       )}
 
       {loading ? (
-        <div className="loading-state" role="status"><span></span>Đang tải danh sách khách…</div>
+        <ListSkeleton rows={4} label="Đang tải danh sách khách…" />
       ) : customers.length === 0 ? (
         <div className="admin-empty">
           <span>?</span><h2>Không tìm thấy khách hàng nào</h2>
@@ -283,7 +284,7 @@ export default function CustomerManager() {
                 {opened === c.id && (
                   <div className="customer-detail">
                     {!detail ? (
-                      <div className="loading-state" role="status"><span></span>Đang tải…</div>
+                      <ListSkeleton rows={4} label="Đang tải…" />
                     ) : (
                       <>
                         <h3>Địa chỉ đã lưu ({detail.addresses.length})</h3>

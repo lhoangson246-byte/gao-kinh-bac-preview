@@ -106,6 +106,8 @@ export default function Admin() {
   const [showForm, setShowForm] = useState(false);
   const [receiving, setReceiving] = useState(null);   // loại gạo đang nhập kho
   const [loading, setLoading] = useState(true);
+  // Hàng nút lọc chỉ có sau khi tải xong và ở mục Đơn hàng, nên canh lại khi các trạng thái này đổi.
+  const filterRef = useScrollTabs(`${filter}|${tab}|${loading}`);
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
@@ -707,7 +709,7 @@ export default function Admin() {
                       </button>
                     </div>
                   )}
-                  <div className="filter-bar" aria-label="Lọc đơn theo trạng thái">
+                  <div className="filter-bar" aria-label="Lọc đơn theo trạng thái" ref={filterRef}>
                     {FILTERS.map(([value, label]) => {
                       const count = counts[value] || 0;
                       return <button key={value} className={filter === value && !transferOnly ? 'active' : ''} onClick={() => { setTransferOnly(false); pickFilter(value); }}>{label} <span>{count}</span></button>;

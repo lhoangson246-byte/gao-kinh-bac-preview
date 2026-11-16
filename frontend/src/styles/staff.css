@@ -113,3 +113,29 @@
 .delivery-items li { color: #111; font-size: 1.02rem; }
 .delivery-meta { color: #3b423c; font-weight: 650; }
 .finder-actions .btn { min-height: 56px; font-size: 1.05rem; font-weight: 800; }
+
+/* ---------- Bán tại quầy: trạng thái nhìn là biết (16/11/2026) ---------- */
+/* Món đã nằm trong hoá đơn: viền xanh + số lượng ở góc ô. */
+.pos-item { position: relative; }
+.pos-item.in-bill { border: 2px solid var(--green-800); background: var(--green-100); }
+.pos-item-qty { position: absolute; top: 6px; right: 6px; z-index: 1; min-width: 30px; padding: 2px 7px; border-radius: 99px; background: var(--green-900); color: #fff; font-size: .82rem; font-style: normal; font-weight: 850; text-align: center; box-shadow: 0 0 0 2px #fff; }
+/* Khách đã tra thấy / khách mới: thẻ có viền rõ thay vì chỉ đổi nền. */
+.pos-customer-card { border: 1.5px solid #9cc9ad; box-shadow: inset 4px 0 0 var(--green-800); }
+.pos-customer-card.new { border-color: #e6cf9a; box-shadow: inset 4px 0 0 var(--gold); }
+/* Giảm giá %: đang áp dụng thì xanh, chưa đủ kg thì mờ kèm ổ khoá. */
+.pos-discount { margin: 4px 0; padding: 9px 10px; border: 1.5px solid var(--border); border-radius: 12px; }
+.pos-discount.active { border-color: #9cc9ad; background: var(--success-light); }
+.pos-discount.locked { border-style: dashed; background: var(--cream); color: var(--muted); }
+.pos-discount.locked label::before { content: '🔒 '; }
+.pos-discount > strong { font-size: 1.08rem; font-variant-numeric: tabular-nums; }
+.pos-totals .grand-total strong { font-size: 1.5rem; }
+.pos-line .qty-stepper button { min-width: 40px; min-height: 40px; }
+.pos-pay .payment-options label.selected { border-color: var(--green-900); box-shadow: 0 0 0 2px var(--green-900); background: var(--green-100); }
+
+/* ---------- Hàng nút lọc cuộn ngang (trạng thái đơn): mờ mép còn nút khuất ---------- */
+.filter-bar { scrollbar-width: none; }
+.filter-bar::-webkit-scrollbar { display: none; }
+.filter-bar[data-more="right"] { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent); }
+.filter-bar[data-more="left"] { -webkit-mask-image: linear-gradient(270deg, #000 calc(100% - 48px), transparent); mask-image: linear-gradient(270deg, #000 calc(100% - 48px), transparent); }
+.filter-bar[data-more="left right"] { -webkit-mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 48px), transparent); mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 48px), transparent); }
+.filter-bar button { min-height: 40px; }

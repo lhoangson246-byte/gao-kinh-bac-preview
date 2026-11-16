@@ -1,3 +1,4 @@
+import { ListSkeleton } from './Skeleton.jsx';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, formatVND } from '../api';
 import OrdersExportButton from './OrdersExportButton.jsx';
@@ -142,7 +143,7 @@ export default function RevenueReport() {
       )}
 
       {loading ? (
-        <div className="loading-state" role="status"><span></span>Đang tính doanh thu…</div>
+        <ListSkeleton rows={4} label="Đang tính doanh thu…" />
       ) : data && (
         <>
           <p className="revenue-period">Kỳ báo cáo: <strong>{data.period.label}</strong></p>

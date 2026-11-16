@@ -1,3 +1,4 @@
+import { ListSkeleton } from './Skeleton.jsx';
 import { useEffect, useState } from 'react';
 import { api, isPhone, mapLink, mentionsOtherProvince } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -195,7 +196,7 @@ export default function AddressBook({ selectable = false, selectedId = null, onS
   };
 
   if (loading) {
-    return <div className="loading-state address-loading"><span></span>{t('address.loading')}</div>;
+    return <ListSkeleton rows={2} label={t('address.loading')} />;
   }
 
   return (
