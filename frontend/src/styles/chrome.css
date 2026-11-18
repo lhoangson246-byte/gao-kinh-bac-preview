@@ -75,12 +75,13 @@ h1, h2 { font-family: var(--font-display); }
 
 /* ---------- Thanh trên cùng: nút cài ứng dụng + chọn ngôn ngữ (18/11/2026) ----------
  * .nav-tools nằm ngoài .nav-panel nên vẫn hiện trên điện thoại. Mọi nút/chữ trên thanh không
- * xuống dòng; chỗ hẹp thì thu gọn dần thay vì tràn ngang:
- *   > 1100px  đủ chỗ: biểu tượng + "Cài app" cạnh nút ngôn ngữ.
- *   781–1100  máy tính bảng: bỏ dòng phụ dưới tên, thu nhỏ khoảng cách, nút cài chỉ còn biểu tượng.
- *   ≤ 780px   điện thoại: nút cài xếp biểu tượng trên chữ, vừa ô 44px. */
+ * xuống dòng; chỗ hẹp thì thu gọn dần hoặc tách hàng thay vì tràn đè:
+ *   > 1120px   1 hàng đầy đủ: biểu tượng + "Cài app" cạnh nút ngôn ngữ.
+ *   961–1120   1 hàng gọn: bỏ dòng phụ dưới tên, thu nhỏ khoảng cách, nút cài chỉ còn biểu tượng.
+ *   781–960    máy tính bảng: chia 2 hàng gọn để nút Tài khoản không đè lên Cài app / Ngôn ngữ.
+ *   ≤ 780px    điện thoại: thanh tab ở đáy màn hình, nút cài xếp biểu tượng trên chữ (ô 44px). */
 .nav-links a, .nav-auth .btn, .hello, .btn-install { white-space: nowrap; }
-.nav-tools { flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-2); margin-left: -18px; }
+.nav-tools { flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-2); margin-left: 0; }
 .nav-tools:empty { display: none; }
 .nav-tools .lang-switch { margin-left: 0; }
 .btn-install { position: relative; gap: 6px; min-height: 36px; padding: 6px 13px 6px 11px; border-color: rgba(255, 255, 255, .32); border-radius: 99px; background: rgba(255, 255, 255, .08); color: var(--white); font-size: var(--text-sm); }
@@ -89,7 +90,7 @@ h1, h2 { font-family: var(--font-display); }
 .btn-install::after { content: ''; position: absolute; inset: -4px; }
 .btn-install svg { flex: 0 0 auto; width: 18px; height: 18px; }
 
-@media (min-width: 781px) and (max-width: 1100px) {
+@media (min-width: 781px) and (max-width: 1120px) {
   .nav-inner { gap: var(--space-4); }
   .brand small { display: none; }
   .nav-panel { min-width: 0; gap: var(--space-3); }
@@ -98,9 +99,18 @@ h1, h2 { font-family: var(--font-display); }
   .nav-auth { gap: var(--space-1); }
   .nav-auth .btn { min-height: 38px; padding: 7px 12px; font-size: var(--text-sm); }
   .hello { padding: 6px; font-size: var(--text-sm); }
-  .nav-tools { margin-left: 0; }
+}
+
+@media (min-width: 961px) and (max-width: 1120px) {
   .btn-install { width: 36px; padding: 0; }
   .btn-install .install-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+}
+
+@media (min-width: 781px) and (max-width: 960px) {
+  .nav-inner { flex-wrap: wrap; gap: 8px 16px; padding-block: 10px; }
+  .brand { order: 1; }
+  .nav-tools { order: 2; margin-left: auto; }
+  .nav-panel { order: 3; flex: 1 0 100%; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, .12); }
 }
 
 @media (max-width: 780px) {
