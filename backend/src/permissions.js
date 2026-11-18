@@ -20,7 +20,7 @@ export const PERMISSIONS = {
   'debt.final': 'Mẹ duyệt tất toán đơn nợ',
   'closing.manage': 'Đóng ngày: kê tiền, lưu và xuất báo cáo cuối ngày',
   'wholesale.manage': 'Khách buôn: thêm khách buôn, mã đăng nhập và bảng giá cố định',
-  'attendance.manage': 'Chấm công: xem bảng công tháng của mọi người và sửa giờ cho người quên chấm',
+  'attendance.manage': 'Chấm công (quản lý): tích 1 công / 0,5 công / Nghỉ cho nhân viên mỗi ngày, xem bảng công cả tháng',
   'inventory.view': 'Kho hàng: xem tồn Cửa hàng Nguyễn Cao, Kho Bồ Sơn và nhật ký kho',
   'inventory.receive': 'Kho hàng: tạo phiếu nhập kho (công gạo, hàng nhập cửa hàng)',
   'inventory.transfer': 'Kho hàng: tạo lệnh điều chuyển giữa hai kho và xác nhận đã nhận hàng',

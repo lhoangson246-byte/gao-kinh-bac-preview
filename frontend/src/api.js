@@ -160,10 +160,12 @@ export const api = {
   /** Tìm khách / địa chỉ để chỉ đường, kể cả khách không có đơn giao cho mình. */
   deliverySearch: (q, signal) => request(`/delivery/search?${new URLSearchParams({ q })}`, { auth: true, signal }),
   attendanceMe: (month) => request(`/attendance/me${month ? `?month=${encodeURIComponent(month)}` : ''}`, { auth: true }),
-  attendanceClockIn: () => request('/attendance/clock-in', { method: 'POST', auth: true }),
-  attendanceClockOut: () => request('/attendance/clock-out', { method: 'POST', auth: true }),
   attendanceMonth: (month) => request(`/attendance/month?month=${encodeURIComponent(month)}`, { auth: true }),
-  attendanceSaveEntry: (payload) => request('/attendance/entry', { method: 'PUT', body: payload, auth: true }),
+  /** Quản lý tích công: { user_ids, work_date, units: 1 | 0.5 | 0 | null, note?, only_empty? }. */
+  attendanceMark: (payload) => request('/attendance/mark', { method: 'PUT', body: payload, auth: true }),
+  /** Hồ sơ khách tự lưu theo số điện thoại. */
+  customerProfileLookup: (phone, signal) => request(`/admin/customer-profiles/lookup?${new URLSearchParams({ phone })}`, { auth: true, signal }),
+  customerProfiles: ({ q = '', offset = 0 } = {}) => request(`/admin/customer-profiles?${new URLSearchParams({ ...(q ? { q } : {}), ...(offset ? { offset } : {}) })}`, { auth: true }),
   deliverySetStatus: (orderId, status, photo) => request(`/delivery/orders/${orderId}/status`, { method: 'PATCH', auth: true, body: { status, ...(photo ? { photo } : {}) } }),
   deliveryDebt: (orderId, body) => request(`/delivery/orders/${orderId}/debt`, { method: 'POST', auth: true, body }),
   // Ảnh chứng từ (giao hàng, hoá đơn nợ): riêng tư, chỉ người trong cửa hàng xem được.

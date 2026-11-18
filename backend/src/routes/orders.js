@@ -20,6 +20,7 @@ import { notifyNewOrder, notifyTransferReported, siteOrigin } from '../push.js';
 import { trackOrder, trackOrdersByPhone } from '../order-tracking.js';
 import { findUsableCode, normalizeCode, publicCode } from '../discount-codes.js';
 import { wholesaleOfUser } from '../wholesale.js';
+import { rememberCustomer } from '../customer-profiles.js';
 
 const router = Router();
 
@@ -230,6 +231,12 @@ export function placeOrder({
         gift.product?.name || gift.choice.name, gift.product?.unit || 'kg', gift.kg,
         gift.product?.cost_price ?? 0, gift.promo.code);
     }
+
+    // Hồ sơ khách theo số điện thoại: tên, địa chỉ, định vị mới nhất (18/11/2026).
+    rememberCustomer({
+      phone: customerPhone, name: receiverName, orderId, mapUrl, lat, lng,
+      address: staff?.fulfillment === 'pickup' ? null : deliveryAddress,
+    });
 
     // Ghi nhớ địa chỉ mặc định nếu tài khoản chưa có (đơn mua nhanh không có tài khoản riêng).
     if (!guest) {

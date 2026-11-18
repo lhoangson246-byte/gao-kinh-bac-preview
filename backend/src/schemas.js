@@ -321,9 +321,12 @@ add('inventory', 'POST', /^\/count\/?$/, obj({
 const monthQuery = obj({ month: z.string().max(7).optional() });
 add('attendance', 'GET', /^\/(me|month)\/?$/, empty, monthQuery);
 add('attendance', 'POST', /^\/clock-(in|out)\/?$/);
-add('attendance', 'PUT', /^\/entry\/?$/, obj({
-  user_id: integer(1), work_date: z.string().max(10), in_time: z.string().max(5), out_time: z.string().max(5).optional(), note: optionalText(300),
+add('attendance', 'PUT', /^\/mark\/?$/, obj({
+  user_id: integer(1).optional(), user_ids: z.array(integer(1)).max(200).optional(), work_date: z.string().max(10),
+  units: z.union([z.literal(1), z.literal(0.5), z.literal(0), z.null()]), note: optionalText(300), only_empty: flag.optional(),
 }));
+add('customer-profiles', 'GET', /^\/lookup\/?$/, empty, obj({ phone: z.string().max(20) }));
+add('customer-profiles', 'GET', /^\/?$/, empty, obj({ q: z.string().max(80).optional(), offset: integer(0, 100000).optional() }));
 add('closing', 'GET', /^\/history\/?$/);
 add('closing', 'GET', /^\/export\/?$/, empty, obj({ day: z.string().max(10) }));
 add('closing', 'POST', /^\/?$/, obj({ day: z.string().max(10), counts: z.record(z.string().max(7), z.union([z.number(), z.string().max(7)])).optional(), note: optionalText(1000) }));

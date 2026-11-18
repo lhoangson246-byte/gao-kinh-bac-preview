@@ -9,12 +9,15 @@ import { writeAdminAudit } from '../audit.js';
 import { todayVN } from '../debts.js';
 
 /**
- * /api/attendance — chấm công (11/11/2026). Mọi tài khoản nhân viên và chủ cửa hàng tự chấm vào / ra
- * mỗi ngày; giờ luôn lấy theo đồng hồ máy chủ, không nhận giờ từ điện thoại. Người có quyền
- * `attendance.manage` (kế toán, quản lý) xem bảng công cả tháng và sửa giờ cho người quên chấm.
+ * /api/attendance — chấm công.
  *
- * Quy đổi số công theo yêu cầu cửa hàng: làm từ 7 tiếng trở lên = 1 công (thường vào 7h–8h, ra trước
- * 18h, khoảng 10 tiếng); dưới 7 tiếng = 0,5 công; chưa chấm ra = chưa tính công.
+ * Từ 18/11/2026 (cửa hàng đổi quy chuẩn): CHỈ QUẢN LÝ chấm công. Người có quyền `attendance.manage` tích
+ * cho từng nhân viên mỗi ngày 1 công, 0,5 công hoặc Nghỉ (0), và xem bảng công cả tháng. Nhân viên không
+ * tự chấm vào / ra nữa, chỉ xem công của chính mình.
+ *
+ * Dữ liệu chấm vào / ra cũ (bảng `attendance`, trước 18/11) vẫn được tính cho những ngày quản lý chưa tích:
+ * từ 7 tiếng trở lên = 1 công, dưới 7 tiếng = 0,5 công, chưa chấm ra = chưa tính. Quản lý tích ngày nào thì
+ * số quản lý tích được dùng.
  */
 export const FULL_DAY_MINUTES = 7 * 60;
 export const congFor = (minutes) => {
@@ -22,34 +25,49 @@ export const congFor = (minutes) => {
   if (minutes >= FULL_DAY_MINUTES) return 1;
   return minutes > 0 ? 0.5 : 0;
 };
+export const MARK_UNITS = [1, 0.5, 0];
 
 const router = Router();
 router.use(requireAuth, requireStaff, validateRoutes('attendance'));
 
-// Giờ lưu theo UTC; đổi sang giờ Việt Nam khi đọc và đổi ngược lại khi quản lý nhập tay.
 const SHIFT = REPORT_TIME_SHIFT;
-const BACK_SHIFT = SHIFT.startsWith('-') ? `+${SHIFT.slice(1)}` : `-${SHIFT.replace(/^\+/, '')}`;
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
-const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-const ROW_SQL = `
-  SELECT a.id, a.user_id, a.work_date, a.note, a.edited_at, e.full_name AS edited_by_name,
+// Ngày công cũ (tự chấm vào / ra trước khi đổi quy chuẩn).
+const CLOCK_SQL = `
+  SELECT a.user_id, a.work_date,
          strftime('%H:%M', a.clock_in, '${SHIFT}') AS in_time,
          strftime('%H:%M', a.clock_out, '${SHIFT}') AS out_time,
          CASE WHEN a.clock_out IS NULL THEN NULL
               ELSE CAST(ROUND((julianday(a.clock_out) - julianday(a.clock_in)) * 1440) AS INTEGER) END AS minutes
-  FROM attendance a LEFT JOIN users e ON e.id = a.edited_by`;
+  FROM attendance a`;
+// Công quản lý tích.
+const MARK_SQL = `
+  SELECT m.user_id, m.work_date, m.units, m.note, m.marked_at, COALESCE(u.full_name, m.marker_name) AS marked_by_name
+  FROM attendance_marks m LEFT JOIN users u ON u.id = m.marked_by`;
 
-const shape = (r) => (!r ? null : {
-  id: r.id, user_id: r.user_id, work_date: r.work_date, in_time: r.in_time, out_time: r.out_time,
-  minutes: r.minutes, cong: congFor(r.minutes), open: !r.out_time, note: r.note || null,
-  edited_at: r.edited_at || null, edited_by_name: r.edited_by_name || null,
-});
+/** Gộp hai nguồn thành từng ngày: { work_date, cong, source: 'mark' | 'clock', … }. Ngày tích thắng ngày chấm. */
+function daysOf(where, args) {
+  const byKey = new Map();
+  for (const r of db.prepare(`${CLOCK_SQL} WHERE ${where.replaceAll('?.', 'a.')}`).all(...args)) {
+    byKey.set(`${r.user_id}|${r.work_date}`, {
+      user_id: r.user_id, work_date: r.work_date, source: 'clock', cong: congFor(r.minutes),
+      open: !r.out_time, in_time: r.in_time, out_time: r.out_time, minutes: r.minutes,
+    });
+  }
+  for (const r of db.prepare(`${MARK_SQL} WHERE ${where.replaceAll('?.', 'm.')}`).all(...args)) {
+    byKey.set(`${r.user_id}|${r.work_date}`, {
+      user_id: r.user_id, work_date: r.work_date, source: 'mark', cong: r.units, open: false,
+      note: r.note || null, marked_by_name: r.marked_by_name || null, marked_at: r.marked_at,
+    });
+  }
+  return [...byKey.values()].sort((a, b) => a.work_date.localeCompare(b.work_date));
+}
 
 const totalsOf = (rows) => ({
-  days: rows.length,
+  days: rows.filter((r) => r.cong > 0).length,
   cong: rows.reduce((sum, r) => sum + r.cong, 0),
-  minutes: rows.reduce((sum, r) => sum + (r.minutes || 0), 0),
+  off: rows.filter((r) => r.source === 'mark' && r.cong === 0).length,
   open: rows.filter((r) => r.open).length,
 });
 
@@ -59,66 +77,44 @@ const monthOf = (value) => {
   return value;
 };
 const daysInMonth = (month) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+const validDay = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`))
+  && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
 
-const todayRecord = (userId) => shape(db.prepare(`${ROW_SQL} WHERE a.user_id = ? AND a.work_date = ?`).get(userId, todayVN()));
-function myPayload(userId, month) {
-  const days = db.prepare(`${ROW_SQL} WHERE a.user_id = ? AND a.work_date LIKE ? ORDER BY a.work_date DESC`)
-    .all(userId, `${month}-%`).map(shape);
-  return {
-    today: todayVN(),
-    now: db.prepare(`SELECT strftime('%H:%M', 'now', '${SHIFT}') AS t`).get().t,
-    record: todayRecord(userId),
-    month, days, totals: totalsOf(days), full_day_hours: FULL_DAY_MINUTES / 60,
-  };
-}
-
-/** GET /api/attendance/me?month=YYYY-MM — hôm nay đã chấm chưa, và lịch sử của chính mình trong tháng. */
+/** GET /api/attendance/me?month=YYYY-MM — công của chính mình trong tháng (chỉ xem). */
 router.get('/me', (req, res, next) => {
-  try { res.json(myPayload(req.user.id, monthOf(req.query.month))); } catch (err) { next(err); }
-});
-
-/** POST /api/attendance/clock-in — chấm vào; mỗi ngày một lần. */
-router.post('/clock-in', (req, res, next) => {
   try {
-    const changed = db.prepare("INSERT OR IGNORE INTO attendance (user_id, work_date, clock_in) VALUES (?, ?, datetime('now'))")
-      .run(req.user.id, todayVN()).changes;
-    if (!changed) {
-      throw new HttpError(409, `Hôm nay bạn đã chấm công vào lúc ${todayRecord(req.user.id)?.in_time || ''}.`);
-    }
-    res.status(201).json(myPayload(req.user.id, todayVN().slice(0, 7)));
+    const month = monthOf(req.query.month);
+    const days = daysOf('?.user_id = ? AND ?.work_date LIKE ?', [req.user.id, `${month}-%`]).reverse();
+    res.json({
+      today: todayVN(), month, days, totals: totalsOf(days),
+      today_record: days.find((d) => d.work_date === todayVN()) || null,
+      manager: can(req.user, 'attendance.manage'),
+    });
   } catch (err) { next(err); }
 });
 
-/** POST /api/attendance/clock-out — chấm ra cho ca hôm nay. */
-router.post('/clock-out', (req, res, next) => {
-  try {
-    const changed = db.prepare(`
-      UPDATE attendance SET clock_out = datetime('now') WHERE user_id = ? AND work_date = ? AND clock_out IS NULL
-    `).run(req.user.id, todayVN()).changes;
-    if (!changed) {
-      const current = todayRecord(req.user.id);
-      throw current
-        ? new HttpError(409, `Hôm nay bạn đã chấm công ra lúc ${current.out_time}.`)
-        : new HttpError(400, 'Bạn chưa chấm công vào hôm nay.');
-    }
-    res.json(myPayload(req.user.id, todayVN().slice(0, 7)));
-  } catch (err) { next(err); }
+/** Chấm vào / ra đã bỏ: báo rõ cho máy còn giữ giao diện cũ. */
+const selfClockRemoved = (req, res) => res.status(403).json({
+  message: 'Chấm công do quản lý thực hiện. Nếu thiếu công, vui lòng báo quản lý.',
 });
+router.post('/clock-in', selfClockRemoved);
+router.post('/clock-out', selfClockRemoved);
 
 /**
- * GET /api/attendance/month?month=YYYY-MM — bảng công cả tháng: mỗi nhân viên một dòng, mỗi ngày
- * một ô số công. Có nhân viên đang hoạt động, và cả người đã nghỉ nhưng có chấm công trong tháng.
+ * GET /api/attendance/month?month=YYYY-MM — bảng công cả tháng (quản lý): mỗi nhân viên một dòng, mỗi
+ * ngày một ô số công. Gồm nhân viên đang làm và cả người đã nghỉ nhưng có công trong tháng.
  */
 router.get('/month', requirePermission('attendance.manage'), (req, res, next) => {
   try {
     const month = monthOf(req.query.month);
-    const rows = db.prepare(`${ROW_SQL} WHERE a.work_date LIKE ? ORDER BY a.work_date`).all(`${month}-%`).map(shape);
+    const rows = daysOf('?.work_date LIKE ?', [`${month}-%`]);
     const people = db.prepare(`
       SELECT id, full_name, staff_title, role FROM users
       WHERE (role = 'staff' AND is_locked = 0)
          OR id IN (SELECT user_id FROM attendance WHERE work_date LIKE ?)
+         OR id IN (SELECT user_id FROM attendance_marks WHERE work_date LIKE ?)
       ORDER BY CASE role WHEN 'admin' THEN 0 ELSE 1 END, full_name
-    `).all(`${month}-%`);
+    `).all(`${month}-%`, `${month}-%`);
     const staff = people.map((p) => {
       const own = rows.filter((r) => r.user_id === p.id);
       return {
@@ -127,68 +123,66 @@ router.get('/month', requirePermission('attendance.manage'), (req, res, next) =>
         totals: totalsOf(own),
       };
     });
-    res.json({ month, days_in_month: daysInMonth(month), today: todayVN(), staff, full_day_hours: FULL_DAY_MINUTES / 60 });
+    res.json({ month, days_in_month: daysInMonth(month), today: todayVN(), staff, units: MARK_UNITS });
   } catch (err) { next(err); }
 });
 
 /**
- * PUT /api/attendance/entry — quản lý sửa / bổ sung giờ công cho một người một ngày (quên chấm ra,
- * điện thoại hết pin…). Bỏ trống giờ vào = xoá ngày công đó. Bắt buộc ghi lý do; có nhật ký.
- * Nhân viên không tự sửa công của chính mình (trừ chủ cửa hàng).
+ * PUT /api/attendance/mark — quản lý tích công. body: { user_ids: [id…] (hoặc user_id), work_date,
+ * units: 1 | 0.5 | 0 | null, note?, only_empty? }. units = 0 là Nghỉ; null là bỏ ô đã tích. `only_empty`
+ * (tích cả cột một ngày) thì chỉ tích những người chưa có công ngày đó. Có nhật ký thay đổi.
+ * Quản lý không tự tích công cho chính mình (trừ chủ cửa hàng).
  */
-router.put('/entry', requirePermission('attendance.manage'), (req, res, next) => {
+router.put('/mark', requirePermission('attendance.manage'), (req, res, next) => {
   try {
     const body = req.body || {};
-    const userId = toInteger(body.user_id, { min: 1 });
+    const ids = [...new Set((Array.isArray(body.user_ids) ? body.user_ids : [body.user_id]).map((v) => toInteger(v, { min: 1 })))];
     const workDate = String(body.work_date || '');
-    const inTime = String(body.in_time || '');
-    const outTime = String(body.out_time || '');
+    const units = body.units === null ? null : Number(body.units);
     const note = cleanText(body.note, 300);
     const errors = {};
-    const person = userId && db.prepare("SELECT id, full_name, role FROM users WHERE id = ? AND role IN ('staff', 'admin')").get(userId);
-    if (!person) errors.user_id = 'Không tìm thấy nhân viên.';
-    const validDay = /^\d{4}-\d{2}-\d{2}$/.test(workDate) && !Number.isNaN(Date.parse(`${workDate}T00:00:00Z`))
-      && new Date(`${workDate}T00:00:00Z`).toISOString().slice(0, 10) === workDate;
-    if (!validDay) errors.work_date = 'Ngày không hợp lệ.';
+    if (!ids.length || ids.some((v) => !v) || ids.length > 200) errors.user_id = 'Chọn nhân viên.';
+    if (!validDay(workDate)) errors.work_date = 'Ngày không hợp lệ.';
     else if (workDate > todayVN()) errors.work_date = 'Không chấm công trước cho ngày chưa tới.';
-    if (inTime && !TIME_RE.test(inTime)) errors.in_time = 'Giờ vào dạng HH:MM.';
-    if (outTime && !TIME_RE.test(outTime)) errors.out_time = 'Giờ ra dạng HH:MM.';
-    if (outTime && !inTime) errors.in_time = 'Nhập giờ vào trước.';
-    if (inTime && outTime && TIME_RE.test(inTime) && TIME_RE.test(outTime) && outTime <= inTime) errors.out_time = 'Giờ ra phải sau giờ vào.';
-    if (!note || note.length < 5) errors.note = 'Ghi lý do sửa (ít nhất 5 ký tự).';
+    if (units !== null && !MARK_UNITS.includes(units)) errors.units = 'Chỉ tích 1 công, 0,5 công hoặc Nghỉ.';
     if (Object.keys(errors).length) throw new HttpError(400, 'Dữ liệu chấm công chưa hợp lệ.', errors);
-    if (req.user.role !== 'admin' && person.id === req.user.id) {
-      throw new HttpError(403, 'Bạn không tự sửa giờ công của chính mình được. Vui lòng nhờ chủ cửa hàng.');
+
+    const people = db.prepare(`SELECT id, full_name FROM users WHERE id IN (${ids.map(() => '?').join(',')}) AND role IN ('staff', 'admin')`).all(...ids);
+    if (people.length !== ids.length) throw new HttpError(400, 'Có người không phải nhân viên.', { user_id: 'Không tìm thấy nhân viên.' });
+    if (req.user.role !== 'admin' && ids.includes(req.user.id)) {
+      throw new HttpError(403, 'Bạn không tự chấm công cho chính mình được. Vui lòng nhờ chủ cửa hàng.');
     }
 
-    const result = db.transaction(() => {
-      const find = db.prepare(`${ROW_SQL} WHERE a.user_id = ? AND a.work_date = ?`);
-      const before = shape(find.get(person.id, workDate));
-      if (!inTime) {
-        if (before) db.prepare('DELETE FROM attendance WHERE id = ?').run(before.id);
-        return { before, after: null };
+    const changes = db.transaction(() => {
+      const findMark = db.prepare('SELECT units FROM attendance_marks WHERE user_id = ? AND work_date = ?');
+      const hasClock = db.prepare('SELECT 1 FROM attendance WHERE user_id = ? AND work_date = ?');
+      const upsert = db.prepare(`
+        INSERT INTO attendance_marks (user_id, work_date, units, note, marked_by, marker_name, marked_at)
+        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT (user_id, work_date) DO UPDATE SET units = excluded.units, note = excluded.note,
+          marked_by = excluded.marked_by, marker_name = excluded.marker_name, marked_at = excluded.marked_at
+      `);
+      const remove = db.prepare('DELETE FROM attendance_marks WHERE user_id = ? AND work_date = ?');
+      const done = [];
+      for (const person of people) {
+        const before = findMark.get(person.id, workDate)?.units ?? null;
+        if (body.only_empty && (before !== null || hasClock.get(person.id, workDate))) continue;
+        if (units === null) {
+          if (before === null) continue;
+          remove.run(person.id, workDate);
+        } else {
+          if (before === units && !note) continue;
+          upsert.run(person.id, workDate, units, note, req.user.id, req.user.full_name);
+        }
+        done.push({ person: person.full_name, before, after: units });
       }
-      const toUtc = (time) => `datetime('${workDate} ${time}', '${BACK_SHIFT}')`;
-      if (before) {
-        db.prepare(`
-          UPDATE attendance SET clock_in = ${toUtc(inTime)}, clock_out = ${outTime ? toUtc(outTime) : 'NULL'},
-            note = ?, edited_by = ?, edited_at = datetime('now') WHERE id = ?
-        `).run(note, req.user.id, before.id);
-      } else {
-        db.prepare(`
-          INSERT INTO attendance (user_id, work_date, clock_in, clock_out, note, edited_by, edited_at)
-          VALUES (?, ?, ${toUtc(inTime)}, ${outTime ? toUtc(outTime) : 'NULL'}, ?, ?, datetime('now'))
-        `).run(person.id, workDate, note, req.user.id);
-      }
-      return { before, after: shape(find.get(person.id, workDate)) };
+      return done;
     })();
 
-    writeAdminAudit(req, {
-      action: result.after ? 'attendance_edit' : 'attendance_delete', entityType: 'attendance', entityId: person.id,
-      before: result.before && { ...result.before, person: person.full_name },
-      after: result.after ? { ...result.after, person: person.full_name } : { work_date: workDate, note },
-    });
-    res.json({ record: result.after });
+    if (changes.length) {
+      writeAdminAudit(req, { action: 'attendance_mark', entityType: 'attendance', entityId: workDate, after: { work_date: workDate, note, changes } });
+    }
+    res.json({ changed: changes.length, days: daysOf(`?.work_date = ? AND ?.user_id IN (${ids.map(() => '?').join(',')})`, [workDate, ...ids]) });
   } catch (err) { next(err); }
 });
 

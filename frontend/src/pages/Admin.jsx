@@ -4,6 +4,7 @@ const ImagePicker = lazy(() => import('../components/ImagePicker.jsx'));
 const BannerSettings = lazy(() => import('../components/BannerSettings.jsx'));
 const GroupManager = lazy(() => import('../components/GroupManager.jsx'));
 const UpsellManager = lazy(() => import('../components/UpsellManager.jsx'));
+const CustomerProfiles = lazy(() => import('../components/CustomerProfiles.jsx'));
 const ProductsByGroup = lazy(() => import('../components/ProductsByGroup.jsx'));
 import OrderAlerts from '../components/OrderAlerts.jsx';
 import PushSettings from '../components/PushSettings.jsx';
@@ -567,7 +568,7 @@ export default function Admin() {
           </Link>}
           <Link to="/quan-tri/cham-cong" className="admin-sidebar-link">
             <span aria-hidden="true">⏱</span>
-            <span>Chấm công<small>{can('attendance.manage') ? 'Vào ca, ra ca, bảng công tháng' : 'Vào ca, ra ca, lịch sử'}</small></span>
+            <span>Chấm công<small>{can('attendance.manage') ? 'Tích công, bảng công tháng' : 'Xem công của tôi'}</small></span>
           </Link>
           {canManageOrders && <div className="admin-help"><strong>Cần làm gì trước?</strong><p>Ưu tiên các đơn “Chờ xác nhận”, gọi khách rồi bấm “Xác nhận đơn”.</p></div>}
         </aside>
@@ -661,7 +662,7 @@ export default function Admin() {
                 : tab === 'staff' ? <StaffManager />
                 : tab === 'wholesale' ? <WholesaleManager />
                 : tab === 'revenue' ? <RevenueReport />
-                : tab === 'customers' ? <CustomerManager />
+                : tab === 'customers' ? <><CustomerProfiles /><CustomerManager /></>
                 : tab === 'orders' ? (
                 <section>
                   <div className="orders-toolbar">
@@ -673,6 +674,7 @@ export default function Admin() {
                       <button type="button" className={`btn btn-secondary${dateFrom === today && dateTo === today ? ' active' : ''}`} onClick={() => pickDay(today)}>Hôm nay</button>
                       <button type="button" className={`btn btn-secondary${dateFrom === yesterday && dateTo === yesterday ? ' active' : ''}`} onClick={() => pickDay(yesterday)}>Hôm qua</button>
                       {dateFrom && <button type="button" className="link-button" onClick={() => { setDateFrom(''); setDateTo(''); setOffset(0); }}>Mọi ngày</button>}
+                      {dateFrom && <small className="orders-date-rule">Hoàn thành tính theo ngày giao xong, Đã huỷ theo ngày huỷ, còn lại theo ngày đặt.</small>}
                     </div>
                     <div className="orders-actions">
                       {filter === 'confirmed' && !transferOnly && orders.some((o) => o.status === 'confirmed') && (

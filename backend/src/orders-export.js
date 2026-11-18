@@ -1,3 +1,4 @@
+import { orderDaySql } from './order-lists.js';
 import db from './db.js';
 import { localDate, REPORT_TIME_SHIFT } from './constants.js';
 import { HttpError } from './validate.js';
@@ -12,6 +13,10 @@ const slotNames = { sang: 'Buổi sáng 07:00–11:30', chieu: 'Buổi chiều 1
  * `status`: chỉ xuất đơn online ở trạng thái đó (ví dụ 'completed' — đơn đã giao xong) và bỏ hoá đơn
  * quầy; không truyền thì xuất mọi đơn online lẫn hoá đơn quầy như trước.
  */
+// Ngày của đơn online giống màn hình Đơn hàng: Hoàn thành theo ngày giao xong, Đã huỷ theo ngày huỷ,
+// còn lại theo ngày đặt (18/11/2026) — xuất Excel "Hoàn thành hôm nay" ra đúng các đơn đang thấy.
+const ORDER_DAY = localDate(`(${orderDaySql('o.')})`);
+
 export async function buildOrdersWorkbook(period, { status = null } = {}) {
   const days = Math.round((Date.parse(period.to) - Date.parse(period.from)) / DAY_MS) + 1;
   if (!Number.isFinite(days) || days < 1 || days > 366) {
@@ -25,23 +30,23 @@ export async function buildOrdersWorkbook(period, { status = null } = {}) {
   // Cùng một snapshot, tránh đơn vừa thay đổi làm lệch tổng hoặc vượt giới hạn.
   const data = db.transaction(() => {
     const counts = db.prepare(`SELECT
-      (SELECT COUNT(*) FROM orders o WHERE ${localDate('o.created_at')} BETWEEN ? AND ? ${statusClause}) +
-      (SELECT COUNT(*) FROM order_items i JOIN orders o ON o.id=i.order_id WHERE ${localDate('o.created_at')} BETWEEN ? AND ? ${statusClause}) +
+      (SELECT COUNT(*) FROM orders o WHERE ${ORDER_DAY} BETWEEN ? AND ? ${statusClause}) +
+      (SELECT COUNT(*) FROM order_items i JOIN orders o ON o.id=i.order_id WHERE ${ORDER_DAY} BETWEEN ? AND ? ${statusClause}) +
       (SELECT COUNT(*) FROM retail_invoices WHERE ${withRetail ? '1' : '0'} AND ${localDate('created_at')} BETWEEN ? AND ?) +
       (SELECT COUNT(*) FROM retail_invoice_items i JOIN retail_invoices v ON v.id=i.invoice_id WHERE ${withRetail ? '1' : '0'} AND ${localDate('v.created_at')} BETWEEN ? AND ?) AS n`)
       .get(...onlineArgs, ...onlineArgs, ...args, ...args);
     if (counts.n + days + 3 > MAX_ROWS) throw new HttpError(400, 'Báo cáo vượt 50.000 dòng. Vui lòng chọn khoảng ngày ngắn hơn.');
-    const online = db.prepare(`SELECT o.*, ${localDate('o.created_at')} AS day,
+    const online = db.prepare(`SELECT o.*, ${ORDER_DAY} AS day,
       time(o.created_at, '${REPORT_TIME_SHIFT}') AS clock,
       strftime('%d/%m %H:%M', o.completed_at, '${REPORT_TIME_SHIFT}') AS completed_clock,
       s.full_name AS shipper_name, c.full_name AS creator_name
       FROM orders o LEFT JOIN users s ON s.id = o.shipper_id LEFT JOIN users c ON c.id = o.created_by
-      WHERE ${localDate('o.created_at')} BETWEEN ? AND ? ${statusClause} ORDER BY o.created_at, o.id`).all(...onlineArgs);
+      WHERE ${ORDER_DAY} BETWEEN ? AND ? ${statusClause} ORDER BY o.created_at, o.id`).all(...onlineArgs);
     const retail = withRetail ? db.prepare(`SELECT *, ${localDate('created_at')} AS day,
       time(created_at, '${REPORT_TIME_SHIFT}') AS clock FROM retail_invoices
       WHERE ${localDate('created_at')} BETWEEN ? AND ? ORDER BY created_at, id`).all(...args) : [];
     const onlineItems = db.prepare(`SELECT i.* FROM order_items i JOIN orders o ON o.id=i.order_id
-      WHERE ${localDate('o.created_at')} BETWEEN ? AND ? ${statusClause} ORDER BY o.created_at, o.id, i.id`).all(...onlineArgs);
+      WHERE ${ORDER_DAY} BETWEEN ? AND ? ${statusClause} ORDER BY o.created_at, o.id, i.id`).all(...onlineArgs);
     const retailItems = withRetail ? db.prepare(`SELECT i.* FROM retail_invoice_items i JOIN retail_invoices v ON v.id=i.invoice_id
       WHERE ${localDate('v.created_at')} BETWEEN ? AND ? ORDER BY v.created_at, v.id, i.id`).all(...args) : [];
     return { online, retail, onlineItems, retailItems };

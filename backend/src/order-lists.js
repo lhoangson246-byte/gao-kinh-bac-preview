@@ -15,10 +15,18 @@ export function attachItems(rows, items, foreignKey) {
 // Đơn chuyển khoản khách đã gửi ảnh, cửa hàng chưa xác nhận nhận tiền.
 const TRANSFER_PENDING = "payment_method = 'bank' AND transfer_reported_at IS NOT NULL AND transfer_confirmed_at IS NULL AND status <> 'cancelled'";
 
+/**
+ * Ngày của một đơn khi lọc theo ngày (18/11/2026): đơn Hoàn thành tính theo ngày giao xong, đơn Đã huỷ theo
+ * ngày huỷ, đơn đang xử lý theo ngày đặt. Nhờ vậy chọn "Hôm nay" ở mục Hoàn thành thấy đúng các đơn giao xong
+ * hôm nay, kể cả đơn đặt từ hôm trước. Đơn cũ chưa ghi giờ hoàn thành / huỷ thì dùng ngày đặt.
+ */
+export const orderDaySql = (prefix = '') => `CASE ${prefix}status WHEN 'completed' THEN COALESCE(${prefix}completed_at, ${prefix}created_at)
+  WHEN 'cancelled' THEN COALESCE(${prefix}cancelled_at, ${prefix}created_at) ELSE ${prefix}created_at END`;
+
 export function listAdminOrders({ status, from = null, to = null, limit = 30, offset = 0, transferPending = false } = {}) {
   // Trang và dòng hàng phải cùng snapshot khi có đơn mới tới đồng thời.
   return db.transaction(() => {
-  const range = from && to ? [`${localDate('created_at')} BETWEEN ? AND ?`] : [];
+  const range = from && to ? [`${localDate(`(${orderDaySql()})`)} BETWEEN ? AND ?`] : [];
   const rangeArgs = from && to ? [from, to] : [];
   const where = [...(status ? ['status = ?'] : []), ...range, ...(transferPending ? [TRANSFER_PENDING] : [])];
   const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';

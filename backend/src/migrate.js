@@ -1262,5 +1262,66 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(deleteTestOrd
     db.prepare("INSERT OR IGNORE INTO app_migrations (name) VALUES ('upsell-eggs-2026-11-13')").run();
   }
 
+  // Chấm công do quản lý tích (18/11/2026): 1 công, 0,5 công hoặc Nghỉ (0) cho mỗi người mỗi ngày.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS attendance_marks (
+      user_id     INTEGER NOT NULL REFERENCES users(id),
+      work_date   TEXT NOT NULL,                 -- ngày công theo giờ Việt Nam (YYYY-MM-DD)
+      units       REAL NOT NULL CHECK (units IN (0, 0.5, 1)),
+      note        TEXT,
+      marked_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      marker_name TEXT,
+      marked_at   TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, work_date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_attendance_marks_date ON attendance_marks(work_date);
+  `);
+
+  // Hồ sơ khách tự lưu (18/11/2026): mỗi số điện thoại một hồ sơ, đơn mới tự cập nhật.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS customer_profiles (
+      phone          TEXT PRIMARY KEY,
+      full_name      TEXT,
+      address        TEXT,
+      map_url        TEXT,
+      lat            REAL,
+      lng            REAL,
+      order_count    INTEGER NOT NULL DEFAULT 0,
+      first_order_at TEXT,
+      last_order_at  TEXT,
+      last_order_id  INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+      updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_customer_profiles_last ON customer_profiles(last_order_at DESC);
+  `);
+  // Lần đầu: dựng hồ sơ từ các đơn đã có. Tên lấy theo đơn mới nhất; địa chỉ theo đơn giao tận nơi mới nhất;
+  // định vị theo đơn mới nhất có định vị CÙNG địa chỉ đó.
+  if (!db.prepare("SELECT 1 FROM app_migrations WHERE name = 'customer-profiles-2026-11-18'").get()) {
+    db.prepare(`
+      INSERT OR IGNORE INTO customer_profiles (phone, full_name, order_count, first_order_at, last_order_at, last_order_id, updated_at)
+      SELECT phone, receiver_name, n, first_at, last_at, last_id, datetime('now') FROM (
+        SELECT phone, receiver_name, MAX(id) AS last_id, COUNT(*) AS n, MIN(created_at) AS first_at, MAX(created_at) AS last_at
+        FROM orders WHERE phone IS NOT NULL AND phone <> '' GROUP BY phone
+      )
+    `).run();
+    db.prepare(`
+      UPDATE customer_profiles SET address = (
+        SELECT o.address FROM orders o
+        WHERE o.phone = customer_profiles.phone AND o.address NOT IN ('Khách lấy tại cửa hàng', 'Giao theo định vị Google Maps')
+          AND COALESCE(o.fulfillment, 'delivery') <> 'pickup'
+        ORDER BY o.id DESC LIMIT 1)
+    `).run();
+    db.prepare(`
+      UPDATE customer_profiles SET
+        map_url = (SELECT o.map_url FROM orders o WHERE o.phone = customer_profiles.phone AND (o.address = customer_profiles.address OR customer_profiles.address IS NULL)
+                     AND (o.map_url IS NOT NULL OR o.delivery_lat IS NOT NULL) ORDER BY o.id DESC LIMIT 1),
+        lat = (SELECT o.delivery_lat FROM orders o WHERE o.phone = customer_profiles.phone AND (o.address = customer_profiles.address OR customer_profiles.address IS NULL)
+                 AND (o.map_url IS NOT NULL OR o.delivery_lat IS NOT NULL) ORDER BY o.id DESC LIMIT 1),
+        lng = (SELECT o.delivery_lng FROM orders o WHERE o.phone = customer_profiles.phone AND (o.address = customer_profiles.address OR customer_profiles.address IS NULL)
+                 AND (o.map_url IS NOT NULL OR o.delivery_lat IS NOT NULL) ORDER BY o.id DESC LIMIT 1)
+    `).run();
+    db.prepare("INSERT OR IGNORE INTO app_migrations (name) VALUES ('customer-profiles-2026-11-18')").run();
+  }
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

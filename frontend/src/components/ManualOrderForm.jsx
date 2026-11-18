@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, DELIVERY_SLOTS, formatVND, pastedMapLink, shippingFeeFor } from '../api';
+import { api, DELIVERY_SLOTS, formatDateTime, formatVND, isPhone, normalizePhone, pastedMapLink, shippingFeeFor } from '../api';
 import { foldText } from './WholesaleManager.jsx';
 import WholesaleCustomerForm from './WholesaleCustomerForm.jsx';
 import MapLinkField, { addressMapProps } from './MapLinkField.jsx';
@@ -36,6 +36,8 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
   const [warehouse, setWarehouse] = useState('KH_BS');
   const [mainStock, setMainStock] = useState(null);       // Map id → tồn Kho Bồ Sơn
   const [mapFromAddress, setMapFromAddress] = useState(false);
+  const [profile, setProfile] = useState(null);       // hồ sơ khách cũ theo số điện thoại vừa gõ
+  const [profileFilled, setProfileFilled] = useState('');   // số điện thoại đã điền sẵn (mỗi số một lần)
   const { can } = useAuth();
   const canManageCustomers = can('wholesale.manage');
   const wholesale = kind === 'wholesale';
@@ -55,6 +57,36 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
   }, [wholesale, wsList]);
 
   const set = (field, value) => setForm((cur) => ({ ...cur, [field]: value }));
+
+  // Khách lẻ: gõ đủ số điện thoại thì tra hồ sơ đã lưu từ các đơn trước. Ô nào còn trống thì điền sẵn;
+  // ô đã gõ thì giữ nguyên, có nút "Dùng thông tin đã lưu" nếu muốn thay.
+  useEffect(() => {
+    const phone = normalizePhone(form.phone);
+    if (wholesale || !isPhone(form.phone)) { setProfile(null); return undefined; }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      api.customerProfileLookup(phone, controller.signal).then(({ profile: found }) => {
+        setProfile(found);
+        if (found && profileFilled !== phone) {
+          setProfileFilled(phone);
+          setForm((cur) => ({
+            ...cur,
+            receiver_name: cur.receiver_name.trim() ? cur.receiver_name : found.full_name || '',
+            address: cur.address.trim() ? cur.address : found.address || '',
+            map_url: cur.map_url.trim() || cur.address.trim() ? cur.map_url : found.location || '',
+          }));
+        }
+      }).catch(() => {});
+    }, 300);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [form.phone, wholesale]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const useProfile = () => setForm((cur) => ({
+    ...cur, receiver_name: profile.full_name || cur.receiver_name, address: profile.address || cur.address, map_url: profile.location || '',
+  }));
+  const profileDiffers = profile && (
+    (profile.full_name && profile.full_name !== form.receiver_name.trim())
+    || (profile.address && profile.address !== form.address.trim())
+    || ((profile.location || '') !== form.map_url.trim() && !!profile.location));
   const byId = Object.fromEntries(products.map((p) => [String(p.id), p]));
   const fixedPrice = (productId) => ws?.prices.get(Number(productId));
   const defaultPrice = (productId) => fixedPrice(productId) ?? byId[productId]?.price ?? '';
@@ -258,6 +290,17 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
           {errors.phone && <small className="err">{errors.phone}</small>}
         </label>
       </div>
+      {!wholesale && profile && (
+        <div className="profile-hit" role="status">
+          <span>
+            <b>Khách cũ</b> · {profile.order_count} đơn{profile.last_order_at ? ` · gần nhất ${formatDateTime(profile.last_order_at)}` : ''}
+            {profile.location ? ' · có định vị' : ''}
+          </span>
+          {profileDiffers
+            ? <button type="button" className="btn btn-secondary" onClick={useProfile}>Dùng thông tin đã lưu</button>
+            : <small>Đã điền sẵn tên, địa chỉ{profile.location ? ', định vị' : ''} đã lưu</small>}
+        </div>
+      )}
       <label className="checkbox-label manual-delivery">
         <input type="checkbox" checked={form.home_delivery} onChange={(e) => set('home_delivery', e.target.checked)} />
         <strong>Giao hàng tận nơi</strong> <small>(bỏ tick nếu khách tự đến lấy tại cửa hàng)</small>

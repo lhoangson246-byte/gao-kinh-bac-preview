@@ -1628,6 +1628,29 @@ Giữ nguyên toàn bộ nghiệp vụ, API, đường dẫn, quyền, ba ngôn 
 - Chưa tách vật lý `styles.css` thành nhiều file (lý do ở trên).
 - Thanh tab quản trị dùng chỉ báo cuộn, chưa làm menu ngăn kéo.
 
+## Chấm công do quản lý tích, hồ sơ khách tự lưu, sửa lọc "Hoàn thành hôm nay" (18/11/2026)
+
+### Chấm công do quản lý tích (thay cho tự chấm vào / ra)
+- **Chỉ quản lý chấm công** (người có quyền `attendance.manage`, mẫu Kế toán có sẵn; muốn giao cho quản lý thì tick quyền này ở mục Nhân viên). Nhân viên **không tự chấm vào / ra nữa**; trang Chấm công của nhân viên chỉ hiện "Công của tôi" theo tháng, ghi ai chấm và ghi chú.
+- Quản lý mở **Chấm công → Bảng công tháng**: bấm một ô (người × ngày) rồi chọn **1 công**, **0,5 công** hoặc **Nghỉ**, ghi chú tuỳ chọn; ô đã tích có nút **Bỏ chấm**. Bấm **số ngày ở đầu cột** để tích nhanh cho những người chưa có công hôm đó (người đã có công giữ nguyên).
+- Quản lý không tự chấm cho chính mình (chủ cửa hàng chấm được cho mọi người). Không chấm trước cho ngày chưa tới. Mỗi lần chấm ghi vào Nhật ký.
+- Bảng cả tháng có cột **Tổng công** và **Nghỉ**. Dữ liệu tự chấm vào / ra cũ (trước 18/11) vẫn được tính cho những ngày quản lý chưa tích (từ 7 tiếng = 1 công, dưới 7 tiếng = 0,5 công).
+- Dữ liệu: bảng `attendance_marks` (người, ngày, số công 1 / 0,5 / 0, ghi chú, ai chấm). API: `PUT /api/attendance/mark`. API chấm vào / ra cũ trả lỗi "Chấm công do quản lý thực hiện".
+
+### Hồ sơ khách tự lưu
+- Mỗi đơn (khách đặt trên web, mua nhanh, nhân viên tạo) **tự lưu hồ sơ theo số điện thoại**: tên, địa chỉ giao, định vị (link Google Maps nhân viên dán, hoặc vị trí khách tự ghim lúc đặt), số lần đặt, đơn gần nhất. Đơn sau **tự cập nhật**: tên theo đơn mới nhất; địa chỉ mới thay địa chỉ cũ; định vị mới thay định vị cũ; đổi sang địa chỉ khác mà không có định vị thì bỏ định vị cũ; đơn lấy tại cửa hàng giữ nguyên địa chỉ.
+- **Tạo đơn**: gõ số điện thoại khách cũ là hiện "Khách cũ · N đơn" và **điền sẵn** tên, địa chỉ, định vị vào ô còn trống; ô đã gõ thì có nút "Dùng thông tin đã lưu".
+- **Quản trị → Khách hàng → "Khách đã đặt hàng (tự lưu)"**: danh sách, tìm theo tên / số / địa chỉ (gõ không dấu được), có link mở định vị.
+- Lúc cập nhật đã dựng sẵn hồ sơ từ các đơn cũ. Chỉ nhân viên có quyền tạo đơn hoặc quản lý khách hàng xem được; khách trên web không tra được hồ sơ người khác.
+- Dữ liệu: bảng `customer_profiles`; cập nhật trong `backend/src/customer-profiles.js` (gọi trong cùng transaction tạo đơn).
+
+### Sửa lỗi: chọn "Hôm nay" ở mục Hoàn thành không thấy đơn vừa giao xong
+- Nguyên nhân: lọc ngày luôn theo **ngày đặt**, nên đơn đặt tối hôm trước, giao xong hôm nay không hiện ở "Hoàn thành hôm nay".
+- Nay: **Hoàn thành** lọc theo ngày giao xong, **Đã huỷ** theo ngày huỷ, các mục còn lại theo ngày đặt; số đếm từng mục và **Xuất Excel** dùng cùng cách tính. Màn hình có dòng ghi chú cách lọc ngày.
+- Báo cáo Doanh thu và Đóng ngày giữ nguyên cách tính như trước.
+
+Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (17).
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.
