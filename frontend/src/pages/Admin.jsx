@@ -300,7 +300,8 @@ export default function Admin() {
   };
 
   // Tồn (Cửa hàng Nguyễn Cao) của sản phẩm đang sửa, để biết ô tồn có bị đổi hay không.
-  const stockOriginal = editingId ? products.find((p) => p.id === editingId)?.stock : null;
+  // Ô tồn kho ở trang Sản phẩm là tồn Kho Bồ Sơn — kho bán online, số khách thấy trên web (18/11/2026).
+  const stockOriginal = editingId ? products.find((p) => p.id === editingId)?.stock_bs : null;
   const stockUnchanged = editingId != null && form.stock !== '' && Number(form.stock) === stockOriginal;
 
   /** Kiểm tra ngay tại trình duyệt; máy chủ vẫn kiểm tra lại lần nữa. */
@@ -387,7 +388,7 @@ export default function Admin() {
       cost_price: product.cost_price || '', unit: product.unit,
       original_price: product.original_price || '', category: product.category || 'gao',
       weight_kg: product.weight_kg || '',
-      stock: product.stock, description: product.description || '', image_url: product.image_url || '',
+      stock: product.stock_bs, description: product.description || '', image_url: product.image_url || '',
       points_custom: product.points_per_unit != null,
       points_per_unit: product.points_per_unit ?? '',
       is_reward: !!product.is_reward,
@@ -483,10 +484,10 @@ export default function Admin() {
         )}
       </div>
       <div className="inventory">
-        <span>Còn trong kho</span>
-        <strong className={product.is_active && product.stock <= 10 ? 'low-stock' : ''}>
-          {product.stock} {product.unit}
-          {product.is_active && product.stock <= 0 && ' · đã hết'}
+        <span>Còn trên web (Bồ Sơn)</span>
+        <strong className={product.is_active && product.stock_bs <= 10 ? 'low-stock' : ''}>
+          {Number(product.stock_bs).toLocaleString('vi-VN', { maximumFractionDigits: 3 })} {product.unit}
+          {product.is_active && product.stock_bs <= 0 && ' · đã hết'}
         </strong>
       </div>
       <span className={`visibility ${product.is_active ? 'shown' : ''}`}>{product.is_active ? 'Đang bán' : 'Đang ẩn'}</span>
@@ -932,10 +933,10 @@ export default function Admin() {
                                 : <small className="field-help">Dùng để tính mốc 50kg giảm giá tại quầy và quà khuyến mãi theo kg.</small>}
                           </label>
                           <label>Số lượng còn lại
-                            <input className="input" type="number" name="stock" value={form.stock} onChange={onChange} min={stockUnchanged ? undefined : 0} step="1" inputMode="numeric" aria-invalid={!!formErrors.stock} />
+                            <input className="input" type="number" name="stock" value={form.stock} onChange={onChange} min={stockUnchanged ? undefined : 0} step="any" inputMode="numeric" aria-invalid={!!formErrors.stock} />
                             {formErrors.stock
                               ? <small className="err">{formErrors.stock}</small>
-                              : <small className="field-help">Tồn ở Cửa hàng Nguyễn Cao (số khách thấy trên web). Nhập kho, điều chuyển, kiểm kê ở trang Kho hàng.</small>}
+                              : <small className="field-help">Tồn ở Kho Bồ Sơn (kho bán online, số khách thấy trên web). Tồn Cửa hàng Nguyễn Cao, nhập kho, điều chuyển, kiểm kê ở trang Kho hàng.</small>}
                           </label>
                         </div>
                         {groups.length > 0 && (

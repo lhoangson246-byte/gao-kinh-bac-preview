@@ -30,15 +30,31 @@ try {
     return { sum: list.movements.reduce((s, m) => s + m.quantity, 0), last: list.movements[0], list: list.movements };
   };
 
-  const gao = await make('Gạo Bắc Hương kho', 'bao 25kg', 100);
-  const tui = await make('Gạo Bóng Đỏ kho', 'túi 5kg', 5);
+  const gao = await make('Gạo Bắc Hương kho', 'bao 25kg', 0);
+  const tui = await make('Gạo Bóng Đỏ kho', 'túi 5kg', 0);
   const mien = await make('Miến dong kho', 'gói', 0, 30000);
+  // Tồn đầu kỳ Nguyễn Cao (cửa hàng bán tại quầy).
+  await inv('/count', { method: 'POST', body: { warehouse: 'KH_NC', kind: 'opening', items: [{ product_id: gao.id, counted: 100 }, { product_id: tui.id, counted: 5 }] } });
 
-  /* ---------- Bắt đầu: tồn cũ là tồn Nguyễn Cao ---------- */
-  let r = await row(gao.id);
+  /* ---------- Kho bán online là Bồ Sơn (18/11/2026) ---------- */
+  const webp = await make('Gạo Tám web', 'túi 5kg', 7);
+  let r = await row(webp.id);
+  check('Ô tồn kho khi thêm sản phẩm là tồn Bồ Sơn (kho bán online)', r.stock_bs === 7 && r.stock_nc === 0 && r.status.code === 'low', short(r));
+  let led = await ledgerSum(webp.id, 'KH_BS');
+  check('Thêm sản phẩm có tồn: ghi dòng "Tồn đầu kỳ" ở Bồ Sơn', led.sum === 7 && led.last?.kind === 'opening' && !!led.last?.actor_name, short(led.last));
+  check('Khách trên web thấy tồn Bồ Sơn', (await call(`/products/${webp.id}`)).data.product.stock === 7);
+  r = await row(gao.id);
+  check('Bồ Sơn hết mà cửa hàng còn: web báo hết (0), bảng tồn báo đỏ', (await call(`/products/${gao.id}`)).data.product.stock === 0 && r.status.code === 'web_out', short(r));
+  const webOut = await call('/orders/guest', { method: 'POST', body: {
+    receiver_name: 'Khách Web', phone: phone('07', 1), address: 'Số 1, đường Ngô Gia Tự, phường Tiền An', delivery_area: 'bac-ninh',
+    payment_method: 'cod', items: [{ product_id: gao.id, quantity: 1 }] } });
+  check('Đơn web không lấy hàng của cửa hàng Nguyễn Cao (400)', webOut.status === 400 && (await row(gao.id)).stock_nc === 100, short(webOut.data));
+
+  /* ---------- Bắt đầu: tồn Nguyễn Cao ---------- */
+  r = await row(gao.id);
   check('Tồn đang có thuộc Cửa hàng Nguyễn Cao, Kho Bồ Sơn bắt đầu từ 0', r.stock_nc === 100 && r.stock_bs === 0 && r.total === 100, short(r));
-  let led = await ledgerSum(gao.id, 'KH_NC');
-  check('Thêm sản phẩm có tồn: ghi dòng "Tồn đầu kỳ" vào nhật ký kho', led.sum === 100 && led.last?.kind === 'opening' && !!led.last?.actor_name, short(led.last));
+  led = await ledgerSum(gao.id, 'KH_NC');
+  check('Tồn đầu kỳ Nguyễn Cao ghi dòng "Tồn đầu kỳ" vào nhật ký kho', led.sum === 100 && led.last?.kind === 'opening' && !!led.last?.actor_name, short(led.last));
   const first = (await inv()).data;
   check('Có đúng hai kho KH_NC và KH_BS', first.warehouses.map((w) => w.code).join() === 'KH_NC,KH_BS');
 
@@ -105,9 +121,9 @@ try {
     receiver_name: 'Chị Hoa', phone: phone('09', 1), home_delivery: true, address: 'Số 12 đường Nguyễn Trãi, phường Võ Cường', payment_method: 'cod',
     items: [{ product_id: gao.id, quantity: 5 }], ...body,
   } });
-  const retail = await order({});
+  const retail = await order({ warehouse: 'KH_NC' });
   r = await row(gao.id);
-  check('Đơn khách lẻ trừ tồn Nguyễn Cao, không đụng Bồ Sơn', retail.status === 201 && retail.data.order.warehouse === 'KH_NC' && r.stock_nc === 210 && r.stock_bs === 400, short(r));
+  check('Đơn nhân viên chọn Cửa hàng: trừ tồn Nguyễn Cao, không đụng Bồ Sơn', retail.status === 201 && retail.data.order.warehouse === 'KH_NC' && r.stock_nc === 210 && r.stock_bs === 400, short(r));
   led = await ledgerSum(gao.id, 'KH_NC');
   check('Nhật ký kho ghi đơn hàng kèm mã đơn và người tạo', led.last.kind === 'order' && led.last.quantity === -5 && led.last.ref_code === retail.data.order.code && !!led.last.actor_name, short(led.last));
   // Nhân viên tạo đơn khách lẻ cũng chọn được Kho Bồ Sơn (mặc định ở form từ 13/11/2026); huỷ thì trả về đúng kho.
@@ -126,34 +142,46 @@ try {
   const over = await wsOrder({ warehouse: 'KH_BS', items: [{ product_id: gao.id, quantity: 361 }] });
   check('Kho Bồ Sơn không đủ hàng: từ chối dù Nguyễn Cao còn, báo rõ kho', over.status === 400 && /Kho Bồ Sơn/.test(over.data.message || '') && (await row(gao.id)).stock_bs === 360, short(over.data));
   const wsDefault = await wsOrder({ items: [{ product_id: gao.id, quantity: 1 }] });
-  check('Đơn khách buôn không chọn kho: xuất từ Nguyễn Cao như trước', wsDefault.status === 201 && wsDefault.data.order.warehouse === 'KH_NC' && (await row(gao.id)).stock_nc === 209);
+  r = await row(gao.id);
+  check('Đơn nhân viên không chọn kho: xuất từ Bồ Sơn (kho bán online)', wsDefault.status === 201 && wsDefault.data.order.warehouse === 'KH_BS' && r.stock_bs === 359 && r.stock_nc === 210, short(r));
+  await call(`/admin/orders/${wsDefault.data.order.id}/status`, { method: 'PATCH', token: owner, body: { status: 'cancelled' } });
+  const web = await call('/orders/guest', { method: 'POST', body: {
+    receiver_name: 'Khách Web', phone: phone('07', 2), address: 'Số 1, đường Ngô Gia Tự, phường Tiền An', delivery_area: 'bac-ninh',
+    delivery_slot: 'chieu2', payment_method: 'cod', items: [{ product_id: gao.id, quantity: 2 }] } });
+  r = await row(gao.id);
+  led = await ledgerSum(gao.id, 'KH_BS');
+  check('Đơn khách đặt trên web trừ Kho Bồ Sơn, cửa hàng giữ nguyên', web.status === 201 && r.stock_bs === 358 && r.stock_nc === 210
+    && led.last.kind === 'order' && led.last.quantity === -2 && web.data.order?.delivery_slot === 'chieu2', short(web.data).slice(0, 200));
+  await call(`/admin/orders/${web.data.order?.id}/status`, { method: 'PATCH', token: owner, body: { status: 'cancelled' } });
+  check('Huỷ đơn web: hoàn về Bồ Sơn', (await row(gao.id)).stock_bs === 360 && (await row(gao.id)).stock_nc === 210);
   const cancel = () => call(`/admin/orders/${sỉ.data.order.id}/status`, { method: 'PATCH', token: owner, body: { status: 'cancelled' } });
   const c1 = await cancel();
   const c2 = await cancel();
   r = await row(gao.id);
-  check('Huỷ đơn khách buôn: hoàn về đúng Kho Bồ Sơn, chỉ một lần', c1.status === 200 && c2.status !== 200 && r.stock_bs === 400 && r.stock_nc === 209, `${c1.status} ${c2.status} ${short(r)}`);
+  check('Huỷ đơn khách buôn: hoàn về đúng Kho Bồ Sơn, chỉ một lần', c1.status === 200 && c2.status !== 200 && r.stock_bs === 400 && r.stock_nc === 210, `${c1.status} ${c2.status} ${short(r)}`);
   check('Nhật ký kho ghi "Huỷ đơn, hoàn kho" kèm người huỷ', (await ledgerSum(gao.id, 'KH_BS')).last.kind === 'order_cancel' && !!(await ledgerSum(gao.id, 'KH_BS')).last.actor_name);
 
   /* ---------- Bán tại quầy trừ tồn Nguyễn Cao ---------- */
   const sale = await call('/retail/invoices', { method: 'POST', token: owner, body: { items: [{ product_id: gao.id, quantity: 9 }] } });
   led = await ledgerSum(gao.id, 'KH_NC');
-  check('Bán tại quầy trừ tồn Nguyễn Cao và ghi nhật ký kho kèm mã hoá đơn', sale.status === 201 && (await row(gao.id)).stock_nc === 200
+  check('Bán tại quầy trừ tồn Nguyễn Cao và ghi nhật ký kho kèm mã hoá đơn', sale.status === 201 && (await row(gao.id)).stock_nc === 201 && (await row(gao.id)).stock_bs === 400
     && led.last.kind === 'counter' && led.last.quantity === -9 && led.last.ref_code === sale.data.invoice.code, short(led.last));
   const overSale = await call('/retail/invoices', { method: 'POST', token: owner, body: { items: [{ product_id: tui.id, quantity: 40 }] } });
   r = await row(tui.id);
   check('Quầy vẫn bán được khi số trên máy không đủ: tồn âm, bảng tồn kho báo đỏ', overSale.status === 201 && r.stock_nc === -5 && r.status.code === 'negative', short(r));
-  check('Khách trên web không thấy số tồn âm (hiện 0)', (await call(`/products/${tui.id}`)).data.product.stock === 0);
-  const blocked = await order({ phone: phone('09', 4), items: [{ product_id: tui.id, quantity: 1 }] });
-  check('Tồn Nguyễn Cao âm: đơn web bị từ chối dù Bồ Sơn còn hàng', blocked.status === 400 && (await row(tui.id)).stock_bs === 20, short(blocked.data));
+  check('Cửa hàng âm không ảnh hưởng web: web vẫn thấy tồn Bồ Sơn (20)', (await call(`/products/${tui.id}`)).data.product.stock === 20);
+  const zeroBs = await inv('/count', { method: 'POST', body: { warehouse: 'KH_BS', kind: 'count', items: [{ product_id: webp.id, counted: 0 }] } });
+  check('Bồ Sơn về 0: khách trên web thấy hết hàng (0)', zeroBs.status === 200 && (await call(`/products/${webp.id}`)).data.product.stock === 0);
 
   /* ---------- Sửa tồn ở trang Sản phẩm, nhập kho nhanh, mã sản phẩm ---------- */
-  await call(`/admin/products/${gao.id}`, { method: 'PUT', token: owner, body: { stock: 190, price: 455000 } });
-  led = await ledgerSum(gao.id, 'KH_NC');
-  check('Sửa ô tồn kho ở trang Sản phẩm: ghi nhật ký kho (−10)', (await row(gao.id)).stock_nc === 190 && led.last.kind === 'edit' && led.last.quantity === -10, short(led.last));
+  await call(`/admin/products/${gao.id}`, { method: 'PUT', token: owner, body: { stock: 390, price: 455000 } });
+  led = await ledgerSum(gao.id, 'KH_BS');
+  check('Sửa ô tồn kho ở trang Sản phẩm: sửa tồn Bồ Sơn, ghi nhật ký kho (−10)', (await row(gao.id)).stock_bs === 390 && (await row(gao.id)).stock_nc === 201
+    && led.last.kind === 'edit' && led.last.quantity === -10, short(led.last));
   await call(`/admin/products/${gao.id}`, { method: 'PUT', token: owner, body: { price: 456000 } });
-  check('Sửa giá không đụng tới tồn và không ghi nhật ký kho', (await row(gao.id)).stock_nc === 190 && (await ledgerSum(gao.id, 'KH_NC')).last.id === led.last.id);
+  check('Sửa giá không đụng tới tồn và không ghi nhật ký kho', (await row(gao.id)).stock_bs === 390 && (await ledgerSum(gao.id, 'KH_BS')).last.id === led.last.id);
   await call(`/admin/products/${gao.id}/stock`, { method: 'POST', token: owner, body: { quantity: 10 } });
-  check('Nút Nhập kho cũ ở trang Sản phẩm: cộng Nguyễn Cao, có ghi nhật ký kho', (await row(gao.id)).stock_nc === 200 && (await ledgerSum(gao.id, 'KH_NC')).last.kind === 'receipt');
+  check('Nút Nhập kho ở trang Sản phẩm: cộng Bồ Sơn, có ghi nhật ký kho', (await row(gao.id)).stock_bs === 400 && (await ledgerSum(gao.id, 'KH_BS')).last.kind === 'receipt');
   const sku = await call(`/admin/products/${gao.id}`, { method: 'PUT', token: owner, body: { sku: 'SP014' } });
   check('Đặt mã sản phẩm SP014, hiện ở bảng tồn kho', sku.status === 200 && (await row(gao.id)).sku === 'SP014');
   check('Mã sản phẩm trùng bị từ chối (400)', (await call(`/admin/products/${tui.id}`, { method: 'PUT', token: owner, body: { sku: 'sp014' } })).status === 400);
@@ -182,7 +210,7 @@ try {
   await inv(`/transfers/${partial.data.transfer.id}/receive`, { method: 'POST', body: {} });
   r = await row(bulk.id);
   check('Chuyển 12,5 bao: Bồ Sơn còn 45,7, Nguyễn Cao 12,5 (không lệch số lẻ)', r.stock_bs === 45.7 && r.stock_nc === 12.5, short(r));
-  check('Khách trên web thấy số nguyên (12 bao)', (await call(`/products/${bulk.id}`)).data.product.stock === 12);
+  check('Khách trên web thấy số nguyên của Bồ Sơn (45 bao)', (await call(`/products/${bulk.id}`)).data.product.stock === 45);
   const sellBulk = await call('/admin/orders', { method: 'POST', token: owner, body: { receiver_name: 'Chị Hoa', phone: phone('09', 7), home_delivery: true, address: 'Số 12 đường Nguyễn Trãi, phường Võ Cường', payment_method: 'cod', warehouse: 'KH_NC', items: [{ product_id: bulk.id, quantity: 12 }] } });
   r = await row(bulk.id);
   check('Bán 12 bao từ 12,5: còn 0,5 bao (5 kg)', sellBulk.status === 201 && r.stock_nc === 0.5, short(r));
@@ -205,7 +233,7 @@ try {
   check('Quyền xem kho: không nhập, không chuyển, không kiểm kê (403)', (await inv('/receipts', { method: 'POST', token: viewer, body: { kind: 'cua-hang', items: [{ product_id: gao.id, quantity_nc: 1 }] } })).status === 403
     && (await inv('/transfers', { method: 'POST', token: viewer, body: { from: 'KH_BS', to: 'KH_NC', items: [{ product_id: gao.id, quantity: 1 }] } })).status === 403
     && (await inv('/count', { method: 'POST', token: viewer, body: { warehouse: 'KH_NC', items: [{ product_id: gao.id, counted: 1 }] } })).status === 403
-    && (await row(gao.id)).stock_nc === 200);
+    && (await row(gao.id)).stock_nc === 201);
   const keeperIn = await inv('/receipts', { method: 'POST', token: keeper, body: { kind: 'cua-hang', items: [{ product_id: gao.id, quantity_nc: 3 }] } });
   check('Thủ kho nhập được hàng; tên thủ kho nằm trong nhật ký', keeperIn.status === 201 && (await ledgerSum(gao.id, 'KH_NC')).last.actor_name === 'Em Thủ Kho');
   check('Thủ kho không được ghi giá nhập (403), không kiểm kê (403)', (await inv('/receipts', { method: 'POST', token: keeper, body: { kind: 'cua-hang', items: [{ product_id: gao.id, quantity_nc: 3, cost_price: 1 }] } })).status === 403

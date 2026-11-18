@@ -15,8 +15,16 @@ export const FREE_SHIPPING_MIN = 100000;
 export const shippingFeeFor = (subtotal, fulfillment = 'delivery') =>
   (fulfillment === 'pickup' || subtotal >= FREE_SHIPPING_MIN ? 0 : SHIPPING_FEE);
 
-/** Khung giờ giao hoả tốc trong ngày. */
+/**
+ * Khung giờ giao trong ngày (18/11/2026): sáng 2 khung, chiều 3 khung.
+ * `sang` / `chieu` là hai khung cũ, giữ lại để đọc đơn đã đặt trước đó.
+ */
 export const DELIVERY_SLOTS = {
+  sang1: 'Sáng: 07h00 – 09h30',
+  sang2: 'Sáng: 09h30 – 11h30',
+  chieu1: 'Chiều: 13h30 – 15h00',
+  chieu2: 'Chiều: 15h00 – 17h30',
+  chieu3: 'Chiều: 17h30 – 18h40',
   sang: 'Sáng: 07h00 – 11h30',
   chieu: 'Chiều: 13h30 – 18h00',
 };

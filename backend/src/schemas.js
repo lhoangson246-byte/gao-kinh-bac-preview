@@ -2,8 +2,9 @@ import { z } from 'zod';
 import { HttpError, cleanImageUrl } from './validate.js';
 import {
   LIMITS, ORDER_STATUSES, RETAIL_DISCOUNT_MAX_PERCENT, PRODUCT_CATEGORY_CODES, CATALOG_GROUP_CODES,
-  CUSTOMER_SEGMENT_CODES,
+  CUSTOMER_SEGMENT_CODES, DELIVERY_SLOT_CODES,
 } from './constants.js';
+const deliverySlot = z.enum([...DELIVERY_SLOT_CODES, '']).nullable().optional();
 
 const obj = (shape) => z.strictObject(shape);
 const text = (max) => z.string().max(max).refine((v) => !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(v));
@@ -95,7 +96,7 @@ add('addresses', 'DELETE', /^\/[^/]+\/?$/);
 add('orders', 'POST', /^\/?$/, obj({
   address_id: id.nullable().optional(), receiver_name: name.optional(), phone,
   address: optionalText(LIMITS.address), delivery_area: z.literal('bac-ninh'),
-  delivery_slot: z.enum(['sang', 'chieu', '']).nullable().optional(), note,
+  delivery_slot: deliverySlot, note,
   payment_method: z.enum(['cod', 'bank']).optional(), items: lines.min(1),
   voucher_count: integer(0, 20).optional(), rewards: z.array(line).max(LIMITS.linesPerOrder).optional(),
   promo_gift: z.enum(['nep', 'lut']).optional(),
@@ -104,7 +105,7 @@ add('orders', 'POST', /^\/?$/, obj({
 add('guest-orders', 'POST', /^\/guest\/?$/, obj({
   receiver_name: name, phone: text(LIMITS.phone), address: text(LIMITS.address),
   delivery_area: z.literal('bac-ninh'),
-  delivery_slot: z.enum(['sang', 'chieu', '']).nullable().optional(), note,
+  delivery_slot: deliverySlot, note,
   payment_method: z.enum(['cod', 'bank']).optional(), items: lines.min(1),
   latitude: address.latitude, longitude: address.longitude, location_accuracy: address.location_accuracy,
   promo_gift: z.enum(['nep', 'lut']).optional(),
@@ -133,7 +134,7 @@ add('admin', 'POST', /^\/orders\/?$/, obj({
   receiver_name: name, phone: text(LIMITS.phone), home_delivery: z.boolean().optional(),
   // Ô địa chỉ nhận cả link Google Maps dán thẳng vào (máy chủ tách link ra), nên cho dài hơn địa chỉ thường.
   address: optionalText(2000),
-  delivery_slot: z.enum(['sang', 'chieu', '']).nullable().optional(), note, payment_method: z.enum(['cod', 'bank']).optional(),
+  delivery_slot: deliverySlot, note, payment_method: z.enum(['cod', 'bank']).optional(),
   items: manualLines.min(1), discount_code: z.string().max(40).nullable().optional(), shipper_id: id.nullable().optional(),
   customer_type: z.enum(['retail', 'wholesale']).optional(), wholesale_customer_id: id.nullable().optional(),
   map_url: optionalText(2000),

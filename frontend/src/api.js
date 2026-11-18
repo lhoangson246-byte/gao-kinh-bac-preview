@@ -435,19 +435,38 @@ export const SHIPPING_FEE = 10000;
 export const FREE_SHIPPING_MIN = 100000;
 export const shippingFeeFor = (subtotal) => (subtotal >= FREE_SHIPPING_MIN ? 0 : SHIPPING_FEE);
 
-/** Khung giờ giao hoả tốc trong ngày. */
+/**
+ * Khung giờ giao trong ngày (18/11/2026): [mã, buổi, giờ, phút bắt đầu, phút kết thúc] theo giờ Việt Nam.
+ * Sáng 07h00–09h30, 09h30–11h30; chiều 13h30–15h00, 15h00–17h30, 17h30–18h40. Giống backend/src/constants.js.
+ */
 export const DELIVERY_SLOTS = [
-  ['sang', 'Buổi sáng', '07h00 – 11h30'],
-  ['chieu', 'Buổi chiều', '13h30 – 18h00'],
+  ['sang1', 'sang', '07h00 – 09h30', 7 * 60, 9 * 60 + 30],
+  ['sang2', 'sang', '09h30 – 11h30', 9 * 60 + 30, 11 * 60 + 30],
+  ['chieu1', 'chieu', '13h30 – 15h00', 13 * 60 + 30, 15 * 60],
+  ['chieu2', 'chieu', '15h00 – 17h30', 15 * 60, 17 * 60 + 30],
+  ['chieu3', 'chieu', '17h30 – 18h40', 17 * 60 + 30, 18 * 60 + 40],
 ];
+/** Hai buổi, theo thứ tự hiện trên trang đặt hàng. */
+export const SLOT_SESSIONS = ['sang', 'chieu'];
+// Khung cũ trên các đơn đặt trước 18/11/2026 — chỉ để hiện lại cho đúng.
+const LEGACY_SLOTS = [
+  ['sang', 'sang', '07h00 – 11h30', 7 * 60, 11 * 60 + 30],
+  ['chieu', 'chieu', '13h30 – 18h00', 13 * 60 + 30, 18 * 60],
+];
+const SLOT_INFO = Object.fromEntries([...DELIVERY_SLOTS.map((s) => [...s, false]), ...LEGACY_SLOTS.map((s) => [...s, true])]
+  .map(([code, session, time, start, end, legacy]) => [code, { code, session, time, start, end, legacy }]));
+/** { code, session: 'sang' | 'chieu', time, start, end, legacy } của một mã khung giờ, hoặc null. */
+export const slotInfo = (code) => SLOT_INFO[code] || null;
+/** Khung giờ phải còn ít nhất chừng này phút thì mới giao trong hôm nay. */
+export const SLOT_LEAD_MIN = 60;
 
 /**
  * Giờ làm việc của cửa hàng (phút trong ngày, giờ Việt Nam):
- * sáng 07h00–11h30, nghỉ trưa 11h30–13h30, chiều 13h30–18h00, nghỉ từ 18h00.
+ * sáng 07h00–11h30, nghỉ trưa 11h30–13h30, chiều 13h30–18h40 (khung giao cuối 17h30–18h40), nghỉ từ 18h40.
  * Hạn nhận đơn giao trong ngày: 17h30 (cửa hàng chốt 13/11/2026). Đặt sau 17h30 thì giao sáng hôm sau,
  * hoặc khách ghé cửa hàng lấy.
  */
-export const SHOP_HOURS = { open: 7 * 60, lunchStart: 11 * 60 + 30, lunchEnd: 13 * 60 + 30, cutoff: 17 * 60 + 30, close: 18 * 60 };
+export const SHOP_HOURS = { open: 7 * 60, lunchStart: 11 * 60 + 30, lunchEnd: 13 * 60 + 30, cutoff: 17 * 60 + 30, close: 18 * 60 + 40 };
 const VN_OFFSET_MIN = 7 * 60;
 
 /*
@@ -502,17 +521,19 @@ export function vietnamClock(date = shopNow()) {
  *  - 07h00–11h30: trong buổi sáng
  *  - 11h30–13h30 (nghỉ trưa): buổi chiều, từ 13h30
  *  - 13h30–17h30: trong buổi chiều
- *  - 17h30–18h00 (hết nhận đơn giao trong ngày, cửa hàng còn mở): sáng hôm sau, hoặc ghé cửa hàng lấy
- *  - từ 18h00: sáng hôm sau
+ *  - 17h30–18h40 (hết nhận đơn giao trong ngày, cửa hàng còn mở): sáng hôm sau, hoặc ghé cửa hàng lấy
+ *  - từ 18h40: sáng hôm sau
+ * `slot`: khung chọn sẵn = khung sớm nhất còn giao được hôm nay, hết thì khung đầu sáng mai.
  */
 export function deliveryPlan(date = shopNow()) {
   const m = vietnamMinutes(date);
-  if (m < SHOP_HOURS.open) return { phase: 'early', slot: 'sang' };
-  if (m < SHOP_HOURS.lunchStart) return { phase: 'morning', slot: 'sang' };
-  if (m < SHOP_HOURS.lunchEnd) return { phase: 'lunch', slot: 'chieu' };
-  if (m < SHOP_HOURS.cutoff) return { phase: 'afternoon', slot: 'chieu' };
-  if (m < SHOP_HOURS.close) return { phase: 'late', slot: 'sang' };
-  return { phase: 'closed', slot: 'sang' };
+  const slot = DELIVERY_SLOTS.find(([code]) => slotDay(code, date) === 'today')?.[0] || DELIVERY_SLOTS[0][0];
+  if (m < SHOP_HOURS.open) return { phase: 'early', slot };
+  if (m < SHOP_HOURS.lunchStart) return { phase: 'morning', slot };
+  if (m < SHOP_HOURS.lunchEnd) return { phase: 'lunch', slot };
+  if (m < SHOP_HOURS.cutoff) return { phase: 'afternoon', slot };
+  if (m < SHOP_HOURS.close) return { phase: 'late', slot };
+  return { phase: 'closed', slot };
 }
 
 /** Ngày theo giờ Việt Nam (YYYY-MM-DD) của thời điểm `date`. */
@@ -561,12 +582,17 @@ export function promoNextTier(kg, promotion) {
   return tiers.find(([minKg]) => kg + 1e-9 < minKg) || null;
 }
 
-/** Chọn khung `slot` lúc `date` thì giao hôm nay hay ngày mai. */
+/**
+ * Chọn khung `slot` lúc `date` thì giao hôm nay hay ngày mai. Sau 17h30 mọi khung là ngày mai;
+ * trước đó khung còn ít nhất 1 tiếng thì giao hôm nay. Khung cũ (sáng/chiều) giữ đúng cách tính cũ.
+ */
 export function slotDay(slot, date = shopNow()) {
   const m = vietnamMinutes(date);
   if (m >= SHOP_HOURS.cutoff) return 'tomorrow';
-  if (slot === 'sang' && m >= SHOP_HOURS.lunchStart) return 'tomorrow';
-  return 'today';
+  const info = slotInfo(slot);
+  if (!info) return 'today';
+  const today = info.legacy ? m < info.end : m + SLOT_LEAD_MIN <= info.end;
+  return today ? 'today' : 'tomorrow';
 }
 
 /**
@@ -598,14 +624,17 @@ export function deliveryEta(createdAt, chosenSlot = null) {
   const current = m >= SHOP_HOURS.open && m < SHOP_HOURS.lunchStart ? 'sang'
     : m >= SHOP_HOURS.lunchEnd && m < SHOP_HOURS.cutoff ? 'chieu' : null;
   const sessionEnd = current === 'sang' ? SHOP_HOURS.lunchStart : SHOP_HOURS.close;
-  if (current && m + 90 <= sessionEnd && (!chosenSlot || chosenSlot === current)) return { fast: true };
-  // Đặt trước 17h30 mà không kịp giao nhanh thì vẫn giao trong buổi chiều nay; sau 17h30 thì sáng mai.
-  const slot = chosenSlot || (m < SHOP_HOURS.open ? 'sang' : m < SHOP_HOURS.cutoff ? 'chieu' : 'sang');
+  const planned = deliveryPlan(placed).slot;
+  // Giao nhanh khi khách để khung chọn sẵn (khung sớm nhất); khách chọn khung muộn hơn thì hẹn đúng khung đó.
+  if (current && m + 90 <= sessionEnd && (!chosenSlot || chosenSlot === planned || chosenSlot === current)) return { fast: true };
+  const slot = chosenSlot || planned;
   return { fast: false, slot, date: deliveryDateLabel(placed.toISOString(), slot) };
 }
 
+const SESSION_NAME = { sang: 'Buổi sáng', chieu: 'Buổi chiều' };
+/** "Buổi sáng (07h00 – 09h30)" — cho trang nhân viên (tiếng Việt), gồm cả khung cũ trên đơn cũ. */
 export const DELIVERY_SLOT_LABEL = Object.fromEntries(
-  DELIVERY_SLOTS.map(([code, name, time]) => [code, `${name} (${time})`])
+  Object.values(SLOT_INFO).map(({ code, session, time }) => [code, `${SESSION_NAME[session]} (${time})`])
 );
 
 const OTHER_PROVINCES = [

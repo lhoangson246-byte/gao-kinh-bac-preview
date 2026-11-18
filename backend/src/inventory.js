@@ -1,10 +1,11 @@
 import db from './db.js';
 
 /**
- * Hai kho (13/11/2026).
- *  - KH_NC  Cửa hàng Nguyễn Cao: kho bán lẻ. Tồn nằm ở `products.stock` — đơn trên web, đơn nhân viên
- *    tạo cho khách lẻ và hoá đơn bán tại quầy đều trừ ở đây.
- *  - KH_BS  Kho Bồ Sơn: kho tổng. Tồn nằm ở `products.stock_bs` — nhận công gạo, xuất bán sỉ.
+ * Hai kho (13/11/2026, đổi vai 18/11/2026).
+ *  - KH_BS  Kho Bồ Sơn: kho bán online. Tồn nằm ở `products.stock_bs` — đây là số khách thấy trên web;
+ *    đơn khách đặt trên web và đơn nhân viên tạo (mặc định) đều trừ ở đây. Nhận công gạo, xuất bán sỉ.
+ *  - KH_NC  Cửa hàng Nguyễn Cao: chỉ bán cho khách tới mua tại cửa hàng. Tồn nằm ở `products.stock` —
+ *    hoá đơn bán tại quầy trừ ở đây.
  *
  * MỌI thay đổi tồn kho đi qua `moveStock`, hàm này vừa đổi số tồn vừa ghi một dòng vào
  * `stock_movements` (ai, lúc nào, kho nào, bao nhiêu, tồn sau đó). Nhờ vậy:
@@ -18,6 +19,9 @@ export const WAREHOUSES = [
   { code: MAIN, name: 'Kho Bồ Sơn', short: 'Bồ Sơn', kind: 'main' },
 ];
 const COLUMN = { [STORE]: 'stock', [MAIN]: 'stock_bs' };
+/** Kho bán online: số tồn khách thấy trên web và kho đơn web trừ hàng (18/11/2026: Kho Bồ Sơn). */
+export const ONLINE = MAIN;
+export const ONLINE_COLUMN = COLUMN[ONLINE];
 
 export const isWarehouse = (code) => Object.hasOwn(COLUMN, code);
 
@@ -42,7 +46,7 @@ export function stockColumn(code) {
   return COLUMN[code];
 }
 
-/** Từ mức này trở xuống, bảng tồn kho báo "Sắp hết ở cửa hàng". */
+/** Từ mức này trở xuống, bảng tồn kho báo "Sắp hết". */
 export const LOW_STOCK_AT = 20;
 
 export const MOVEMENT_KINDS = {
@@ -113,12 +117,17 @@ export function inTransitByProduct() {
   return map;
 }
 
-/** Trạng thái cảnh báo của một dòng trong bảng tồn kho. */
-export function stockStatus({ stock_nc: nc, stock_bs: bs, moving_to_nc: moving = 0 }) {
+/**
+ * Trạng thái cảnh báo của một dòng trong bảng tồn kho. Kho Bồ Sơn bán online nên xét trước:
+ * Bồ Sơn hết thì web báo hết hàng dù cửa hàng còn.
+ */
+export function stockStatus({ stock_nc: nc, stock_bs: bs, moving_to_nc: toNc = 0, moving_to_bs: toBs = 0 }) {
   if (nc < 0 || bs < 0) return { level: 'red', code: 'negative', label: 'Âm kho, cần kiểm kê' };
-  if (nc + bs <= 0) return { level: 'red', code: 'out', label: moving > 0 ? 'Hết hàng, đang chuyển về' : 'Hết hàng, cần nhập' };
-  if (nc <= 0) return { level: 'blue', code: 'main_only', label: moving > 0 ? 'Đang chuyển về cửa hàng' : 'Chỉ có ở kho Bồ Sơn' };
-  if (nc <= LOW_STOCK_AT) return { level: 'yellow', code: 'low', label: 'Sắp hết ở cửa hàng' };
+  if (nc + bs <= 0) return { level: 'red', code: 'out', label: toNc + toBs > 0 ? 'Hết hàng, đang chuyển về' : 'Hết hàng, cần nhập' };
+  if (bs <= 0) return { level: 'red', code: 'web_out', label: toBs > 0 ? 'Web hết hàng, đang chuyển về Bồ Sơn' : 'Web báo hết (chỉ còn ở cửa hàng)' };
+  if (bs <= LOW_STOCK_AT) return { level: 'yellow', code: 'low', label: 'Sắp hết ở Bồ Sơn (web)' };
+  if (nc <= 0) return { level: 'blue', code: 'store_empty', label: toNc > 0 ? 'Đang chuyển về cửa hàng' : 'Cửa hàng hết, chỉ có ở Bồ Sơn' };
+  if (nc <= LOW_STOCK_AT) return { level: 'yellow', code: 'store_low', label: 'Sắp hết ở cửa hàng' };
   return { level: 'green', code: 'ok', label: 'Đủ hàng' };
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, DELIVERY_SLOTS, formatDateTime, formatVND, isPhone, normalizePhone, pastedMapLink, shippingFeeFor } from '../api';
+import { api, DELIVERY_SLOTS, DELIVERY_SLOT_LABEL, formatDateTime, formatVND, isPhone, normalizePhone, pastedMapLink, shippingFeeFor } from '../api';
 import { foldText } from './WholesaleManager.jsx';
 import WholesaleCustomerForm from './WholesaleCustomerForm.jsx';
 import MapLinkField, { addressMapProps } from './MapLinkField.jsx';
@@ -34,7 +34,7 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
   const [custForm, setCustForm] = useState(null);  // null | { customer: null } (thêm) | { customer } (sửa)
   // Kho xuất hàng (13/11/2026): mặc định Kho Bồ Sơn, nhân viên đổi bằng tay ở góc form nếu lấy ở cửa hàng.
   const [warehouse, setWarehouse] = useState('KH_BS');
-  const [mainStock, setMainStock] = useState(null);       // Map id → tồn Kho Bồ Sơn
+  const [whStock, setWhStock] = useState(null);           // Map id → { KH_BS, KH_NC } tồn từng kho
   const [mapFromAddress, setMapFromAddress] = useState(false);
   const [profile, setProfile] = useState(null);       // hồ sơ khách cũ theo số điện thoại vừa gõ
   const [profileFilled, setProfileFilled] = useState('');   // số điện thoại đã điền sẵn (mỗi số một lần)
@@ -45,11 +45,11 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
   useEffect(() => {
     api.products().then((d) => setProducts(d.products || [])).catch(() => {});
   }, []);
-  // Tồn Kho Bồ Sơn để biết còn bao nhiêu khi xuất từ kho.
+  // Tồn từng kho để biết còn bao nhiêu ở kho đang chọn (số tồn trên web chỉ là của Kho Bồ Sơn).
   useEffect(() => {
     api.inventoryStock()
-      .then((d) => setMainStock(new Map(d.products.map((p) => [p.id, p.stock_bs]))))
-      .catch(() => setMainStock(new Map()));
+      .then((d) => setWhStock(new Map(d.products.map((p) => [p.id, { KH_BS: p.stock_bs, KH_NC: p.stock_nc }]))))
+      .catch(() => setWhStock(new Map()));
   }, []);
   useEffect(() => {
     if (!wholesale || wsList) return;
@@ -95,7 +95,7 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
   const fromMain = warehouse === 'KH_BS';
   const whName = fromMain ? 'Kho Bồ Sơn' : 'Cửa hàng';
   // Số còn ở kho xuất hàng của đơn; kho kia còn bao nhiêu để nhân viên biết mà đổi.
-  const stockAt = (p, code) => (code === 'KH_BS' ? mainStock?.get(p.id) ?? 0 : Math.max(p.stock, 0));
+  const stockAt = (p, code) => Math.floor(Math.max(whStock?.get(p.id)?.[code] ?? (code === 'KH_BS' ? p.stock : 0), 0));
   const avail = (p) => stockAt(p, warehouse);
   const otherStock = (p) => stockAt(p, fromMain ? 'KH_NC' : 'KH_BS');
   const selectable = products.filter((p) => p.price > 0 || (wholesale && fixedPrice(p.id)));
@@ -372,7 +372,7 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
         <label>Khung giờ giao
           <select className="input" value={form.delivery_slot} onChange={(e) => set('delivery_slot', e.target.value)}>
             <option value="">Chưa hẹn giờ</option>
-            {DELIVERY_SLOTS.map(([code, label, time]) => <option key={code} value={code}>{label} ({time})</option>)}
+            {DELIVERY_SLOTS.map(([code]) => <option key={code} value={code}>{DELIVERY_SLOT_LABEL[code]}</option>)}
           </select>
         </label>
         <label>Thanh toán

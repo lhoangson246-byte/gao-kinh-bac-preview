@@ -9,7 +9,7 @@ const router = Router();
 router.use(validateRoutes('products'));
 // Không có cost_price: giá nhập là thông tin nội bộ của cửa hàng.
 // Tồn khách thấy là tồn Cửa hàng Nguyễn Cao; bán tại quầy có thể làm số này âm nên không để lộ số âm.
-const PUBLIC_COLUMNS = 'id, name, description, origin, price, original_price, unit, CAST(MAX(stock, 0) AS INTEGER) AS stock, '
+const PUBLIC_COLUMNS = 'id, name, description, origin, price, original_price, unit, CAST(MAX(stock_bs, 0) AS INTEGER) AS stock, '
   + 'image_url, is_active, category, points_per_unit, weight_kg, upsell_rank, created_at';
 
 /** Bỏ ý nghĩa đặc biệt của % và _ để khách gõ ký tự nào cũng chỉ là tìm kiếm chữ. */
@@ -39,14 +39,14 @@ router.get('/', (req, res) => {
     .prepare(
       `SELECT ${PUBLIC_COLUMNS} FROM products
        WHERE is_active = 1
-         ${inStockOnly ? 'AND stock > 0' : ''}
+         ${inStockOnly ? 'AND stock_bs > 0' : ''}
          ${groupClause}
          AND (name LIKE ? ESCAPE '\\'
               OR IFNULL(origin, '') LIKE ? ESCAPE '\\'
               OR IFNULL(description, '') LIKE ? ESCAPE '\\')
        -- Còn hàng lên trước. Lọc theo nhóm cửa hàng tạo: đúng thứ tự đã kéo thả trong nhóm;
        -- còn lại: đúng thứ tự cửa hàng kéo thả ở "Tất cả sản phẩm".
-       ORDER BY stock > 0 DESC, ${groupParams.length
+       ORDER BY stock_bs > 0 DESC, ${groupParams.length
          ? `(SELECT gi.sort_order FROM product_group_items gi JOIN product_groups g ON g.id = gi.group_id
               WHERE g.slug = ? AND gi.product_id = products.id),`
          : 'sort_order,'} id`

@@ -227,12 +227,16 @@ let invoice10k;
 
 /* ---------- Bán tại quầy trừ tồn Cửa hàng Nguyễn Cao (từ 13/11/2026, hai kho) ---------- */
 {
-  const before = (await call(`/products/${p35.id}`)).data.product.stock;
+  // Tồn Nguyễn Cao là cột `stock` ở danh sách quản trị; số khách thấy trên web là tồn Bồ Sơn (18/11/2026).
+  const stocks = async () => (await call('/admin/products', { token: admin })).data.products.find((p) => p.id === p35.id);
+  const webBefore = (await call(`/products/${p35.id}`)).data.product.stock;
+  const before = (await stocks()).stock;
   await call('/retail/invoices', {
     method: 'POST', token: admin, body: { items: [{ product_id: p35.id, quantity: 3 }] },
   });
-  const after = (await call(`/products/${p35.id}`)).data.product.stock;
+  const after = (await stocks()).stock;
   check('Bán tại quầy trừ tồn Cửa hàng Nguyễn Cao', after === before - 3, `${before} -> ${after}`);
+  check('Bán tại quầy không đổi số tồn khách thấy trên web (Bồ Sơn)', (await call(`/products/${p35.id}`)).data.product.stock === webBefore);
 }
 
 /* ---------- Tra cứu khách theo số điện thoại ---------- */

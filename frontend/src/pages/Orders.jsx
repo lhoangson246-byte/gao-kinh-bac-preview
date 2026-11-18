@@ -3,10 +3,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import DeliveryPromise from '../components/DeliveryPromise.jsx';
 import TransferBox from '../components/TransferBox.jsx';
-import { api, formatDateTime, formatNumber, formatVND, DELIVERY_SLOTS, deliveryDateLabel } from '../api';
+import { api, formatDateTime, formatNumber, formatVND, deliveryDateLabel, slotInfo } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 
-const SLOT_TIME = Object.fromEntries(DELIVERY_SLOTS.map(([code, , time]) => [code, time]));
 const STATUSES = ['pending', 'confirmed', 'shipping', 'completed', 'cancelled'];
 const PAYMENTS = ['cod', 'bank'];
 
@@ -120,9 +119,9 @@ export default function Orders() {
                 <div>
                   <strong>{order.receiver_name} · {order.phone}</strong>
                   <p>{order.address}</p>
-                  {SLOT_TIME[order.delivery_slot] && (
+                  {slotInfo(order.delivery_slot) && (
                     <small>{t('orders.delivery', {
-                      slot: `${t(`slot.${order.delivery_slot}`)} ${deliveryDateLabel(order.created_at, order.delivery_slot)} (${SLOT_TIME[order.delivery_slot]})`,
+                      slot: `${t(`slot.${slotInfo(order.delivery_slot).session}`)} ${deliveryDateLabel(order.created_at, order.delivery_slot)} (${slotInfo(order.delivery_slot).time})`,
                     })}</small>
                   )}
                   <small>{PAYMENTS.includes(order.payment_method) ? t(`orders.${order.payment_method}`) : order.payment_method}</small>

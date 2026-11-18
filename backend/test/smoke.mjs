@@ -248,7 +248,7 @@ const baseOrder = {
 }
 
 /* ---------- 10. Tạo đơn — máy chủ tự tính tổng tiền ---------- */
-const stockBefore = product.stock;
+const stockBefore = product.stock_bs;   // tồn Bồ Sơn — kho bán online, số khách thấy trên web
 let orderId;
 {
   const tampered = await call('/orders', {

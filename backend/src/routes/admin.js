@@ -21,7 +21,7 @@ import {
 } from '../product-groups.js';
 import { getWholesale, wholesalePrices } from '../wholesale.js';
 import { MAP_ONLY_ADDRESS, parseMapLink, splitAddressMap } from '../map-link.js';
-import { STORE, isWarehouse, moveStock } from '../inventory.js';
+import { ONLINE, ONLINE_COLUMN, isWarehouse, moveStock } from '../inventory.js';
 
 const router = Router();
 
@@ -194,9 +194,9 @@ router.post('/orders', async (req, res, next) => {
     } else if (items.some((line) => line?.price != null)) {
       errors.items = 'Khách lẻ tính đúng giá web, không sửa giá được.';
     }
-    // Kho xuất hàng do nhân viên chọn ở góc form (mặc định Kho Bồ Sơn từ 13/11/2026), cho cả khách lẻ và
-    // khách buôn. Không gửi lên thì là Cửa hàng Nguyễn Cao. Đơn khách tự đặt trên web luôn là cửa hàng.
-    const warehouse = body.warehouse || STORE;
+    // Kho xuất hàng do nhân viên chọn ở góc form, cho cả khách lẻ và khách buôn. Không gửi lên thì là
+    // kho bán online (Kho Bồ Sơn, 18/11/2026) — giống đơn khách tự đặt trên web.
+    const warehouse = body.warehouse || ONLINE;
     if (!isWarehouse(warehouse)) errors.warehouse = 'Chọn kho xuất hàng.';
     if (Object.keys(errors).length) throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', errors);
 
@@ -637,11 +637,11 @@ router.post('/products/:id/stock', (req, res, next) => {
       const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
       if (!product) throw new HttpError(404, 'Không tìm thấy loại gạo.');
 
-      const stockAfter = product.stock + quantity;
+      const stockAfter = product[ONLINE_COLUMN] + quantity;
       if (stockAfter > LIMITS.stock) throw new HttpError(400, 'Tồn kho vượt giới hạn cho phép.');
-      // Nút "Nhập kho" ở trang Sản phẩm nhập thẳng vào Cửa hàng Nguyễn Cao, có ghi nhật ký kho.
+      // Nút "Nhập kho" ở trang Sản phẩm nhập thẳng vào kho bán online (Kho Bồ Sơn), có ghi nhật ký kho.
       moveStock({
-        productId, warehouse: STORE, delta: quantity, kind: 'receipt',
+        productId, warehouse: ONLINE, delta: quantity, kind: 'receipt',
         note: note || 'Nhập kho nhanh ở trang Sản phẩm', actor: req.user,
       });
       // Khai giá nhập ở lần nhập này thì cập nhật luôn giá nhập của sản phẩm.
@@ -661,8 +661,8 @@ router.post('/products/:id/stock', (req, res, next) => {
     const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
     writeAdminAudit(req, {
       action: 'receive_stock', entityType: 'product', entityId: productId,
-      before: { stock: before.stock, cost_price: before.cost_price },
-      after: { stock: product.stock, cost_price: product.cost_price, quantity, note },
+      before: { stock_bs: before[ONLINE_COLUMN], cost_price: before.cost_price },
+      after: { stock_bs: product[ONLINE_COLUMN], cost_price: product.cost_price, quantity, note },
     });
     res.status(201).json({
       product,
@@ -732,9 +732,9 @@ router.post('/products', (req, res, next) => {
           data.image_url ?? null, data.is_active ?? 1, data.category ?? 'gao', data.original_price ?? 0,
           data.points_per_unit ?? null, data.is_reward ?? 0,
         ).lastInsertRowid;
-      // Tồn ban đầu là tồn Cửa hàng Nguyễn Cao, ghi vào nhật ký kho như mọi thay đổi tồn khác.
+      // Ô tồn kho ở trang Sản phẩm là tồn kho bán online (Kho Bồ Sơn), ghi vào nhật ký kho như mọi thay đổi khác.
       if (data.stock > 0) {
-        moveStock({ productId: id, warehouse: STORE, delta: data.stock, kind: 'opening', note: 'Tồn ban đầu khi thêm sản phẩm', actor: req.user });
+        moveStock({ productId: id, warehouse: ONLINE, delta: data.stock, kind: 'opening', note: 'Tồn ban đầu khi thêm sản phẩm', actor: req.user });
       }
       if (data.sku) db.prepare('UPDATE products SET sku = ? WHERE id = ?').run(data.sku, id);
       // Nhóm gạo (bộ lọc trang chủ): một sản phẩm thuộc được nhiều nhóm.
@@ -767,12 +767,12 @@ router.put('/products/:id', (req, res, next) => {
     assertSkuFree(data.sku, productId);
 
     db.transaction(() => {
-      // Sửa ô tồn kho ở trang Sản phẩm = điều chỉnh tồn Cửa hàng Nguyễn Cao; đi qua nhật ký kho để
-      // ai sửa, sửa bao nhiêu đều để lại dấu.
+      // Sửa ô tồn kho ở trang Sản phẩm = điều chỉnh tồn kho bán online (Kho Bồ Sơn); đi qua nhật ký kho
+      // để ai sửa, sửa bao nhiêu đều để lại dấu.
       if (data.stock !== undefined) {
-        const current = db.prepare('SELECT stock FROM products WHERE id = ?').get(productId).stock;
+        const current = db.prepare(`SELECT ${ONLINE_COLUMN} AS stock FROM products WHERE id = ?`).get(productId).stock;
         if (data.stock !== current) {
-          moveStock({ productId, warehouse: STORE, delta: data.stock - current, kind: 'edit', actor: req.user, strict: false });
+          moveStock({ productId, warehouse: ONLINE, delta: data.stock - current, kind: 'edit', actor: req.user, strict: false });
         }
       }
       const columns = fields.filter((f) => f !== 'stock');
@@ -957,7 +957,7 @@ router.get('/stats', (req, res) => {
       orders: db.prepare('SELECT COUNT(*) c FROM orders').get().c,
       pending: countOrders.get('pending').c,
       shipping: countOrders.get('shipping').c,
-      lowStock: db.prepare('SELECT COUNT(*) c FROM products WHERE is_active = 1 AND stock <= 10').get().c,
+      lowStock: db.prepare('SELECT COUNT(*) c FROM products WHERE is_active = 1 AND stock_bs <= 10').get().c,
       missingPrice: db.prepare('SELECT COUNT(*) c FROM products WHERE is_active = 1 AND price <= 0').get().c,
       missingCost: db.prepare('SELECT COUNT(*) c FROM products WHERE is_active = 1 AND cost_price <= 0').get().c,
       // Giá trị vốn của hàng đang nằm trong kho.

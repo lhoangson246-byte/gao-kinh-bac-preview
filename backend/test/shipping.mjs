@@ -69,9 +69,9 @@ try {
   check('Khách lấy tại cửa hàng: không mất phí', pickup.data.order?.shipping_fee === 0, JSON.stringify(pickup.data).slice(0, 220));
 
   /* Huỷ đơn: hoàn kho như thường */
-  const stockBefore = (await call('/admin/products', { token: admin })).data.products.find((p) => p.id === p99.id)?.stock;
+  const stockBefore = (await call('/admin/products', { token: admin })).data.products.find((p) => p.id === p99.id)?.stock_bs;
   await call(`/admin/orders/${edge.id}/status`, { method: 'PATCH', token: admin, body: { status: 'cancelled' } });
-  const stockAfter = (await call('/admin/products', { token: admin })).data.products.find((p) => p.id === p99.id)?.stock;
+  const stockAfter = (await call('/admin/products', { token: admin })).data.products.find((p) => p.id === p99.id)?.stock_bs;
   check('Huỷ đơn có phí giao vẫn hoàn kho một lần', stockAfter === stockBefore + 1, `${stockBefore} -> ${stockAfter}`);
 } finally {
   await app.close();

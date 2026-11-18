@@ -39,7 +39,7 @@ try {
   check('Giá và tổng tiền do máy chủ tính; đơn đầu của số này được giảm 20.000đ', o1?.subtotal === 240000 && o1.discount === 20000 && o1.total === 220000);
   check('Đơn tay giao luôn cho nhân viên giao hàng', o1?.shipper_name === 'Anh Giao');
   check('Nhân viên giao hàng thấy đơn ngay', (await call('/delivery/orders', { token: shipper })).data.orders.some((o) => o.id === o1.id));
-  check('Trừ tồn kho như đơn online', (await call('/admin/products', { token: owner })).data.products.find((p) => p.id === product.id).stock === 38);
+  check('Trừ tồn kho như đơn online', (await call('/admin/products', { token: owner })).data.products.find((p) => p.id === product.id).stock_bs === 38);
   const pickup = (await create(sales, { home_delivery: false, address: '', discount_code: 'GAOKINHBAC11', items: [{ product_id: product.id, quantity: 1 }] })).data.order;
   check('Khách lấy tại cửa hàng: không cần địa chỉ', pickup?.fulfillment === 'pickup' && pickup.address === 'Khách lấy tại cửa hàng');
   check('Đơn tay thứ hai cùng số dùng được mã GAOKINHBAC11', pickup?.discount_code === 'GAOKINHBAC11' && pickup.total === 110000);

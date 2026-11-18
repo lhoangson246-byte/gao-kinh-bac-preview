@@ -14,7 +14,7 @@ import { PromoGiftChoice, PromoGiftRow, PromoProgress } from '../components/Prom
 import { passwordErrorKey } from '../password';
 import {
   api, formatVND, isPhone, mapLink, mentionsOtherProvince, normalizePhone, pointsForLines, shippingFeeFor, FREE_SHIPPING_MIN,
-  DELIVERY_AREA_CODE, DELIVERY_SLOTS, FIRST_ORDER_DISCOUNT, deliveryPlan, slotDay, isReturningCustomer, markReturningCustomer,
+  DELIVERY_AREA_CODE, DELIVERY_SLOTS, SLOT_SESSIONS, FIRST_ORDER_DISCOUNT, deliveryPlan, slotDay, isReturningCustomer, markReturningCustomer,
 } from '../api';
 
 /** Thông tin nhận hàng lần trước, chỉ lưu trên máy của khách để lần sau khỏi gõ lại. */
@@ -256,17 +256,25 @@ export default function QuickCheckout() {
 
           <fieldset className="quick-choice quick-half">
             <legend>{t('quick.when')}</legend>
-            <div className="quick-options">
-              {DELIVERY_SLOTS.map(([code, , time]) => (
-                <button key={code} type="button" className={form.delivery_slot === code ? 'active' : ''}
-                        aria-pressed={form.delivery_slot === code}
-                        onClick={() => { slotTouched.current = true; set('delivery_slot', code); }}>
-                  <strong>{t(`slot.${code}`)}</strong>
-                  <small>{time}</small>
-                  <small className={`slot-day ${slotDay(code, now)}`}>{t(`slot.day.${slotDay(code, now)}`)}</small>
-                </button>
-              ))}
-            </div>
+            {SLOT_SESSIONS.map((session) => {
+              const slots = DELIVERY_SLOTS.filter(([, s]) => s === session);
+              return (
+                <div key={session} className="slot-session">
+                  <span className="slot-session-name">{t(`slot.${session}`)}</span>
+                  <div className={`quick-options slot-options cols-${slots.length}`}>
+                    {slots.map(([code, , time]) => (
+                      <button key={code} type="button" className={form.delivery_slot === code ? 'active' : ''}
+                              aria-pressed={form.delivery_slot === code}
+                              aria-label={`${t(`slot.${session}`)} ${time}, ${t(`slot.day.${slotDay(code, now)}`)}`}
+                              onClick={() => { slotTouched.current = true; set('delivery_slot', code); }}>
+                        <strong>{time.replace(' – ', '–')}</strong>
+                        <small className={`slot-day ${slotDay(code, now)}`}>{t(`slot.day.${slotDay(code, now)}`)}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </fieldset>
 
           <fieldset className="quick-choice quick-half">

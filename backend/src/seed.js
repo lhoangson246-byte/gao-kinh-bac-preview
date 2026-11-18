@@ -141,8 +141,9 @@ const tx = db.transaction(() => {
 
   // Cùng tên nhưng khác quy cách đóng gói vẫn là hai sản phẩm khác nhau.
   const existed = db.prepare('SELECT id FROM products WHERE name = ? AND unit = ?');
+  // Tồn mẫu đặt ở Kho Bồ Sơn — kho bán online, số khách thấy trên web (18/11/2026).
   const ins = db.prepare(
-    `INSERT INTO products (name, description, origin, price, unit, stock, image_url, is_reward, weight_kg)
+    `INSERT INTO products (name, description, origin, price, unit, stock_bs, image_url, is_reward, weight_kg)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 

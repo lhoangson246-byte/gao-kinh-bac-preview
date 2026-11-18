@@ -14,7 +14,7 @@ import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../val
 import { readLocation } from './addresses.js';
 import { promoGiftFor } from '../promotions.js';
 import { attachItems } from '../order-lists.js';
-import { STORE, moveStock, stockColumn, warehouseName } from '../inventory.js';
+import { ONLINE, ONLINE_COLUMN, moveStock, stockColumn, warehouseName } from '../inventory.js';
 import { loyaltyProfile, refundPoints, spendPoints } from '../loyalty.js';
 import { notifyNewOrder, notifyTransferReported, siteOrigin } from '../push.js';
 import { trackOrder, trackOrdersByPhone } from '../order-tracking.js';
@@ -87,9 +87,9 @@ export function placeOrder({
   wholesaleCustomerId = null, priceOverrides = null,
   // Link định vị nhân viên dán khi tạo đơn (đã kiểm tra bằng parseMapLink).
   mapUrl = null,
-  // Kho xuất hàng (13/11/2026): đơn web và đơn khách lẻ luôn là Cửa hàng Nguyễn Cao; đơn khách buôn do
-  // nhân viên chọn (thường là Kho Bồ Sơn). stockActor: người tạo đơn, ghi vào nhật ký kho.
-  warehouse = STORE, stockActor = null,
+  // Kho xuất hàng: đơn khách đặt trên web luôn trừ kho bán online (Kho Bồ Sơn, từ 18/11/2026); đơn
+  // nhân viên tạo thì theo kho nhân viên chọn. stockActor: người tạo đơn, ghi vào nhật ký kho.
+  warehouse = ONLINE, stockActor = null,
 }) {
   const rewardCount = vouchers + [...wantedRewards.values()].reduce((sum, q) => sum + q, 0);
   return db.transaction(() => {
@@ -134,7 +134,7 @@ export function placeOrder({
       }
       const available = Math.floor(Math.max(product[column], 0));
       if (available < quantity) {
-        throw new HttpError(400, `“${product.name}” chỉ còn ${available} ${product.unit}${warehouse === STORE ? '' : ` ở ${warehouseName(warehouse)}`}.`);
+        throw new HttpError(400, `“${product.name}” chỉ còn ${available} ${product.unit}${staff ? ` ở ${warehouseName(warehouse)}` : ''}.`);
       }
       lines.push({ product, quantity });
       subtotal += product.price * quantity;
@@ -514,8 +514,8 @@ router.get('/discount', requireAuth, (req, res) => {
     pointsPerReward: RETAIL_POINTS_PER_REWARD,
     voucherAmount: REWARD_VOUCHER_AMOUNT,
     rewards: db.prepare(`
-      SELECT id, name, unit, image_url, stock FROM products
-      WHERE is_reward = 1 AND is_active = 1 AND stock > 0 ORDER BY id
+      SELECT id, name, unit, image_url, CAST(${ONLINE_COLUMN} AS INTEGER) AS stock FROM products
+      WHERE is_reward = 1 AND is_active = 1 AND ${ONLINE_COLUMN} >= 1 ORDER BY id
     `).all(),
   });
 });
@@ -590,7 +590,7 @@ export function restoreStockForOrder(orderId, actor = null) {
   for (const item of items) {
     if (!item.product_id) continue;
     moveStock({
-      productId: item.product_id, warehouse: order?.warehouse || STORE, delta: item.quantity, kind: 'order_cancel',
+      productId: item.product_id, warehouse: order?.warehouse || 'KH_NC', delta: item.quantity, kind: 'order_cancel',
       ref: { type: 'order', id: orderId, code: order?.code }, actor,
     });
   }

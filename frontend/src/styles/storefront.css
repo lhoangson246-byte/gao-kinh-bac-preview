@@ -99,3 +99,27 @@
 /* ---------- Tra cứu đơn ---------- */
 .track-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
 .track-actions .btn { min-height: 46px; gap: 6px; }
+
+/* ---------- Khung giờ giao: sáng 2 khung, chiều 3 khung (18/11/2026) ---------- */
+/* Cỡ chữ theo bề rộng khung (cqi) để ba nút buổi chiều vừa cả khi ô chọn giờ chỉ chiếm nửa trang. */
+.slot-session { container-type: inline-size; }
+.slot-session + .slot-session { margin-top: 10px; }
+.slot-session-name { display: block; margin-bottom: 5px; color: var(--muted); font-size: .84rem; font-weight: 750; text-transform: uppercase; letter-spacing: .02em; }
+.slot-options.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.slot-options.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.quick-options.slot-options, .payment-options.slot-options { gap: 8px; }
+.quick-options.slot-options button { min-height: 58px; padding: 10px 2px 6px; font-size: .95rem; }
+.quick-options.slot-options button.active::after { top: -8px; right: -6px; width: 18px; height: 18px; font-size: .68rem; }
+.slot-options strong { white-space: nowrap; font-size: clamp(.68rem, 4.1cqi, .98rem); letter-spacing: -.01em; }
+.payment-options.slot-options label { position: relative; display: flex; justify-content: center; padding: 10px 2px; text-align: center; }
+.payment-options.slot-options label input { position: absolute; opacity: 0; pointer-events: none; }
+.payment-options.slot-options label:has(input:focus-visible) { outline: 3px solid var(--gold); outline-offset: 2px; }
+.payment-options.slot-options label.selected { background: var(--green-100); }
+.payment-options.slot-options small.slot-day { display: inline-block; margin-top: 3px; padding: 1px 7px; border-radius: 99px; background: var(--green-100); color: var(--green-900); font-size: .72rem; font-weight: 750; }
+.payment-options.slot-options label.selected small.slot-day { background: var(--white); }
+.payment-options.slot-options small.slot-day.tomorrow { background: #fff3d6; color: #7a5410; }
+@media (max-width: 560px) {
+  /* styles.css cho .payment-options thành display:block trên điện thoại; khung giờ vẫn xếp lưới. */
+  .slot-group .payment-options.slot-options { display: grid; }
+  .slot-group .payment-options.slot-options label { margin-bottom: 0; }
+}

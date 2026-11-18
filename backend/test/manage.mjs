@@ -185,13 +185,13 @@ const pid = created.data.product?.id;
 
 /* --- Nhập thêm hàng --- */
 {
-  const before = created.data.product.stock;
+  const before = created.data.product.stock_bs;   // ô tồn kho ở trang Sản phẩm = tồn Bồ Sơn (kho bán online)
   const r = await call(`/admin/products/${pid}/stock`, {
     method: 'POST', token: admin, body: { quantity: 20, note: 'Lấy từ kho Hưng Yên' },
   });
   check('Nhập kho thành công (201)', r.status === 201, JSON.stringify(r.data));
-  check('Tồn kho được CỘNG THÊM, không ghi đè', r.data.product.stock === before + 20,
-    `${before} + 20 -> ${r.data.product?.stock}`);
+  check('Tồn kho được CỘNG THÊM, không ghi đè', r.data.product.stock_bs === before + 20,
+    `${before} + 20 -> ${r.data.product?.stock_bs}`);
   check('Lịch sử ghi lại lần nhập', r.data.entries[0]?.quantity === 20);
   check('Lịch sử lưu tồn kho sau khi nhập', r.data.entries[0]?.stock_after === before + 20);
   check('Lịch sử lưu ghi chú', r.data.entries[0]?.note === 'Lấy từ kho Hưng Yên');
@@ -199,8 +199,8 @@ const pid = created.data.product?.id;
   const again = await call(`/admin/products/${pid}/stock`, {
     method: 'POST', token: admin, body: { quantity: 5 },
   });
-  check('Nhập lần hai cộng dồn tiếp', again.data.product.stock === before + 25,
-    String(again.data.product?.stock));
+  check('Nhập lần hai cộng dồn tiếp', again.data.product.stock_bs === before + 25,
+    String(again.data.product?.stock_bs));
   check('Lịch sử có 2 lần nhập', again.data.entries.length === 2);
 }
 

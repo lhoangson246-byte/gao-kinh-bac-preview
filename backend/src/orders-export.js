@@ -1,13 +1,13 @@
 import { orderDaySql } from './order-lists.js';
 import db from './db.js';
-import { localDate, REPORT_TIME_SHIFT } from './constants.js';
+import { DELIVERY_SLOTS, localDate, REPORT_TIME_SHIFT } from './constants.js';
 import { HttpError } from './validate.js';
 
 const MAX_ROWS = 50000;
 const DAY_MS = 86400000;
 const statusNames = { pending: 'Chờ xác nhận', confirmed: 'Đã xác nhận', shipping: 'Đang giao', completed: 'Hoàn thành', cancelled: 'Đã huỷ' };
 const paymentNames = { cod: 'Thanh toán khi nhận hàng', bank: 'Chuyển khoản', cash: 'Tiền mặt', transfer: 'Chuyển khoản' };
-const slotNames = { sang: 'Buổi sáng 07:00–11:30', chieu: 'Buổi chiều 13:30–18:00' };
+const slotNames = DELIVERY_SLOTS;
 
 /**
  * `status`: chỉ xuất đơn online ở trạng thái đó (ví dụ 'completed' — đơn đã giao xong) và bỏ hoá đơn

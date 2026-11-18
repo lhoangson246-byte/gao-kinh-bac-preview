@@ -1660,6 +1660,34 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
 - **Danh sách chọn hàng** ở Phiếu nhập và Điều chuyển chỉ còn **tên** (kèm mã nếu có), bỏ "· bao 10kg". Hai loại trùng tên (ví dụ Gạo Lài Miên túi 5kg và bao 10kg) thì vẫn ghi quy cách trong ngoặc để khỏi chọn nhầm. Điều chuyển ghi số còn kèm kg: "còn 58,2 bao (582 kg)".
 - Mã: `toQty`, `roundQty` trong `backend/src/inventory.js`; giao diện ở `frontend/src/components/InventoryForms.jsx`.
 
+## Web bán từ Kho Bồ Sơn; 5 khung giờ giao (18/11/2026)
+
+**Đổi vai hai kho.**
+- Số tồn khách thấy trên web là tồn **Kho Bồ Sơn** (`products.stock_bs`). Đơn khách đặt online (đặt nhanh, đặt có tài khoản) trừ ở Bồ Sơn; huỷ đơn hoàn về đúng kho đã trừ (cột `orders.warehouse`).
+- **Cửa hàng Nguyễn Cao** chỉ bán cho khách tới mua tại cửa hàng: hoá đơn bán tại quầy trừ ở đây. Tồn Nguyễn Cao không ảnh hưởng số trên web.
+- Đơn nhân viên tạo: trừ ở kho chọn ở góc form (mặc định Bồ Sơn). Không gửi kho lên thì máy chủ cũng lấy Bồ Sơn.
+- Ô "Số lượng còn lại" và nút "Nhập kho" ở trang Sản phẩm giờ là tồn Bồ Sơn; danh sách sản phẩm ghi "Còn trên web (Bồ Sơn)".
+- Bảng tồn kho cảnh báo theo vai mới: "Web báo hết (chỉ còn ở cửa hàng)" (đỏ), "Sắp hết ở Bồ Sơn (web)", "Cửa hàng hết, chỉ có ở Bồ Sơn", "Sắp hết ở cửa hàng"; có nút "Chuyển từ cửa hàng" khi web hết mà cửa hàng còn.
+- Hằng số `ONLINE` / `ONLINE_COLUMN` trong `backend/src/inventory.js`. Muốn đổi kho bán online thì đổi một chỗ đó.
+- Dữ liệu mẫu (`seed.js`) đặt tồn vào Bồ Sơn.
+- **Lưu ý khi đưa lên:** đơn cũ đã trừ Nguyễn Cao vẫn hoàn về Nguyễn Cao khi huỷ. Tồn Bồ Sơn trên trang thật phải được nhập (Kho hàng → Kiểm kê → Kho Bồ Sơn, hoặc Nhập kho), không thì web báo hết hàng.
+
+**Khung giờ giao.**
+- Sáng: 07h00–09h30 (`sang1`), 09h30–11h30 (`sang2`).
+- Chiều: 13h30–15h00 (`chieu1`), 15h00–17h30 (`chieu2`), 17h30–18h40 (`chieu3`).
+- Mã cũ `sang` / `chieu` vẫn được nhận và hiện đúng trên đơn cũ.
+- **Tự chọn sẵn:** khung sớm nhất còn ít nhất 1 tiếng (`SLOT_LEAD_MIN` trong `frontend/src/api.js`).
+- **Khung còn dưới 1 tiếng:** ghi "Ngày mai". Sau 17h30 mọi khung là ngày mai, giữ nguyên hạn nhận đơn.
+- **Trang đặt nhanh và trang đặt hàng:** hai hàng "Buổi sáng" (2 nút) và "Buổi chiều" (3 nút). Cỡ chữ co theo bề rộng khung nên vừa cả màn 360px lẫn ô hẹp trên máy tính.
+- **Form tạo đơn của nhân viên, thông báo đơn mới, file xuất Excel:** dùng đủ 5 khung.
+- Danh sách khung nằm ở hai nơi phải sửa cùng nhau: `backend/src/constants.js` (`DELIVERY_SLOTS`) và `frontend/src/api.js` (`DELIVERY_SLOTS`).
+- **Chưa đổi:** chân trang "Giờ làm việc" vẫn ghi buổi chiều 13h30–18h00, chờ chủ cửa hàng xác nhận giờ đóng cửa.
+
+**Kiểm tra.**
+- Kho: `test:inventory` 71/71, gồm đơn web trừ Bồ Sơn, web báo hết khi Bồ Sơn hết dù cửa hàng còn, và ô tồn kho trang Sản phẩm sửa Bồ Sơn.
+- Các bộ smoke / retail / manage / shipping / manual đã cập nhật theo vai mới.
+- Thử trên trình duyệt: 5 khung ở đặt nhanh và đặt hàng (360px và 1280px), đặt đơn khung 17h30–18h40 lưu `chieu3` và trừ Bồ Sơn.
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

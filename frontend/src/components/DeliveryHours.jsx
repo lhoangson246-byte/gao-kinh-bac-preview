@@ -8,8 +8,8 @@ const ROWS = [
   { phase: 'morning', icon: '☀️', time: '07h00 – 11h30' },
   { phase: 'lunch', icon: '🍚', time: '11h30 – 13h30' },
   { phase: 'afternoon', icon: '🌤️', time: '13h30 – 17h30' },
-  { phase: 'late', icon: '🏪', time: '17h30 – 18h00' },
-  { phase: 'closed', icon: '🌙', time: '18h00 – 07h00' },
+  { phase: 'late', icon: '🏪', time: '17h30 – 18h40' },
+  { phase: 'closed', icon: '🌙', time: '18h40 – 07h00' },
 ];
 
 /**

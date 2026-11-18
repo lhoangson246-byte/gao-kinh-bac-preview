@@ -5,7 +5,7 @@ import AddressBook from '../components/AddressBook.jsx';
 import DeliveryHours, { useNow } from '../components/DeliveryHours.jsx';
 import { PromoGiftChoice, PromoGiftRow, PromoProgress } from '../components/Promotion.jsx';
 import {
-  api, formatNumber, formatVND, markReturningCustomer, pointsForLines, shippingFeeFor, DELIVERY_AREA_CODE, DELIVERY_SLOTS, deliveryPlan, slotDay,
+  api, formatNumber, formatVND, markReturningCustomer, pointsForLines, shippingFeeFor, DELIVERY_AREA_CODE, DELIVERY_SLOTS, SLOT_SESSIONS, deliveryPlan, slotDay,
 } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 import DiscountCodeField from '../components/DiscountCodeField.jsx';
@@ -172,19 +172,26 @@ export default function Checkout() {
 
           <fieldset className="slot-group">
             <legend>{t('checkout.slotLegend')} <span className="free-tag">{t('common.free')}</span></legend>
-            <div className="payment-options">
-              {DELIVERY_SLOTS.map(([code, , time]) => (
-                <label key={code} className={form.delivery_slot === code ? 'selected' : ''}>
-                  <input type="radio" name="delivery_slot" value={code}
-                         checked={form.delivery_slot === code} onChange={onChange} />
-                  <span aria-hidden="true">◷</span>
-                  <div>
-                    <strong>{t(`slot.${code}`)}</strong>
-                    <small>{time} · {t(`slot.day.${slotDay(code, now)}`)}</small>
+            {SLOT_SESSIONS.map((session) => {
+              const slots = DELIVERY_SLOTS.filter(([, s]) => s === session);
+              return (
+                <div key={session} className="slot-session">
+                  <span className="slot-session-name">{t(`slot.${session}`)}</span>
+                  <div className={`payment-options slot-options cols-${slots.length}`}>
+                    {slots.map(([code, , time]) => (
+                      <label key={code} className={form.delivery_slot === code ? 'selected' : ''}>
+                        <input type="radio" name="delivery_slot" value={code}
+                               checked={form.delivery_slot === code} onChange={onChange} />
+                        <div>
+                          <strong>{time.replace(' – ', '–')}</strong>
+                          <small className={`slot-day ${slotDay(code, now)}`}>{t(`slot.day.${slotDay(code, now)}`)}</small>
+                        </div>
+                      </label>
+                    ))}
                   </div>
-                </label>
-              ))}
-            </div>
+                </div>
+              );
+            })}
             <small className="field-help">
               {t('checkout.slotHelp')}
             </small>

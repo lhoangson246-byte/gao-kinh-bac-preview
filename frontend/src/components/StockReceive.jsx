@@ -23,7 +23,9 @@ export default function StockReceive({ product, onClose, onDone }) {
   }, [product.id]);
 
   const added = Number(quantity) || 0;
-  const stockAfter = product.stock + (added > 0 ? Math.round(added) : 0);
+  // Nhập nhanh ở trang Sản phẩm vào Kho Bồ Sơn (kho bán online) — số khách thấy trên web.
+  const current = Number(product.stock_bs) || 0;
+  const stockAfter = Math.round((current + (added > 0 ? Math.round(added) : 0)) * 1000) / 1000;
   const cost = Number(costPrice) || 0;
 
   const submit = async (e) => {
@@ -68,10 +70,10 @@ export default function StockReceive({ product, onClose, onDone }) {
       {error && <div className="alert error" role="alert">{error}</div>}
 
       <div className="stock-current">
-        <div><span>Tồn kho hiện tại</span><strong>{product.stock} {product.unit}</strong></div>
+        <div><span>Tồn Bồ Sơn (web)</span><strong>{current.toLocaleString('vi-VN', { maximumFractionDigits: 3 })} {product.unit}</strong></div>
         <div aria-hidden="true" className="stock-arrow">→</div>
         <div className={added > 0 ? 'stock-after' : ''}>
-          <span>Sau khi nhập</span><strong>{stockAfter} {product.unit}</strong>
+          <span>Sau khi nhập</span><strong>{stockAfter.toLocaleString('vi-VN', { maximumFractionDigits: 3 })} {product.unit}</strong>
         </div>
       </div>
 

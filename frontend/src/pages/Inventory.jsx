@@ -167,8 +167,9 @@ export default function Inventory() {
     });
   }, [products, query, onlyAlert, warehouse]);
   const alerts = useMemo(() => ({
-    out: products.filter((p) => p.is_active && ['out', 'negative'].includes(p.status.code)).length,
-    low: products.filter((p) => p.is_active && ['low', 'main_only'].includes(p.status.code)).length,
+    out: products.filter((p) => p.is_active && ['out', 'negative', 'web_out'].includes(p.status.code)).length,
+    webLow: products.filter((p) => p.is_active && p.status.code === 'low').length,
+    storeLow: products.filter((p) => p.is_active && ['store_empty', 'store_low'].includes(p.status.code)).length,
   }), [products]);
   const historyOf = logFilter.product_id ? products.find((p) => String(p.id) === logFilter.product_id) : null;
 
@@ -202,17 +203,17 @@ export default function Inventory() {
               <div className={`inv-kpi total${alerts.out ? ' warn' : ''}`}>
                 <span>Tổng tồn hệ thống</span>
                 <strong>{kgText(data.totals.all)}</strong>
-                <small>{alerts.out ? `🔴 ${alerts.out} loại hết hàng hoặc âm kho` : '🟢 An toàn'}{data.totals.all.other_units ? ` · ${formatQty(data.totals.all.other_units)} đơn vị hàng khác` : ''}</small>
+                <small>{alerts.out ? `🔴 ${alerts.out} loại web báo hết hoặc âm kho` : '🟢 An toàn'}{data.totals.all.other_units ? ` · ${formatQty(data.totals.all.other_units)} đơn vị hàng khác` : ''}</small>
               </div>
               <div className="inv-kpi store">
-                <span>Cửa hàng Nguyễn Cao</span>
+                <span>Cửa hàng Nguyễn Cao (bán tại quầy)</span>
                 <strong>{kgText(data.totals[STORE])}</strong>
-                <small>{alerts.low ? `🟡 ${alerts.low} loại sắp hết hoặc chưa có ở cửa hàng` : 'Đang bán lẻ, đủ hàng'}</small>
+                <small>{alerts.storeLow ? `🟡 ${alerts.storeLow} loại sắp hết hoặc hết ở cửa hàng` : 'Khách tới mua tại cửa hàng, đủ hàng'}</small>
               </div>
               <div className="inv-kpi main">
-                <span>Kho Bồ Sơn (kho tổng)</span>
+                <span>Kho Bồ Sơn (bán online)</span>
                 <strong>{kgText(data.totals[MAIN])}</strong>
-                <small>{data.in_transit ? `🔄 ${data.in_transit} lệnh đang chuyển` : 'Hàng công lớn và hàng sỉ'}</small>
+                <small>{[alerts.webLow ? `🟡 ${alerts.webLow} loại sắp hết trên web` : '', data.in_transit ? `🔄 ${data.in_transit} lệnh đang chuyển` : ''].filter(Boolean).join(' · ') || 'Số khách thấy trên web'}</small>
               </div>
             </section>
 
@@ -269,7 +270,7 @@ export default function Inventory() {
                           </td>
                           <td data-label="Tên"><strong>{p.name}</strong> <small className="muted">{p.unit}{p.is_active ? '' : ' · đang ẩn'}</small></td>
                           {showNc && <td data-label="Tồn Nguyễn Cao" className={`inv-num${p.stock_nc < 0 ? ' inv-neg' : p.stock_nc <= data.low_stock_at ? ' inv-low' : ''}`}>{formatQty(p.stock_nc)}</td>}
-                          {showBs && <td data-label="Tồn Bồ Sơn" className={`inv-num${p.stock_bs < 0 ? ' inv-neg' : ''}`}>{formatQty(p.stock_bs)}</td>}
+                          {showBs && <td data-label="Tồn Bồ Sơn" className={`inv-num${p.stock_bs < 0 ? ' inv-neg' : p.stock_bs <= data.low_stock_at ? ' inv-low' : ''}`}>{formatQty(p.stock_bs)}</td>}
                           {showNc && showBs && <td data-label="Tổng tồn" className="inv-num"><strong>{formatQty(p.total)}</strong></td>}
                           <td data-label="Đang chuyển" className={`inv-num${moving > 0 ? '' : ' inv-none-mobile'}`}>
                             {moving > 0 ? <span className="inv-moving">{formatQty(moving)}{showNc && showBs ? ` ➔ ${p.moving_to_nc ? WAREHOUSE_SHORT[STORE] : WAREHOUSE_SHORT[MAIN]}` : ''}</span> : '—'}
@@ -277,10 +278,13 @@ export default function Inventory() {
                           <td data-label="Cảnh báo"><span className={`inv-status ${p.status.level}`}>{p.status.label}</span></td>
                           <td data-label="Thao tác" className="inv-row-actions">
                             <button type="button" className="link-button" onClick={() => showHistory(p)}>Xem lịch sử</button>
-                            {canTransfer && p.stock_bs > 0 && ['low', 'main_only', 'negative'].includes(p.status.code) && !p.moving_to_nc && (
+                            {canTransfer && p.stock_bs >= 1 && ['store_empty', 'store_low'].includes(p.status.code) && !p.moving_to_nc && (
                               <button type="button" className="link-button" onClick={() => open('transfer', { from: MAIN, product_id: p.id })}>Chuyển từ Bồ Sơn</button>
                             )}
-                            {canReceive && (p.status.code === 'out' || (p.status.code === 'low' && p.stock_bs <= 0)) && (
+                            {canTransfer && p.stock_nc >= 1 && ['web_out', 'low'].includes(p.status.code) && !p.moving_to_bs && (
+                              <button type="button" className="link-button" onClick={() => open('transfer', { from: STORE, product_id: p.id })}>Chuyển từ cửa hàng</button>
+                            )}
+                            {canReceive && (p.status.code === 'out' || (['web_out', 'low'].includes(p.status.code) && p.stock_nc <= 0)) && (
                               <button type="button" className="link-button" onClick={() => open('receive', { kind: 'cong-gao', product_id: p.id })}>Nhập kho</button>
                             )}
                           </td>
@@ -292,8 +296,8 @@ export default function Inventory() {
                 </table>
               </div>
               <p className="field-help">
-                Tồn Nguyễn Cao là số khách thấy trên web. Đơn web, đơn khách lẻ và bán tại quầy trừ ở Nguyễn Cao; đơn khách buôn trừ ở kho nhân viên chọn khi tạo đơn.
-                "Sắp hết" khi Nguyễn Cao còn từ {data.low_stock_at} trở xuống.
+                Tồn Bồ Sơn là số khách thấy trên web: đơn khách đặt online trừ ở Kho Bồ Sơn. Cửa hàng Nguyễn Cao chỉ bán cho khách tới mua tại cửa hàng (bán tại quầy trừ ở đây).
+                Đơn nhân viên tạo trừ ở kho chọn khi tạo đơn (mặc định Bồ Sơn). "Sắp hết" khi một kho còn từ {data.low_stock_at} trở xuống.
               </p>
             </section>
 
