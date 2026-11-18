@@ -179,3 +179,11 @@
 .profile-hit .btn { min-height: 36px; padding: 4px 12px; font-size: .84rem; }
 .profile-hit small { font-weight: 700; }
 .orders-date-rule { flex-basis: 100%; color: var(--muted); font-size: .76rem; }
+
+/* ---------- Nhập kho theo kg, số lẻ (18/11/2026) ---------- */
+.inv-unit { display: inline-flex; align-items: center; gap: 4px; justify-self: start; align-self: flex-start; margin-bottom: 4px; padding: 3px; border: 1px solid var(--border); border-radius: 99px; background: var(--white); font-size: .82rem; font-weight: 750; }
+.inv-unit > span { padding: 0 6px 0 8px; color: var(--muted); }
+.inv-unit button { min-height: 36px; padding: 4px 14px; border: 0; border-radius: 99px; background: transparent; color: var(--green-950); font-weight: 800; cursor: pointer; }
+.inv-unit button.active { background: var(--green-950); color: #fff; }
+.inv-conv { color: var(--success); font-weight: 750; }
+.inv-count .inv-conv { display: block; font-size: .72rem; }

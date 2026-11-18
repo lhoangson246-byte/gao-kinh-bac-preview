@@ -45,8 +45,8 @@ function TransferCard({ transfer, canAct, onDone }) {
     run(() => api.inventoryTransferReceive(transfer.id, {}));
   };
   const confirmCounted = () => {
-    const items = transfer.items.map((i) => ({ item_id: i.id, received: received[i.id] === undefined || received[i.id] === '' ? i.quantity : Number(received[i.id]) }));
-    const missing = items.reduce((sum, row, index) => sum + (transfer.items[index].quantity - row.received), 0);
+    const items = transfer.items.map((i) => ({ item_id: i.id, received: received[i.id] === undefined || received[i.id] === '' ? i.quantity : Number(String(received[i.id]).replace(',', '.')) }));
+    const missing = Math.round(items.reduce((sum, row, index) => sum + (transfer.items[index].quantity - row.received), 0) * 1000) / 1000;
     if (items.some((row, index) => row.received > transfer.items[index].quantity)) { setError('Số thực nhận không được lớn hơn số đã chuyển.'); return; }
     if (!window.confirm(missing > 0 ? `Xác nhận nhận THIẾU ${missing} so với lệnh ${transfer.code}? Phần thiếu sẽ được ghi lại.` : `Xác nhận nhận đủ hàng của lệnh ${transfer.code}?`)) return;
     run(() => api.inventoryTransferReceive(transfer.id, { items }));
@@ -70,7 +70,7 @@ function TransferCard({ transfer, canAct, onDone }) {
             {counting ? (
               <label>Thực nhận
                 <input className="input" inputMode="numeric" value={received[item.id] ?? String(item.quantity)} aria-label={`Thực nhận: ${item.product_name}`}
-                       onChange={(e) => setReceived({ ...received, [item.id]: e.target.value.replace(/\D/g, '').slice(0, 6) })} />
+                       inputMode="decimal" onChange={(e) => setReceived({ ...received, [item.id]: e.target.value.replace(/[^\d.,]/g, '').slice(0, 9) })} />
                 <small>/ {formatQty(item.quantity)}</small>
               </label>
             ) : <b>{formatQty(item.quantity)}</b>}

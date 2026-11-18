@@ -8,7 +8,7 @@ import { LIMITS, localDate } from '../constants.js';
 import { writeAdminAudit } from '../audit.js';
 import {
   LOW_STOCK_AT, MAIN, MOVEMENT_GROUPS, MOVEMENT_KINDS, STORE, WAREHOUSES, inTransitByProduct, isWarehouse,
-  moveStock, receiptCode, stockColumn, stockStatus, transferCode, warehouseName,
+  moveStock, receiptCode, roundQty, stockColumn, stockStatus, toQty, transferCode, warehouseName,
 } from '../inventory.js';
 
 /**
@@ -55,7 +55,11 @@ function overview() {
     addTotal(MAIN, row.stock_bs, row.weight_kg);
     return { ...row, status: stockStatus(row) };
   });
-  for (const total of Object.values(totals)) total.kg = Math.round(total.kg * 100) / 100;
+  for (const total of Object.values(totals)) {
+    total.kg = Math.round(total.kg * 100) / 100;
+    total.units = roundQty(total.units);
+    total.other_units = roundQty(total.other_units);
+  }
   const inTransit = db.prepare("SELECT COUNT(*) AS n FROM stock_transfers WHERE status = 'in_transit'").get().n;
   return { warehouses: WAREHOUSES, low_stock_at: LOW_STOCK_AT, products, totals, in_transit: inTransit };
 }
@@ -153,16 +157,16 @@ router.post('/receipts', allow('inventory.receive'), (req, res, next) => {
     const wanted = new Map();
     for (const row of Array.isArray(body.items) ? body.items : []) {
       const productId = toInteger(row?.product_id, { min: 1 });
-      const bs = blank(row?.quantity_bs) ? 0 : toInteger(row.quantity_bs, { min: 0, max: MAX_QTY });
-      const nc = blank(row?.quantity_nc) ? 0 : toInteger(row.quantity_nc, { min: 0, max: MAX_QTY });
-      if (!productId || bs == null || nc == null) throw new HttpError(400, `Số lượng nhập phải là số nguyên từ 0 đến ${MAX_QTY}.`, { items: 'Số lượng nhập chưa hợp lệ.' });
+      const bs = blank(row?.quantity_bs) ? 0 : toQty(row.quantity_bs, { min: 0, max: MAX_QTY });
+      const nc = blank(row?.quantity_nc) ? 0 : toQty(row.quantity_nc, { min: 0, max: MAX_QTY });
+      if (!productId || bs == null || nc == null) throw new HttpError(400, `Số lượng nhập phải là số từ 0 đến ${MAX_QTY} (được lẻ, ví dụ 58,2).`, { items: 'Số lượng nhập chưa hợp lệ.' });
       if (bs + nc === 0) continue;
       const cost = blank(row?.cost_price) ? null : toInteger(row.cost_price, { min: 0, max: LIMITS.price });
       if (!blank(row?.cost_price) && cost == null) throw new HttpError(400, 'Giá nhập không hợp lệ.', { items: 'Giá nhập không hợp lệ.' });
       if (cost != null && !canCost) throw new HttpError(403, 'Tài khoản của bạn không được ghi giá nhập. Bỏ trống ô giá nhập.');
       const line = wanted.get(productId) || { [MAIN]: 0, [STORE]: 0, cost: null };
-      line[MAIN] += bs;
-      line[STORE] += nc;
+      line[MAIN] = roundQty(line[MAIN] + bs);
+      line[STORE] = roundQty(line[STORE] + nc);
       if (cost != null) line.cost = cost;
       wanted.set(productId, line);
     }
@@ -229,9 +233,9 @@ router.post('/transfers', allow('inventory.transfer'), (req, res, next) => {
     const wanted = new Map();
     for (const row of Array.isArray(req.body.items) ? req.body.items : []) {
       const productId = toInteger(row?.product_id, { min: 1 });
-      const quantity = toInteger(row?.quantity, { min: 1, max: MAX_QTY });
-      if (!productId || !quantity) throw new HttpError(400, 'Số lượng chuyển phải là số nguyên lớn hơn 0.', { items: 'Số lượng chuyển chưa hợp lệ.' });
-      wanted.set(productId, (wanted.get(productId) || 0) + quantity);
+      const quantity = toQty(row?.quantity, { min: 0.001, max: MAX_QTY });
+      if (!productId || !quantity) throw new HttpError(400, 'Số lượng chuyển phải lớn hơn 0 (được lẻ, ví dụ 12,5).', { items: 'Số lượng chuyển chưa hợp lệ.' });
+      wanted.set(productId, roundQty((wanted.get(productId) || 0) + quantity));
     }
     if (!wanted.size) throw new HttpError(400, 'Chọn ít nhất một loại hàng để chuyển.', { items: 'Chọn ít nhất một loại hàng để chuyển.' });
 
@@ -288,8 +292,8 @@ router.post('/transfers/:id/receive', allow('inventory.transfer'), (req, res, ne
     const counted = new Map();
     for (const row of Array.isArray(req.body.items) ? req.body.items : []) {
       const itemId = toInteger(row?.item_id, { min: 1 });
-      const received = toInteger(row?.received, { min: 0, max: MAX_QTY });
-      if (!itemId || received == null) throw new HttpError(400, 'Số thực nhận phải là số nguyên từ 0 trở lên.');
+      const received = toQty(row?.received, { min: 0, max: MAX_QTY });
+      if (!itemId || received == null) throw new HttpError(400, 'Số thực nhận phải là số từ 0 trở lên.');
       counted.set(itemId, received);
     }
     const actor = actorOf(req);
@@ -310,7 +314,7 @@ router.post('/transfers/:id/receive', allow('inventory.transfer'), (req, res, ne
         }
         setReceived.run(received, item.id);
         if (!item.product_id) continue;        // sản phẩm đã bị xoá hẳn
-        const missing = item.quantity - received;
+        const missing = roundQty(item.quantity - received);
         moveStock({
           productId: item.product_id, warehouse: transfer.to_warehouse, delta: received, kind: 'transfer_in',
           ref: { type: 'transfer', id: transferId, code: transfer.code },
@@ -324,7 +328,7 @@ router.post('/transfers/:id/receive', allow('inventory.transfer'), (req, res, ne
       action: 'receive', entityType: 'stock_transfer', entityId: transfer.code,
       after: { code: transfer.code, items: transfer.items.map((i) => ({ product: i.product_name, sent: i.quantity, received: i.received_quantity })) },
     });
-    const missing = transfer.items.reduce((sum, i) => sum + (i.quantity - (i.received_quantity ?? i.quantity)), 0);
+    const missing = roundQty(transfer.items.reduce((sum, i) => sum + (i.quantity - (i.received_quantity ?? i.quantity)), 0));
     res.json({
       transfer, ...overview(), transfers: transfersList("WHERE status = 'in_transit'"),
       message: missing > 0 ? `Đã xác nhận ${transfer.code}. Thiếu ${missing} so với lệnh chuyển.` : `Đã xác nhận nhận đủ hàng của ${transfer.code}.`,
@@ -378,8 +382,8 @@ router.post('/count', allow('inventory.count'), (req, res, next) => {
     const wanted = new Map();
     for (const row of Array.isArray(req.body.items) ? req.body.items : []) {
       const productId = toInteger(row?.product_id, { min: 1 });
-      const countedQty = toInteger(row?.counted, { min: 0, max: LIMITS.stock });
-      if (!productId || countedQty == null) throw new HttpError(400, `Số đếm được phải là số nguyên từ 0 đến ${LIMITS.stock}.`, { items: 'Số đếm được chưa hợp lệ.' });
+      const countedQty = toQty(row?.counted, { min: 0, max: LIMITS.stock });
+      if (!productId || countedQty == null) throw new HttpError(400, `Số đếm được phải là số từ 0 đến ${LIMITS.stock} (được lẻ).`, { items: 'Số đếm được chưa hợp lệ.' });
       wanted.set(productId, countedQty);
     }
     if (!wanted.size) throw new HttpError(400, 'Nhập số đếm được cho ít nhất một loại hàng.', { items: 'Nhập số đếm được cho ít nhất một loại hàng.' });
@@ -392,7 +396,7 @@ router.post('/count', allow('inventory.count'), (req, res, next) => {
       for (const [productId, countedQty] of wanted) {
         const product = getProduct.get(productId);
         if (!product) throw new HttpError(400, 'Có loại hàng không còn trong danh sách. Vui lòng tải lại trang.');
-        const delta = countedQty - product.current;
+        const delta = roundQty(countedQty - product.current);
         if (!delta) continue;
         moveStock({ productId, warehouse, delta, kind, note, actor, strict: false });
         changed.push({ product: product.name, before: product.current, after: countedQty });

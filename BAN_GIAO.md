@@ -1651,6 +1651,15 @@ Giữ nguyên toàn bộ nghiệp vụ, API, đường dẫn, quyền, ba ngôn 
 
 Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (17).
 
+## Nhập kho theo kg, số lượng lẻ; danh sách chọn hàng chỉ còn tên (18/11/2026)
+
+- **Phiếu nhập, Điều chuyển, Kiểm kê** có nút **"Nhập theo: Bao / túi | Kg"**. Chọn **Kg** rồi gõ số kg: máy tự đổi ra số bao / túi theo khối lượng một đơn vị (ví dụ 582 kg gạo bao 10kg = **58,2 bao**) và hiện dòng "= 58,2 bao" ngay dưới ô. Chọn Bao / túi thì dòng dưới hiện số kg tương ứng.
+- Ô số lượng nhận **số lẻ** (58,2 hoặc 58.2; tối đa 3 chữ số sau dấu phẩy). Xác nhận nhận hàng chuyển cũng gõ được số lẻ.
+- Hàng không có khối lượng (miến, trứng, nếp gói…) luôn tính theo đơn vị của nó, kể cả khi đang chọn Kg.
+- Tồn kho lưu được số lẻ (làm tròn 3 chữ số, mọi phép cộng trừ đều làm tròn nên tồn vẫn khớp nhật ký kho). **Khách trên web chỉ thấy số nguyên**: còn 12,5 bao thì web hiện còn 12 và bán tối đa 12 bao.
+- **Danh sách chọn hàng** ở Phiếu nhập và Điều chuyển chỉ còn **tên** (kèm mã nếu có), bỏ "· bao 10kg". Hai loại trùng tên (ví dụ Gạo Lài Miên túi 5kg và bao 10kg) thì vẫn ghi quy cách trong ngoặc để khỏi chọn nhầm. Điều chuyển ghi số còn kèm kg: "còn 58,2 bao (582 kg)".
+- Mã: `toQty`, `roundQty` trong `backend/src/inventory.js`; giao diện ở `frontend/src/components/InventoryForms.jsx`.
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

@@ -173,6 +173,29 @@ try {
   const onlyTransfers = (await inv(`/movements?product_id=${gao.id}&group=transfer`)).data.movements;
   check('Lọc nhật ký kho theo nhóm Điều chuyển', onlyTransfers.length === 4 && onlyTransfers.every((m) => m.kind.startsWith('transfer_')), short(onlyTransfers.map((m) => m.kind)));
 
+  /* ---------- Số lẻ: nhập theo kg (đổi ra bao), chuyển, kiểm kê (18/11/2026) ---------- */
+  const bulk = await make('Gạo Bắc Hương bao to', 'bao 10kg', 0);
+  const kgIn = await inv('/receipts', { method: 'POST', body: { kind: 'cong-gao', items: [{ product_id: bulk.id, quantity_bs: '58,2' }] } });
+  r = await row(bulk.id);
+  check('Nhập 582 kg (gửi 58,2 bao): Bồ Sơn có 58,2 bao = 582 kg', kgIn.status === 201 && r.stock_bs === 58.2 && Math.round(r.stock_bs * r.weight_kg) === 582, short(r));
+  const partial = await inv('/transfers', { method: 'POST', body: { from: 'KH_BS', to: 'KH_NC', items: [{ product_id: bulk.id, quantity: 12.5 }] } });
+  await inv(`/transfers/${partial.data.transfer.id}/receive`, { method: 'POST', body: {} });
+  r = await row(bulk.id);
+  check('Chuyển 12,5 bao: Bồ Sơn còn 45,7, Nguyễn Cao 12,5 (không lệch số lẻ)', r.stock_bs === 45.7 && r.stock_nc === 12.5, short(r));
+  check('Khách trên web thấy số nguyên (12 bao)', (await call(`/products/${bulk.id}`)).data.product.stock === 12);
+  const sellBulk = await call('/admin/orders', { method: 'POST', token: owner, body: { receiver_name: 'Chị Hoa', phone: phone('09', 7), home_delivery: true, address: 'Số 12 đường Nguyễn Trãi, phường Võ Cường', payment_method: 'cod', warehouse: 'KH_NC', items: [{ product_id: bulk.id, quantity: 12 }] } });
+  r = await row(bulk.id);
+  check('Bán 12 bao từ 12,5: còn 0,5 bao (5 kg)', sellBulk.status === 201 && r.stock_nc === 0.5, short(r));
+  const over13 = await call('/admin/orders', { method: 'POST', token: owner, body: { receiver_name: 'Chị Hoa', phone: phone('09', 8), home_delivery: true, address: 'Số 12 đường Nguyễn Trãi, phường Võ Cường', payment_method: 'cod', warehouse: 'KH_NC', items: [{ product_id: bulk.id, quantity: 1 }] } });
+  check('Còn 0,5 bao thì không bán được 1 bao', over13.status === 400, short(over13.data));
+  const countDec = await inv('/count', { method: 'POST', body: { warehouse: 'KH_BS', kind: 'count', items: [{ product_id: bulk.id, counted: '45,25' }] } });
+  check('Kiểm kê số lẻ 45,25: chênh lệch −0,45 ghi đúng', countDec.status === 200 && (await row(bulk.id)).stock_bs === 45.25 && (await ledgerSum(bulk.id, 'KH_BS')).last.quantity === -0.45, short((await ledgerSum(bulk.id, 'KH_BS')).last));
+  const bulkNc = await ledgerSum(bulk.id, 'KH_NC');
+  const bulkBs = await ledgerSum(bulk.id, 'KH_BS');
+  check('Số lẻ vẫn khớp sổ: tồn = tổng nhật ký kho', Math.abs(bulkNc.sum - 0.5) < 1e-9 && Math.abs(bulkBs.sum - 45.25) < 1e-9, `${bulkNc.sum} ${bulkBs.sum}`);
+  check('Số âm / chữ bị từ chối (400)', (await inv('/receipts', { method: 'POST', body: { kind: 'cong-gao', items: [{ product_id: bulk.id, quantity_bs: '-1' }] } })).status === 400
+    && (await inv('/transfers', { method: 'POST', body: { from: 'KH_BS', to: 'KH_NC', items: [{ product_id: bulk.id, quantity: 'abc' }] } })).status === 400);
+
   /* ---------- Phân quyền (kiểm tra ở máy chủ) ---------- */
   const viewer = await staff('Em Xem Kho', 1, ['inventory.view']);
   const keeper = await staff('Em Thủ Kho', 2, ['inventory.receive', 'inventory.transfer']);

@@ -6,10 +6,51 @@ export const MAIN = 'KH_BS';
 export const WAREHOUSE_NAME = { [STORE]: 'Cửa hàng Nguyễn Cao', [MAIN]: 'Kho Bồ Sơn' };
 export const WAREHOUSE_SHORT = { [STORE]: 'Nguyễn Cao', [MAIN]: 'Bồ Sơn' };
 export const stockOf = (product, warehouse) => (warehouse === MAIN ? product.stock_bs : product.stock_nc);
-export const formatQty = (n) => Number(n || 0).toLocaleString('vi-VN');
-export const productLabel = (p) => `${p.sku ? `${p.sku} · ` : ''}${p.name} · ${p.unit}`;
+export const formatQty = (n) => Number(n || 0).toLocaleString('vi-VN', { maximumFractionDigits: 3 });
+/** Tên trong ô chọn: chỉ tên (kèm mã nếu có). Trùng tên với loại khác thì ghi thêm quy cách để khỏi nhầm. */
+export const productLabel = (p, all = []) => {
+  const same = all.some((o) => o.id !== p.id && o.name.trim().toLowerCase() === p.name.trim().toLowerCase());
+  return `${p.sku ? `${p.sku} · ` : ''}${p.name}${same ? ` (${p.unit})` : ''}`;
+};
+
+/*
+ * Số lượng lẻ và nhập theo kg (18/11/2026): kho nhập bao to rồi đóng ra túi nên hay đếm bằng kg. Chế độ "Kg"
+ * đổi số kg ra số bao / túi theo khối lượng một đơn vị (582 kg gạo bao 10kg = 58,2 bao). Hàng không có
+ * khối lượng (miến, trứng…) vẫn tính theo đơn vị của nó.
+ */
+const qtyInput = (value) => {
+  const [whole, ...rest] = String(value).replace(/[^\d.,]/g, '').replace('.', ',').split(',');
+  return rest.length ? `${whole.slice(0, 7)},${rest.join('').slice(0, 3)}` : whole.slice(0, 7);
+};
+const num = (value) => Number(String(value ?? '').replace(',', '.')) || 0;
+const round3 = (n) => Math.round(n * 1000) / 1000;
+const canKg = (p) => p?.weight_kg > 0;
+const unitWord = (p) => String(p?.unit || '').split(' ')[0] || 'đơn vị';
+/** Số gõ vào → số đơn vị của sản phẩm. */
+const toUnits = (p, value, mode) => (mode === 'kg' && canKg(p) ? round3(num(value) / p.weight_kg) : round3(num(value)));
+const kgText = (p, units) => (canKg(p) ? `${formatQty(round3(units * p.weight_kg))} kg` : '');
+
+/** Chọn nhập theo bao / túi hay theo kg. */
+function UnitToggle({ mode, onChange }) {
+  return (
+    <div className="inv-unit" role="radiogroup" aria-label="Nhập số lượng theo">
+      <span>Nhập theo</span>
+      {[['pack', 'Bao / túi'], ['kg', 'Kg']].map(([value, label]) => (
+        <button key={value} type="button" role="radio" aria-checked={mode === value} className={mode === value ? 'active' : ''} onClick={() => onChange(value)}>{label}</button>
+      ))}
+    </div>
+  );
+}
+
+/** Dòng đổi đơn vị ngay dưới ô số lượng: "= 58,2 bao" hoặc "= 582 kg". */
+function QtyHint({ product, value, mode }) {
+  if (!product || !num(value)) return null;
+  if (mode === 'kg') {
+    return <small className="inv-conv">{canKg(product) ? `= ${formatQty(toUnits(product, value, mode))} ${unitWord(product)}` : `tính theo ${product.unit}`}</small>;
+  }
+  return canKg(product) ? <small className="inv-conv">= {kgText(product, num(value))}</small> : null;
+}
 const fold = (value) => String(value || '').normalize('NFD').replace(/\p{M}/gu, '').replace(/[đĐ]/g, 'd').toLowerCase();
-const digits = (value) => String(value).replace(/\D/g, '').slice(0, 6);
 const kgOf = (product, quantity) => (product?.weight_kg > 0 ? product.weight_kg * quantity : 0);
 
 function FormShell({ title, onClose, children, onSubmit }) {
@@ -30,7 +71,7 @@ function ProductSelect({ products, value, taken, onChange, label, hint }) {
     <select className="input" value={value} aria-label={label} onChange={(e) => onChange(e.target.value)}>
       <option value="">— Chọn loại hàng —</option>
       {products.filter((p) => String(p.id) === value || !taken.has(String(p.id))).map((p) => (
-        <option key={p.id} value={p.id}>{productLabel(p)}{hint ? ` · ${hint(p)}` : ''}</option>
+        <option key={p.id} value={p.id}>{productLabel(p, products)}{hint ? ` · ${hint(p)}` : ''}</option>
       ))}
     </select>
   );
@@ -45,15 +86,20 @@ export function ReceiptForm({ products, canCost, initial = null, onSaved, onClos
   const [kind, setKind] = useState(initial?.kind || 'cong-gao');
   const [info, setInfo] = useState({ source: '', vehicle: '', note: '' });
   const [rows, setRows] = useState(() => [{ product_id: initial?.product_id ? String(initial.product_id) : '', bs: '', nc: '', cost: '' }]);
+  const [mode, setMode] = useState('pack');     // 'pack' = bao / túi · 'kg'
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const byId = useMemo(() => Object.fromEntries(products.map((p) => [String(p.id), p])), [products]);
   const taken = new Set(rows.map((r) => r.product_id).filter(Boolean));
   const setRow = (index, patch) => setRows((cur) => cur.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   const shopOnly = kind === 'cua-hang';
-  const filled = rows.filter((r) => r.product_id && (Number(r.bs) > 0 || Number(r.nc) > 0));
-  const sum = (key) => filled.reduce((total, r) => total + (Number(r[key]) || 0), 0);
-  const kg = filled.reduce((total, r) => total + kgOf(byId[r.product_id], (Number(r.bs) || 0) + (Number(r.nc) || 0)), 0);
+  const units = (r, key) => toUnits(byId[r.product_id], r[key], mode);
+  const filled = rows.filter((r) => r.product_id && (units(r, 'bs') > 0 || units(r, 'nc') > 0));
+  const sumKg = (key) => filled.reduce((total, r) => total + kgOf(byId[r.product_id], units(r, key)), 0);
+  const kg = sumKg('bs') + sumKg('nc');
+  const sumUnits = (key) => round3(filled.reduce((total, r) => total + units(r, key), 0));
+  const hasPacks = filled.some((r) => !canKg(byId[r.product_id]));
+  const kgSuffix = mode === 'kg' ? ' (kg)' : '';
 
   const save = async (event) => {
     event.preventDefault();
@@ -64,7 +110,7 @@ export function ReceiptForm({ products, canCost, initial = null, onSaved, onClos
       const result = await api.inventoryReceive({
         kind, source: info.source.trim() || null, vehicle: shopOnly ? null : info.vehicle.trim() || null, note: info.note.trim() || null,
         items: filled.map((r) => ({
-          product_id: Number(r.product_id), quantity_bs: shopOnly ? 0 : Number(r.bs) || 0, quantity_nc: Number(r.nc) || 0,
+          product_id: Number(r.product_id), quantity_bs: shopOnly ? 0 : units(r, 'bs'), quantity_nc: units(r, 'nc'),
           ...(canCost && r.cost !== '' ? { cost_price: Number(r.cost) } : {}),
         })),
       });
@@ -94,19 +140,22 @@ export function ReceiptForm({ products, canCost, initial = null, onSaved, onClos
 
       <fieldset className="manual-lines inv-lines">
         <legend>Hàng nhập</legend>
+        <UnitToggle mode={mode} onChange={setMode} />
         {rows.map((row, index) => (
           <div key={index} className={`inv-line${shopOnly ? ' one' : ''}${canCost ? ' with-cost' : ''}`}>
             <ProductSelect products={products} value={row.product_id} taken={taken} label={`Loại hàng nhập ${index + 1}`}
                            onChange={(value) => setRow(index, { product_id: value })} />
             {!shopOnly && (
-              <label className="inv-qty">Vào Bồ Sơn
-                <input className="input" inputMode="numeric" value={row.bs} disabled={!row.product_id} placeholder="0"
-                       onChange={(e) => setRow(index, { bs: digits(e.target.value) })} aria-label={`Số nhập vào Bồ Sơn ${index + 1}`} />
+              <label className="inv-qty">Vào Bồ Sơn{kgSuffix}
+                <input className="input" inputMode="decimal" value={row.bs} disabled={!row.product_id} placeholder="0"
+                       onChange={(e) => setRow(index, { bs: qtyInput(e.target.value) })} aria-label={`Số nhập vào Bồ Sơn ${index + 1}`} />
+                <QtyHint product={byId[row.product_id]} value={row.bs} mode={mode} />
               </label>
             )}
-            <label className="inv-qty">{shopOnly ? 'Số lượng' : 'Giao thẳng Nguyễn Cao'}
-              <input className="input" inputMode="numeric" value={row.nc} disabled={!row.product_id} placeholder="0"
-                     onChange={(e) => setRow(index, { nc: digits(e.target.value) })} aria-label={`Số nhập vào Nguyễn Cao ${index + 1}`} />
+            <label className="inv-qty">{shopOnly ? 'Số lượng' : 'Giao thẳng Nguyễn Cao'}{kgSuffix}
+              <input className="input" inputMode="decimal" value={row.nc} disabled={!row.product_id} placeholder="0"
+                     onChange={(e) => setRow(index, { nc: qtyInput(e.target.value) })} aria-label={`Số nhập vào Nguyễn Cao ${index + 1}`} />
+              <QtyHint product={byId[row.product_id]} value={row.nc} mode={mode} />
             </label>
             {canCost && (
               <label className="inv-qty">Giá nhập
@@ -120,8 +169,11 @@ export function ReceiptForm({ products, canCost, initial = null, onSaved, onClos
         <button type="button" className="link-button" onClick={() => setRows((cur) => [...cur, { product_id: '', bs: '', nc: '', cost: '' }])}>+ Thêm loại hàng</button>
         {filled.length > 0 && (
           <p className="inv-summary">
-            {!shopOnly && <>Vào Bồ Sơn: <b>{formatQty(sum('bs'))}</b> · </>}Vào Nguyễn Cao: <b>{formatQty(sum('nc'))}</b>
-            {kg > 0 && <> · Tổng khoảng <b>{formatQty(kg)} kg</b></>}
+            {/* Theo bao / túi: ghi số bao như đã gõ; theo kg: ghi số kg. Dòng cuối luôn có tổng kg. */}
+            {!shopOnly && <>Vào Bồ Sơn: <b>{mode === 'kg' ? `${formatQty(round3(sumKg('bs')))} kg` : formatQty(sumUnits('bs'))}</b> · </>}
+            Vào Nguyễn Cao: <b>{mode === 'kg' ? `${formatQty(round3(sumKg('nc')))} kg` : formatQty(sumUnits('nc'))}</b>
+            {kg > 0 && <> · Tổng <b>{formatQty(round3(kg))} kg</b></>}
+            {hasPacks && <> · cộng thêm hàng tính theo gói / khay</>}
           </p>
         )}
       </fieldset>
@@ -142,6 +194,7 @@ export function TransferForm({ products, initial = null, onSaved, onClose }) {
   const to = from === MAIN ? STORE : MAIN;
   const [note, setNote] = useState('');
   const [rows, setRows] = useState(() => [{ product_id: initial?.product_id ? String(initial.product_id) : '', quantity: '' }]);
+  const [mode, setMode] = useState('pack');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const byId = useMemo(() => Object.fromEntries(products.map((p) => [String(p.id), p])), [products]);
@@ -149,19 +202,21 @@ export function TransferForm({ products, initial = null, onSaved, onClose }) {
   const setRow = (index, patch) => setRows((cur) => cur.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   // Chỉ chọn được hàng đang có ở kho xuất.
   const available = products.filter((p) => stockOf(p, from) > 0);
-  const filled = rows.filter((r) => r.product_id && Number(r.quantity) > 0);
-  const over = filled.find((r) => Number(r.quantity) > stockOf(byId[r.product_id], from));
+  const units = (r) => toUnits(byId[r.product_id], r.quantity, mode);
+  const filled = rows.filter((r) => r.product_id && units(r) > 0);
+  const over = filled.find((r) => units(r) > stockOf(byId[r.product_id], from));
+  const left = (p) => `${formatQty(stockOf(p, from))} ${unitWord(p)}${canKg(p) ? ` (${kgText(p, stockOf(p, from))})` : ''}`;
 
   const save = async (event) => {
     event.preventDefault();
     if (!filled.length) { setError('Chọn loại hàng và nhập số lượng cần chuyển.'); return; }
-    if (over) { setError(`“${byId[over.product_id].name}” ở ${WAREHOUSE_NAME[from]} chỉ còn ${formatQty(stockOf(byId[over.product_id], from))} ${byId[over.product_id].unit}.`); return; }
+    if (over) { setError(`“${byId[over.product_id].name}” ở ${WAREHOUSE_NAME[from]} chỉ còn ${left(byId[over.product_id])}.`); return; }
     setBusy(true);
     setError('');
     try {
       onSaved(await api.inventoryTransfer({
         from, to, note: note.trim() || null,
-        items: filled.map((r) => ({ product_id: Number(r.product_id), quantity: Number(r.quantity) })),
+        items: filled.map((r) => ({ product_id: Number(r.product_id), quantity: units(r) })),
       }));
     } catch (err) { setError(err.message); } finally { setBusy(false); }
   };
@@ -174,18 +229,20 @@ export function TransferForm({ products, initial = null, onSaved, onClose }) {
       </div>
       <fieldset className="manual-lines inv-lines">
         <legend>Hàng chuyển</legend>
+        <UnitToggle mode={mode} onChange={setMode} />
         {!available.length && <p className="muted">{WAREHOUSE_NAME[from]} hiện không có hàng để chuyển.</p>}
         {rows.map((row, index) => {
           const product = byId[row.product_id];
-          const tooMany = product && Number(row.quantity) > stockOf(product, from);
+          const tooMany = product && units(row) > stockOf(product, from);
           return (
             <div key={index} className="inv-line one">
               <ProductSelect products={available} value={row.product_id} taken={taken} label={`Loại hàng chuyển ${index + 1}`}
-                             hint={(p) => `còn ${formatQty(stockOf(p, from))}`} onChange={(value) => setRow(index, { product_id: value })} />
-              <label className="inv-qty">Số lượng chuyển
-                <input className="input" inputMode="numeric" value={row.quantity} disabled={!row.product_id} placeholder="0" aria-invalid={!!tooMany}
-                       onChange={(e) => setRow(index, { quantity: digits(e.target.value) })} aria-label={`Số lượng chuyển ${index + 1}`} />
-                {product && <small className={tooMany ? 'err' : ''}>{WAREHOUSE_SHORT[from]} còn {formatQty(stockOf(product, from))} {product.unit}</small>}
+                             hint={(p) => `còn ${left(p)}`} onChange={(value) => setRow(index, { product_id: value })} />
+              <label className="inv-qty">Số lượng chuyển{mode === 'kg' ? ' (kg)' : ''}
+                <input className="input" inputMode="decimal" value={row.quantity} disabled={!row.product_id} placeholder="0" aria-invalid={!!tooMany}
+                       onChange={(e) => setRow(index, { quantity: qtyInput(e.target.value) })} aria-label={`Số lượng chuyển ${index + 1}`} />
+                <QtyHint product={product} value={row.quantity} mode={mode} />
+                {product && <small className={tooMany ? 'err' : ''}>{WAREHOUSE_SHORT[from]} còn {left(product)}</small>}
               </label>
               {rows.length > 1 && <button type="button" className="icon-close" aria-label="Bỏ dòng" onClick={() => setRows((cur) => cur.filter((_, i) => i !== index))}>×</button>}
             </div>
@@ -219,9 +276,11 @@ export function CountForm({ products, initialWarehouse = STORE, onSaved, onClose
   const [busy, setBusy] = useState(false);
   const q = fold(query.trim());
   const shown = products.filter((p) => !q || fold(`${p.sku || ''} ${p.name}`).includes(q));
+  const [mode, setMode] = useState('pack');
+  const countedUnits = (p) => toUnits(p, counted[p.id], mode);
   const changes = products
-    .filter((p) => counted[p.id] !== undefined && counted[p.id] !== '' && Number(counted[p.id]) !== stockOf(p, warehouse))
-    .map((p) => ({ product_id: p.id, counted: Number(counted[p.id]) }));
+    .filter((p) => counted[p.id] !== undefined && counted[p.id] !== '' && countedUnits(p) !== stockOf(p, warehouse))
+    .map((p) => ({ product_id: p.id, counted: countedUnits(p) }));
 
   const save = async (event) => {
     event.preventDefault();
@@ -257,6 +316,7 @@ export function CountForm({ products, initialWarehouse = STORE, onSaved, onClose
           <input className="input" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tên hoặc mã" />
         </label>
       </div>
+      <UnitToggle mode={mode} onChange={(value) => { setMode(value); setCounted({}); }} />
       <div className="table-scroll inv-count">
         <table className="data-table">
           <thead><tr><th>Loại hàng</th><th>Trên máy</th><th>Đếm được</th><th>Chênh lệch</th></tr></thead>
@@ -264,13 +324,14 @@ export function CountForm({ products, initialWarehouse = STORE, onSaved, onClose
             {shown.map((p) => {
               const current = stockOf(p, warehouse);
               const value = counted[p.id] ?? '';
-              const diff = value === '' ? 0 : Number(value) - current;
+              const diff = value === '' ? 0 : round3(countedUnits(p) - current);
               return (
                 <tr key={p.id} className={diff ? 'row-changed' : ''}>
                   <td>{p.sku && <small className="inv-sku">{p.sku}</small>} {p.name} <small className="muted">{p.unit}</small></td>
-                  <td className={current < 0 ? 'inv-neg' : ''}>{formatQty(current)}</td>
-                  <td><input className="input inv-count-input" inputMode="numeric" value={value} placeholder={String(Math.max(current, 0))}
-                             onChange={(e) => setCounted({ ...counted, [p.id]: digits(e.target.value) })} aria-label={`Số đếm được: ${p.name}`} /></td>
+                  <td className={current < 0 ? 'inv-neg' : ''}>{formatQty(current)}{mode === 'kg' && canKg(p) && <small className="muted"> ({kgText(p, current)})</small>}</td>
+                  <td><input className="input inv-count-input" inputMode="decimal" value={value} placeholder={mode === 'kg' && canKg(p) ? 'kg' : formatQty(Math.max(current, 0))}
+                             onChange={(e) => setCounted({ ...counted, [p.id]: qtyInput(e.target.value) })} aria-label={`Số đếm được: ${p.name}`} />
+                    {mode === 'kg' && value !== '' && <QtyHint product={p} value={value} mode={mode} />}</td>
                   <td className={diff > 0 ? 'price-down' : diff < 0 ? 'price-up' : 'muted'}>{diff ? `${diff > 0 ? '+' : '−'}${formatQty(Math.abs(diff))}` : '—'}</td>
                 </tr>
               );

@@ -291,7 +291,7 @@ add('closing', 'GET', /^\/?$/, empty, obj({ day: z.string().max(10).optional() }
 add('admin', 'PUT', /^\/upsell\/?$/, obj({ ids: z.array(id).max(12) }));
 // Kho hàng: hai kho, phiếu nhập, điều chuyển, kiểm kê, nhật ký kho.
 const warehouseCode = z.enum(['KH_NC', 'KH_BS']);
-const stockQty = integer(0, 100_000).or(z.literal('')).nullable().optional();
+const stockQty = decimal(0, 100_000).or(z.literal('')).nullable().optional();
 add('inventory', 'GET', /^\/?$/);
 add('inventory', 'GET', /^\/(stock|receipts)\/?$/);
 add('inventory', 'GET', /^\/movements\/?$/, empty, obj({
@@ -308,15 +308,15 @@ add('inventory', 'POST', /^\/receipts\/?$/, obj({
 }));
 add('inventory', 'POST', /^\/transfers\/?$/, obj({
   from: warehouseCode, to: warehouseCode, note,
-  items: z.array(obj({ product_id: id, quantity: integer(1, 100_000) })).min(1).max(300),
+  items: z.array(obj({ product_id: id, quantity: decimal(0.001, 100_000) })).min(1).max(300),
 }));
 add('inventory', 'POST', /^\/transfers\/[^/]+\/receive\/?$/, obj({
-  note, items: z.array(obj({ item_id: id, received: integer(0, 100_000) })).max(300).optional(),
+  note, items: z.array(obj({ item_id: id, received: decimal(0, 100_000) })).max(300).optional(),
 }));
 add('inventory', 'POST', /^\/transfers\/[^/]+\/cancel\/?$/, obj({ note }));
 add('inventory', 'POST', /^\/count\/?$/, obj({
   warehouse: warehouseCode, kind: z.enum(['opening', 'count']).optional(), note,
-  items: z.array(obj({ product_id: id, counted: integer(0, LIMITS.stock) })).min(1).max(1000),
+  items: z.array(obj({ product_id: id, counted: decimal(0, LIMITS.stock) })).min(1).max(1000),
 }));
 const monthQuery = obj({ month: z.string().max(7).optional() });
 add('attendance', 'GET', /^\/(me|month)\/?$/, empty, monthQuery);

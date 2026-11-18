@@ -20,6 +20,21 @@ export const WAREHOUSES = [
 const COLUMN = { [STORE]: 'stock', [MAIN]: 'stock_bs' };
 
 export const isWarehouse = (code) => Object.hasOwn(COLUMN, code);
+
+/*
+ * Số lượng trong kho được phép lẻ (18/11/2026): kho nhập bao to rồi đóng ra túi, nên nhập theo kg — ví dụ
+ * 582 kg gạo bao 10kg = 58,2 bao. Giữ tối đa 3 chữ số thập phân, làm tròn mọi phép cộng trừ để không lệch.
+ */
+export const QTY_DECIMALS = 3;
+export const roundQty = (n) => Math.round(n * 10 ** QTY_DECIMALS) / 10 ** QTY_DECIMALS;
+/** "58,2" / "58.2" / 58.2 → 58.2; sai dạng, âm hoặc ngoài khoảng → null. */
+export function toQty(value, { min = 0, max = 1_000_000 } = {}) {
+  if (value === '' || value == null) return null;
+  const text = typeof value === 'number' ? String(value) : String(value).trim().replace(',', '.');
+  if (!/^\d+(\.\d+)?$/.test(text)) return null;
+  const n = roundQty(Number(text));
+  return Number.isFinite(n) && n >= min && n <= max ? n : null;
+}
 export const warehouseName = (code) => WAREHOUSES.find((w) => w.code === code)?.name || code;
 /** Tên cột tồn của một kho. Chỉ trả về tên trong danh sách cố định ở trên. */
 export function stockColumn(code) {
@@ -60,14 +75,15 @@ export const MOVEMENT_GROUPS = {
  */
 export function moveStock({ productId, warehouse, delta, kind, ref = null, note = null, actor = null, strict = true }) {
   const column = stockColumn(warehouse);
-  if (!Number.isInteger(delta)) throw new Error('Số lượng thay đổi tồn phải là số nguyên.');
+  if (!Number.isFinite(delta)) throw new Error('Số lượng thay đổi tồn không hợp lệ.');
+  delta = roundQty(delta);
   if (!Object.hasOwn(MOVEMENT_KINDS, kind)) throw new Error(`Loại biến động kho không hợp lệ: ${kind}`);
   let changed = 1;
   if (delta < 0 && strict) {
-    changed = db.prepare(`UPDATE products SET ${column} = ${column} - ? WHERE id = ? AND ${column} >= ?`)
+    changed = db.prepare(`UPDATE products SET ${column} = ROUND(${column} - ?, ${QTY_DECIMALS}) WHERE id = ? AND ${column} >= ?`)
       .run(-delta, productId, -delta).changes;
   } else if (delta !== 0) {
-    changed = db.prepare(`UPDATE products SET ${column} = ${column} + ? WHERE id = ?`).run(delta, productId).changes;
+    changed = db.prepare(`UPDATE products SET ${column} = ROUND(${column} + ?, ${QTY_DECIMALS}) WHERE id = ?`).run(delta, productId).changes;
   }
   if (!changed) return false;
   db.prepare(`

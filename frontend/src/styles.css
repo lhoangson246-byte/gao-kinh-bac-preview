@@ -2230,8 +2230,11 @@ label b { color: var(--danger); }
 .warehouse-switch { flex: 0 0 auto; white-space: nowrap; }
 .manual-order-head h2 { min-width: 0; }
 @media (max-width: 640px) {
-  .manual-order-head { flex-wrap: wrap; }
-  .manual-order-head h2 { flex: 1 1 100%; order: -1; font-size: 1.5rem; }
+  /* Chỉ form Tạo đơn có nút chọn kho ở giữa nên mới xuống dòng; các form khác giữ × cạnh tiêu đề. */
+  .manual-order-head:has(.warehouse-switch) { flex-wrap: wrap; }
+  .manual-order-head:has(.warehouse-switch) h2 { flex: 1 1 100%; order: -1; font-size: 1.5rem; }
+  .manual-order-head h2 { font-size: 1.4rem; }
+  .manual-order-head .icon-close { flex: 0 0 auto; }
   .warehouse-switch { margin-left: 0; }
 }
 

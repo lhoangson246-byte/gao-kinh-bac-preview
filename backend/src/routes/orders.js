@@ -132,7 +132,7 @@ export function placeOrder({
         // Cửa hàng chưa nhập giá — không được để khách đặt với giá 0 đồng.
         throw new HttpError(400, `“${product.name}” chưa có giá bán. Vui lòng liên hệ cửa hàng.`);
       }
-      const available = Math.max(product[column], 0);
+      const available = Math.floor(Math.max(product[column], 0));
       if (available < quantity) {
         throw new HttpError(400, `“${product.name}” chỉ còn ${available} ${product.unit}${warehouse === STORE ? '' : ` ở ${warehouseName(warehouse)}`}.`);
       }
