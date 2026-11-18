@@ -72,3 +72,84 @@ h1, h2 { font-family: var(--font-display); }
   /* Bong bóng thoại mọc lên từ chân cô bé, không bao giờ tụt xuống đè thanh bên dưới. */
   .mascot-bubble { top: auto; bottom: 4px; }
 }
+
+/* ---------- Thanh trên cùng: nút cài ứng dụng + chọn ngôn ngữ (18/11/2026) ----------
+ * .nav-tools nằm ngoài .nav-panel nên vẫn hiện trên điện thoại. Mọi nút/chữ trên thanh không
+ * xuống dòng; chỗ hẹp thì thu gọn dần thay vì tràn ngang:
+ *   > 1100px  đủ chỗ: biểu tượng + "Cài app" cạnh nút ngôn ngữ.
+ *   781–1100  máy tính bảng: bỏ dòng phụ dưới tên, thu nhỏ khoảng cách, nút cài chỉ còn biểu tượng.
+ *   ≤ 780px   điện thoại: nút cài xếp biểu tượng trên chữ, vừa ô 44px. */
+.nav-links a, .nav-auth .btn, .hello, .btn-install { white-space: nowrap; }
+.nav-tools { flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-2); margin-left: -18px; }
+.nav-tools:empty { display: none; }
+.nav-tools .lang-switch { margin-left: 0; }
+.btn-install { position: relative; gap: 6px; min-height: 36px; padding: 6px 13px 6px 11px; border-color: rgba(255, 255, 255, .32); border-radius: 99px; background: rgba(255, 255, 255, .08); color: var(--white); font-size: var(--text-sm); }
+.btn-install:hover:not(:disabled) { background: rgba(255, 255, 255, .16); }
+/* Vùng bấm 44px dù nút trông gọn (không làm thanh trên cao thêm). */
+.btn-install::after { content: ''; position: absolute; inset: -4px; }
+.btn-install svg { flex: 0 0 auto; width: 18px; height: 18px; }
+
+@media (min-width: 781px) and (max-width: 1100px) {
+  .nav-inner { gap: var(--space-4); }
+  .brand small { display: none; }
+  .nav-panel { min-width: 0; gap: var(--space-3); }
+  .nav-links { gap: 2px; }
+  .nav-links a { padding: 8px 9px; font-size: .92rem; }
+  .nav-auth { gap: var(--space-1); }
+  .nav-auth .btn { min-height: 38px; padding: 7px 12px; font-size: var(--text-sm); }
+  .hello { padding: 6px; font-size: var(--text-sm); }
+  .nav-tools { margin-left: 0; }
+  .btn-install { width: 36px; padding: 0; }
+  .btn-install .install-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+}
+
+@media (max-width: 780px) {
+  .nav-inner { gap: var(--space-2); }
+  .brand { flex: 0 1 auto; min-width: 0; }
+  .brand > span:last-child { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nav-tools { margin-left: auto; gap: 6px; }
+  .btn-install { flex-direction: column; gap: 1px; min-width: var(--tap); min-height: var(--tap); padding: 3px 6px; border-radius: 12px; font-size: .66rem; line-height: 1.1; }
+  .btn-install::after { inset: 0; }
+  .btn-install svg { width: 18px; height: 18px; }
+  .lang-switch button { min-width: 32px; padding: 0 7px; }
+}
+/* Màn hình rất hẹp (dưới 360px): chỉ giữ logo, tên cửa hàng đã có trong nhãn đọc của liên kết. */
+@media (max-width: 359px) {
+  .brand > span:last-child { display: none; }
+}
+
+/* ---------- Chân trang: nút cài ứng dụng ---------- */
+.footer-install { display: grid; justify-items: start; gap: 6px; margin-top: var(--space-3); }
+.footer-install-btn { gap: var(--space-2); min-height: var(--tap); padding: 10px 18px; border-color: rgba(255, 255, 255, .4); border-radius: 99px; background: rgba(255, 255, 255, .1); color: var(--white); font-size: var(--text-md); }
+.footer-install-btn:hover:not(:disabled) { background: rgba(255, 255, 255, .18); }
+.footer-install-btn svg { flex: 0 0 auto; width: 20px; height: 20px; }
+.footer-install small { max-width: 280px; color: #b8ccbf; font-size: var(--text-xs); line-height: 1.45; }
+
+/* ---------- Hướng dẫn cài (iPhone/iPad, trình duyệt không tự hỏi cài) ---------- */
+body.install-guide-open { overflow: hidden; }
+.install-guide-backdrop { position: fixed; inset: 0; z-index: var(--z-modal); display: grid; place-items: center; overflow-y: auto; padding: var(--space-5); background: rgba(18, 31, 23, .6); animation: install-fade .15s ease-out; }
+.install-guide { width: min(460px, 100%); max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); overflow-y: auto; padding: var(--space-5); border-radius: var(--radius); background: var(--paper); color: var(--ink); box-shadow: 0 26px 75px rgba(0, 0, 0, .25); overscroll-behavior: contain; }
+.install-guide-head { display: grid; grid-template-columns: 48px minmax(0, 1fr) var(--tap); align-items: start; gap: var(--space-3); margin-bottom: var(--space-4); }
+.install-guide-head img { width: 48px; height: 48px; border-radius: 12px; }
+.install-guide-head h2 { margin: 2px 0 4px; color: var(--green-950); font-size: var(--text-lg); letter-spacing: 0; line-height: 1.25; }
+.install-guide-head p { margin: 0; color: var(--muted); font-size: var(--text-sm); }
+.install-guide-close { display: grid; place-items: center; width: var(--tap); height: var(--tap); margin: -8px -8px 0 0; border: 0; border-radius: 99px; background: transparent; color: var(--muted); font-size: 1.6rem; line-height: 1; cursor: pointer; }
+.install-guide-close:hover { background: var(--cream); color: var(--ink); }
+.install-guide-body { display: grid; gap: var(--space-3); }
+.install-platform { padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--white); }
+.install-platform h3 { margin: 0 0 var(--space-2); color: var(--green-900); font-size: var(--text-md); }
+.install-platform ol { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; counter-reset: install-step; }
+.install-platform li { display: grid; grid-template-columns: 22px 36px minmax(0, 1fr); align-items: center; gap: var(--space-2); font-size: var(--text-sm); line-height: 1.4; counter-increment: install-step; }
+.install-platform li::before { content: counter(install-step); display: grid; place-items: center; width: 22px; height: 22px; border-radius: 99px; background: var(--green-950); color: var(--white); font-size: var(--text-xs); font-weight: 800; }
+.install-step-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--green-100); color: var(--green-950); }
+.install-step-icon svg { width: 20px; height: 20px; }
+.install-guide-note { margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--cream); color: var(--muted); font-size: var(--text-xs); line-height: 1.45; }
+.install-guide-done { min-height: var(--tap); margin-top: var(--space-4); }
+@keyframes install-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes install-rise { from { transform: translateY(24px); } to { transform: none; } }
+@media (max-width: 780px) {
+  /* Điện thoại: trượt lên từ đáy như một tấm, nằm trên cả thanh tab. */
+  .install-guide-backdrop { place-items: end stretch; padding: 0; }
+  .install-guide { width: 100%; max-height: 88vh; max-height: 88dvh; padding: var(--space-5) var(--space-4) calc(var(--space-4) + var(--safe-bottom)); border-radius: 20px 20px 0 0; animation: install-rise .2s ease-out; }
+}
+@media print { .install-guide-backdrop { display: none; } }

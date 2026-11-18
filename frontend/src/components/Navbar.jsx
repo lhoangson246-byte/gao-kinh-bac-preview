@@ -36,7 +36,6 @@ export default function Navbar() {
             </nav>
 
             <div className="nav-auth">
-              <InstallButton />
               {user ? (
                 <>
                   {isStaff && <Link className="btn btn-admin" to="/quan-tri">{t('nav.admin')}</Link>}
@@ -56,7 +55,11 @@ export default function Navbar() {
             </div>
           </div>
 
-          <LanguageSwitcher />
+          {/* Nằm NGOÀI .nav-panel (bị ẩn trên điện thoại) để nút cài app luôn hiện. */}
+          <div className="nav-tools">
+            <InstallButton />
+            <LanguageSwitcher />
+          </div>
         </div>
       </header>
 

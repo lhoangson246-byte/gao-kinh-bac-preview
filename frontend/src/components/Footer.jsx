@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useI18n } from '../i18n/index.jsx';
 import { api } from '../api';
+import InstallButton from './InstallButton.jsx';
 
 /** Cài đặt cửa hàng đọc một lần cho cả trang (chân trang dùng chung với các trang khác). */
 let storefrontRequest = null;
@@ -47,6 +48,7 @@ export default function Footer() {
               <span aria-hidden="true">Zalo</span> {t('zalo.footer', { phone: formatPhone(zalo) })}
             </a>
           )}
+          <InstallButton variant="footer" />
         </section>
 
         <section className="footer-hours" aria-labelledby="footer-hours-title">
