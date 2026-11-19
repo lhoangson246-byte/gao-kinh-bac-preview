@@ -1323,5 +1323,20 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(deleteTestOrd
     db.prepare("INSERT OR IGNORE INTO app_migrations (name) VALUES ('customer-profiles-2026-11-18')").run();
   }
 
+  // Đóng ngày tách theo nơi (19/11/2026): mỗi ngày một phiếu cho Kho Bồ Sơn (KH_BS) và một phiếu cho
+  // Cửa hàng Nguyễn Cao (KH_NC). Bảng day_closings cũ (một phiếu gộp mỗi ngày) giữ nguyên để xem lại.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS location_closings (
+      day         TEXT NOT NULL,
+      location    TEXT NOT NULL CHECK (location IN ('KH_BS', 'KH_NC')),
+      data        TEXT NOT NULL,
+      closed_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      closer_name TEXT,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (day, location)
+    );
+  `);
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

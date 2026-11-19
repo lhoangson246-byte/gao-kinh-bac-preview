@@ -286,7 +286,7 @@ add('debts', 'POST', /^\/[^/]+\/paid\/?$/, obj({ method: z.enum(['cash', 'transf
 add('debts', 'PUT', /^\/accounts\/[^/]+\/?$/, obj({
   term_days: integer(1, 365).optional(), contact_name: optionalText(120), company: optionalText(160), note: optionalText(300),
 }), obj({ scope: z.enum(['open', 'settled']).optional() }));
-add('closing', 'GET', /^\/?$/, empty, obj({ day: z.string().max(10).optional() }));
+add('closing', 'GET', /^\/?$/, empty, obj({ day: z.string().max(10).optional(), location: z.enum(['KH_BS', 'KH_NC']).optional() }));
 // Chấm công: giờ vào / ra do máy chủ ghi, nên chấm vào / ra không nhận dữ liệu nào.
 // Sản phẩm mua kèm (upsale) ở giỏ hàng, theo thứ tự gửi lên.
 add('admin', 'PUT', /^\/upsell\/?$/, obj({ ids: z.array(id).max(12) }));
@@ -329,9 +329,9 @@ add('attendance', 'PUT', /^\/mark\/?$/, obj({
 add('customer-profiles', 'GET', /^\/lookup\/?$/, empty, obj({ phone: z.string().max(20) }));
 add('customer-profiles', 'GET', /^\/?$/, empty, obj({ q: z.string().max(80).optional(), offset: integer(0, 100000).optional() }));
 add('closing', 'GET', /^\/history\/?$/);
-add('closing', 'GET', /^\/export\/?$/, empty, obj({ day: z.string().max(10) }));
+add('closing', 'GET', /^\/export\/?$/, empty, obj({ day: z.string().max(10), location: z.enum(['KH_BS', 'KH_NC', 'ALL']).optional() }));
 add('closing', 'POST', /^\/?$/, obj({
-  day: z.string().max(10), counts: z.record(z.string().max(7), z.union([z.number(), z.string().max(7)])).optional(), note: optionalText(1000),
+  day: z.string().max(10), location: z.enum(['KH_BS', 'KH_NC']).optional(), counts: z.record(z.string().max(7), z.union([z.number(), z.string().max(7)])).optional(), note: optionalText(1000),
   extras: z.array(obj({ type: z.enum(['in', 'out']), label: z.string().max(200), amount: z.union([z.number(), z.string().max(14)]) })).max(50).optional(),
 }));
 

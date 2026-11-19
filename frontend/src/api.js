@@ -178,7 +178,7 @@ export const api = {
   debts: (scope = 'open') => request(`/debts?scope=${scope}`, { auth: true }),
   debtAction: (id, action, body = {}, scope = 'open') => request(`/debts/${id}/${action}?scope=${scope}`, { method: 'POST', auth: true, body }),
   debtAccount: (id, body, scope = 'open') => request(`/debts/accounts/${id}?scope=${scope}`, { method: 'PUT', auth: true, body }),
-  closing: (day) => request(`/admin/closing${day ? `?day=${day}` : ''}`, { auth: true }),
+  closing: (day, location) => request(`/admin/closing?${new URLSearchParams({ ...(day ? { day } : {}), ...(location ? { location } : {}) })}`, { auth: true }),
   saveClosing: (body) => request('/admin/closing', { method: 'POST', auth: true, body }),
   adminCreateDiscountCode: (body) => request('/admin/discount-codes', { method: 'POST', auth: true, body }),
   adminUpdateDiscountCode: (id, body) => request(`/admin/discount-codes/${id}`, { method: 'PUT', auth: true, body }),
@@ -274,7 +274,8 @@ export const api = {
   },
   adminExportOrders: (filters = {}) => downloadFile(`/admin/export/orders?${new URLSearchParams(filters)}`, 'don-hang.xlsx'),
   closingHistory: () => request('/admin/closing/history', { auth: true }),
-  downloadClosing: (day) => downloadFile(`/admin/closing/export?day=${day}`, `dong-ngay-${day}.xlsx`),
+  downloadClosing: (day, location = 'KH_BS') => downloadFile(`/admin/closing/export?day=${day}&location=${location}`,
+    `dong-ngay-${day}-${location === 'ALL' ? 'gop' : location === 'KH_BS' ? 'kho-bo-son' : 'cua-hang-nguyen-cao'}.xlsx`),
   adminActivity: (limit = 50) => request(`/admin/activity?limit=${limit}`, { auth: true }),
 
   /* --- Bán lẻ tại quầy --- */

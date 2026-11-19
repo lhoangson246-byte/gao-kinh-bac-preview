@@ -1712,6 +1712,35 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
 - `test:debts` 64/64: tổng mỗi bảng khớp số tổng; chi đổ xăng 70.000 làm CÒN LẠI giảm đúng; khoản chi thiếu số tiền hoặc sai loại thì bị từ chối.
 - Thử trên trình duyệt 18/18: đóng ngày có khoản chi, mở lại vẫn còn, bản in 2×2, điện thoại một cột, khung chuyển khoản có tên công ty.
 
+## Đóng ngày tách theo nơi: Kho Bồ Sơn / Cửa hàng Nguyễn Cao (19/11/2026)
+
+**Chọn nơi:**
+- Ở đầu trang Đóng ngày có nút chọn **🏭 Kho Bồ Sơn | 🏪 Cửa hàng Nguyễn Cao**. Máy nhớ lựa chọn lần trước trên máy đó.
+- Mỗi nơi một phiếu riêng: 4 bảng, kê tiền, khoản chi, ghi chú, bản in và tệp Excel chỉ có số liệu của nơi đó.
+
+**Tiền tính về nơi nào:**
+- Đơn online (và đơn nhân viên tạo) tính về kho đã xuất hàng (`orders.warehouse`).
+- Hoá đơn bán tại quầy và phiếu trả hàng tính về Cửa hàng Nguyễn Cao.
+- Tiền thu nợ và nợ chờ duyệt tính theo kho của đơn nợ. Đơn nợ của kho chưa duyệt thì chỉ chặn phiếu kho, không chặn phiếu cửa hàng.
+
+**Lưu và xem lại:**
+- Phiếu lưu ở bảng mới `location_closings`, khoá chính `(day, location)`. Bảng `day_closings` cũ (phiếu gộp hai nơi trước 19/11/2026) giữ nguyên.
+- Mục "Các ngày đã đóng" hiện cả phiếu cũ, ghi "Gộp hai nơi (bản cũ)" và vẫn tải được Excel.
+- API thêm `location` (`KH_BS` / `KH_NC`, mặc định `KH_BS`) cho `GET /api/admin/closing`, `POST /api/admin/closing` và `/export` (thêm `ALL` cho phiếu cũ).
+- Tên tệp Excel ghi rõ nơi: `dong-ngay-YYYY-MM-DD-kho-bo-son.xlsx` / `…-cua-hang-nguyen-cao.xlsx`.
+
+**Bản in một tờ A4:**
+- Tiêu đề có tên công ty và tên nơi.
+- Mỗi khách in một dòng: tên · địa chỉ · mã đơn, quá dài thì cắt bớt.
+- Có dòng "Diễn giải" nói số liệu lấy từ đâu, và chỗ ký người lập / chủ cửa hàng.
+
+**Ô ghi chú:** ví dụ đổi thành "VD: Chú Mạnh nộp cô Dung ngày dd/mm", theo ngày đang đóng.
+
+**Kiểm tra:**
+- `test:debts` 71/71: phiếu kho không có hoá đơn quầy; phiếu cửa hàng có hoá đơn quầy và không có đơn của kho; đóng riêng từng nơi; lịch sử hai phiếu cùng ngày; Excel riêng.
+- Thử trên trình duyệt 23/23. Bản in PDF là một trang A4.
+- Cấu trúc cơ sở dữ liệu lên phiên bản `schema:2026-11-19-v1`. Vercel tự chạy cập nhật khi build.
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

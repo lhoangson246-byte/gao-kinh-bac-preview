@@ -203,6 +203,28 @@ try {
   check('Không đóng ngày trong tương lai (400)', (await call('/admin/closing', { method: 'POST', token: accountant, body: { day: plusDays(vnToday, 2), counts: {} } })).status === 400);
   check('Số tờ âm bị từ chối (400)', (await call('/admin/closing', { method: 'POST', token: accountant, body: { day: vnToday, counts: { 500000: -1 } } })).status === 400);
   check('Nhân viên giao không xem được đóng ngày (403)', (await call('/admin/closing', { token: shipper })).status === 403);
+
+  /* Đóng ngày tách theo nơi (19/11/2026): Kho Bồ Sơn và Cửa hàng Nguyễn Cao */
+  await call('/admin/inventory/count', { method: 'POST', token: owner, body: { warehouse: 'KH_NC', kind: 'count', items: [{ product_id: product.id, counted: 20 }] } });
+  const counter = await call('/retail/invoices', { method: 'POST', token: owner, body: { items: [{ product_id: product.id, quantity: 1 }] } });
+  const kho = (await call(`/admin/closing?day=${vnToday}&location=KH_BS`, { token: accountant })).data;
+  const shop = (await call(`/admin/closing?day=${vnToday}&location=KH_NC`, { token: accountant })).data;
+  check('Phiếu kho: chỉ có đơn xuất từ Kho Bồ Sơn, không có hoá đơn quầy', kho.figures.location === 'KH_BS' && kho.figures.lines.retail_cash.n === 0
+    && kho.figures.details.cash_in.some((x) => x.code === o1.code) && kho.figures.location_name === 'Kho Bồ Sơn', JSON.stringify(kho.figures.lines.retail_cash));
+  check('Phiếu cửa hàng: có hoá đơn bán tại quầy, không có đơn của kho', counter.status === 201 && shop.figures.lines.retail_cash.s >= counter.data.invoice.total
+    && !shop.figures.details.cash_in.some((x) => x.code === o1.code) && shop.figures.lines.online_debt.n === 0, JSON.stringify(shop.figures.lines));
+  check('Có danh sách hai nơi để chọn', JSON.stringify(shop.locations?.map((l) => l.code)) === '["KH_BS","KH_NC"]');
+  check('Nơi lạ bị từ chối (400)', (await call(`/admin/closing?day=${vnToday}&location=KH_XX`, { token: accountant })).status === 400);
+  let restShop = shop.figures.totals.cash;
+  const exactShop = {};
+  for (const v of shop.denominations) { exactShop[v] = Math.floor(restShop / v); restShop -= exactShop[v] * v; }
+  const shopSaved = await call('/admin/closing', { method: 'POST', token: accountant, body: { day: vnToday, location: 'KH_NC', counts: exactShop, extras: [], note: 'Chú Mạnh nộp cô Dung ngày 20/11' } });
+  check('Đóng ngày riêng cửa hàng: lưu phiếu cửa hàng, phiếu kho vẫn giữ nguyên', shopSaved.status === 200 && shopSaved.data.saved.figures.location === 'KH_NC'
+    && (await call(`/admin/closing?day=${vnToday}&location=KH_BS`, { token: accountant })).data.saved?.figures.location === 'KH_BS', JSON.stringify(shopSaved.data).slice(0, 200));
+  const hist = (await call('/admin/closing/history', { token: accountant })).data.closings.filter((h) => h.day === vnToday).map((h) => h.location).sort();
+  check('Lịch sử có hai phiếu của cùng ngày: kho và cửa hàng', JSON.stringify(hist) === '["KH_BS","KH_NC"]', JSON.stringify(hist));
+  const shopFile = await fetch(`${app.base}/api/admin/closing/export?day=${vnToday}&location=KH_NC`, { headers: { Authorization: `Bearer ${accountant}` } });
+  check('Tải Excel riêng phiếu cửa hàng (tên tệp ghi rõ nơi)', shopFile.status === 200 && /cua-hang-nguyen-cao/.test(shopFile.headers.get('content-disposition') || ''));
 } finally {
   await app.close();
 }

@@ -237,3 +237,50 @@
   .closing-sign.print-only { display: flex; }
   .closing-note textarea { border: 0; padding: 0; resize: none; }
 }
+
+/* Đóng ngày tách theo nơi (19/11/2026) */
+.closing-place { display: inline-block; margin-left: 6px; padding: 2px 12px; border-radius: 99px; background: var(--green-100); color: var(--green-900); font-size: .5em; vertical-align: middle; }
+.closing-pick { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.closing-pick label { display: flex; flex-direction: column; gap: 4px; font-weight: 700; font-size: .84rem; }
+.closing-places { display: inline-flex; padding: 3px; border: 1px solid var(--border); border-radius: 12px; background: #fff; }
+.closing-places button { min-height: 40px; padding: 6px 14px; border: 0; border-radius: 9px; background: none; color: var(--ink); font-weight: 750; cursor: pointer; }
+.closing-places button.active { background: var(--green-800); color: #fff; }
+.closing-places button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.closing-scope { margin: -6px 0 12px; }
+.closing-explain { margin: 8px 0; font-size: .8rem; }
+@media (max-width: 560px) {
+  .closing-places { width: 100%; }
+  .closing-places button { flex: 1; padding: 6px 8px; font-size: .86rem; }
+}
+@media print {
+  .closing-place { border: 1px solid #999; background: none; color: #111; }
+  .closing-explain { margin: 6px 0 0; font-size: .7rem; color: #333; }
+}
+
+/* Bản in đóng ngày gọn một tờ A4: mỗi khách một dòng (tên · địa chỉ · mã đơn cắt bớt), chữ nhỏ. */
+@media print {
+  .closing-head h1 { margin: 0; font-size: 1.35rem; }
+  .closing-company { font-size: .72rem; }
+  .closing-saved { font-size: .72rem; }
+  .closing-summary { gap: 6px; margin-bottom: 6px; }
+  .closing-summary div { padding: 3px 8px; border-radius: 6px; }
+  .closing-summary span { font-size: .62rem; }
+  .closing-summary strong { font-size: .86rem; }
+  .closing-sheets { gap: 6px; }
+  .closing-sheet { break-inside: auto; }
+  .closing-sheet h2 { font-size: .86rem; padding: 2px 6px; }
+  .closing-grid { table-layout: fixed; font-size: .68rem; line-height: 1.25; }
+  .closing-grid th, .closing-grid td { padding: 2px 5px; }
+  .closing-grid tbody th { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .closing-grid tbody th small { display: inline; margin-left: 4px; font-size: .62rem; }
+  .closing-grid tbody th small::before { content: "· "; }
+  .closing-grid td.num, .closing-grid th.num { width: 26%; }
+  .closing-grid.cash-book th + td, .closing-grid.cash-book td + td { width: 22%; }
+  .closing-grid thead th { font-size: .6rem; }
+  .closing-grid tr.total th, .closing-grid tr.total td, .closing-grid tr.remain th, .closing-grid tr.remain td,
+  .closing-grid tr.grand th, .closing-grid tr.grand td { font-size: .78rem; }
+  .closing-debt-open { margin: 4px 0; font-size: .72rem; }
+  .closing-sign { margin-top: 12px; font-size: .78rem; }
+  .closing-sign span { min-height: 48px; }
+  .closing-grid input.money, .closing-grid.cash-count input { width: 100%; font-size: inherit; }
+}
