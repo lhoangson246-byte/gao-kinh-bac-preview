@@ -4,6 +4,7 @@ import { api, formatDateTime } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
 import StaffNav from '../components/StaffNav.jsx';
 import { DashboardSkeleton } from '../components/Skeleton.jsx';
+import useDragReorder from '../components/useDragReorder.js';
 import {
   CountForm, MAIN, ReceiptForm, STORE, TransferForm, WAREHOUSE_NAME, WAREHOUSE_SHORT, formatQty,
 } from '../components/InventoryForms.jsx';
@@ -173,6 +174,33 @@ export default function Inventory() {
   }), [products]);
   const historyOf = logFilter.product_id ? products.find((p) => String(p.id) === logFilter.product_id) : null;
 
+  // Kéo thả đổi thứ tự dòng trong bảng tồn (19/11/2026). Lúc sắp xếp hiện đủ mọi dòng, bộ lọc tạm tắt.
+  const [sorting, setSorting] = useState(false);
+  const canSort = canReceive || canTransfer || canCount || canManageProducts;
+  const sort = useDragReorder({
+    ids: products.map((p) => p.id),
+    disabled: !sorting,
+    onSave: async (ids) => {
+      try {
+        const result = await api.inventoryReorder(ids);
+        setData((cur) => ({ ...cur, ...result, transfers: result.transfers || cur?.transfers || [] }));
+      } catch (err) { setError(err.message); }
+    },
+  });
+  const shownRows = sorting ? sort.order.map((id) => products.find((p) => p.id === id)).filter(Boolean) : rows;
+
+  // Kho bán online của từng sản phẩm (19/11/2026): hàng đã chuyển sang cửa hàng vẫn bán trên web được.
+  const canSetOnline = canTransfer || canManageProducts;
+  const setOnline = async (p, code) => {
+    if (code === p.online) return;
+    if (!window.confirm(`Bán “${p.name}” trên web từ ${WAREHOUSE_NAME[code]}?\nKhách sẽ thấy tồn ${WAREHOUSE_NAME[code]} (${formatQty(code === STORE ? p.stock_nc : p.stock_bs)}) và đơn web trừ hàng ở đó.`)) return;
+    try {
+      const result = await api.inventorySetOnline(p.id, code);
+      setData((cur) => ({ ...cur, ...result, transfers: result.transfers || cur?.transfers || [] }));
+      setMessage(result.message);
+    } catch (err) { setError(err.message); }
+  };
+
   if (!canView) {
     return (
       <div className="admin-app">
@@ -245,24 +273,41 @@ export default function Inventory() {
                     <button key={code} type="button" className={warehouse === code ? 'active' : ''} onClick={() => setWarehouse(code)}>{label}</button>
                   ))}
                 </div>
-                <input className="input inv-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm theo tên hoặc mã" aria-label="Tìm loại hàng" />
-                <label className="checkbox-label"><input type="checkbox" checked={onlyAlert} onChange={(e) => setOnlyAlert(e.target.checked)} /> Chỉ hàng cần chú ý</label>
+                <input className="input inv-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm theo tên hoặc mã" aria-label="Tìm loại hàng" disabled={sorting} />
+                <label className="checkbox-label"><input type="checkbox" checked={onlyAlert} onChange={(e) => setOnlyAlert(e.target.checked)} disabled={sorting} /> Chỉ hàng cần chú ý</label>
+                {canSort && (
+                  <button type="button" className={`btn ${sorting ? 'btn-primary' : 'btn-secondary'} inv-sort-toggle`} aria-pressed={sorting} onClick={() => setSorting(!sorting)}>
+                    {sorting ? '✓ Xong sắp xếp' : '↕ Sắp xếp thứ tự'}
+                  </button>
+                )}
               </div>
+              {sorting && <p className="alert info inv-sort-hint" role="status">Kéo tay nắm ⠿ ở đầu dòng để đổi chỗ (hoặc bấm vào tay nắm rồi dùng mũi tên lên / xuống). Thả tay là lưu. Thứ tự này chỉ áp dụng cho bảng kho, không đổi thứ tự trên web.</p>}
               <div className="table-scroll">
                 <table className="data-table inv-table">
                   <thead>
                     <tr>
+                      {sorting && <th aria-label="Kéo để đổi thứ tự" />}
                       <th>Mã SP</th><th>Tên sản phẩm</th>
                       {showNc && <th className="wh-col KH_NC">Tồn Nguyễn Cao</th>}{showBs && <th className="wh-col KH_BS">Tồn Bồ Sơn</th>}
                       {showNc && showBs && <th>Tổng tồn</th>}
-                      <th>Đang chuyển</th><th>Cảnh báo</th><th>Thao tác nhanh</th>
+                      <th>Bán web từ</th><th>Đang chuyển</th><th>Cảnh báo</th><th>Thao tác nhanh</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {rows.map((p) => {
+                  <tbody ref={sort.listRef}>
+                    {shownRows.map((p) => {
                       const moving = (showNc ? p.moving_to_nc : 0) + (showBs ? p.moving_to_bs : 0);
+                      const webAtStore = p.online === STORE;
+                      const fromOther = webAtStore ? MAIN : STORE;
+                      const otherStock = webAtStore ? p.stock_bs : p.stock_nc;
+                      const movingToWeb = webAtStore ? p.moving_to_nc : p.moving_to_bs;
                       return (
-                        <tr key={p.id} className={`inv-row-${p.status.level}${p.is_active ? '' : ' inv-hidden'}`}>
+                        <tr key={p.id} className={`inv-row-${p.status.level}${p.is_active ? '' : ' inv-hidden'}${sort.dragId === p.id ? ' dragging' : ''}`}>
+                          {sorting && (
+                            <td className="inv-grip-cell">
+                              <button type="button" className="group-grip" title="Kéo để đổi thứ tự" aria-label={`Kéo để đổi thứ tự ${p.name}. Hoặc bấm mũi tên lên, xuống.`}
+                                      onPointerDown={(event) => sort.start(event, p.id)} onKeyDown={(event) => sort.keyMove(event, p.id)}>⠿</button>
+                            </td>
+                          )}
                           <td data-label="Mã SP">
                             {canManageProducts
                               ? <button type="button" className="link-button inv-sku-edit" onClick={() => editSku(p)}>{p.sku || '+ mã'}</button>
@@ -272,6 +317,14 @@ export default function Inventory() {
                           {showNc && <td data-label="Tồn Nguyễn Cao" className={`inv-num${p.stock_nc < 0 ? ' inv-neg' : p.stock_nc <= data.low_stock_at ? ' inv-low' : ''}`}>{formatQty(p.stock_nc)}</td>}
                           {showBs && <td data-label="Tồn Bồ Sơn" className={`inv-num${p.stock_bs < 0 ? ' inv-neg' : p.stock_bs <= data.low_stock_at ? ' inv-low' : ''}`}>{formatQty(p.stock_bs)}</td>}
                           {showNc && showBs && <td data-label="Tổng tồn" className="inv-num"><strong>{formatQty(p.total)}</strong></td>}
+                          <td data-label="Bán web từ">
+                            {canSetOnline ? (
+                              <select className={`input inv-online ${p.online}`} value={p.online} onChange={(e) => setOnline(p, e.target.value)} aria-label={`Bán web ${p.name} từ kho`}>
+                                <option value={MAIN}>Bồ Sơn</option>
+                                <option value={STORE}>Nguyễn Cao</option>
+                              </select>
+                            ) : <i className={`wh-chip ${p.online}`}>{WAREHOUSE_SHORT[p.online]}</i>}
+                          </td>
                           <td data-label="Đang chuyển" className={`inv-num${moving > 0 ? '' : ' inv-none-mobile'}`}>
                             {moving > 0 ? <span className="inv-moving">{formatQty(moving)}{showNc && showBs ? ` ➔ ${p.moving_to_nc ? WAREHOUSE_SHORT[STORE] : WAREHOUSE_SHORT[MAIN]}` : ''}</span> : '—'}
                           </td>
@@ -281,23 +334,25 @@ export default function Inventory() {
                             {canTransfer && p.stock_bs >= 1 && ['store_empty', 'store_low'].includes(p.status.code) && !p.moving_to_nc && (
                               <button type="button" className="link-button" onClick={() => open('transfer', { from: MAIN, product_id: p.id })}>Chuyển từ Bồ Sơn</button>
                             )}
-                            {canTransfer && p.stock_nc >= 1 && ['web_out', 'low'].includes(p.status.code) && !p.moving_to_bs && (
-                              <button type="button" className="link-button" onClick={() => open('transfer', { from: STORE, product_id: p.id })}>Chuyển từ cửa hàng</button>
+                            {canTransfer && otherStock >= 1 && ['web_out', 'low'].includes(p.status.code) && !movingToWeb && (
+                              <button type="button" className="link-button" onClick={() => open('transfer', { from: fromOther, product_id: p.id })}>
+                                {fromOther === STORE ? 'Chuyển từ cửa hàng' : 'Chuyển từ Bồ Sơn'}
+                              </button>
                             )}
-                            {canReceive && (p.status.code === 'out' || (['web_out', 'low'].includes(p.status.code) && p.stock_nc <= 0)) && (
+                            {canReceive && (p.status.code === 'out' || (['web_out', 'low'].includes(p.status.code) && otherStock <= 0)) && (
                               <button type="button" className="link-button" onClick={() => open('receive', { kind: 'cong-gao', product_id: p.id })}>Nhập kho</button>
                             )}
                           </td>
                         </tr>
                       );
                     })}
-                    {!rows.length && <tr><td colSpan={8} className="muted">Không có loại hàng nào khớp bộ lọc.</td></tr>}
+                    {!shownRows.length && <tr><td colSpan={10} className="muted">Không có loại hàng nào khớp bộ lọc.</td></tr>}
                   </tbody>
                 </table>
               </div>
               <p className="field-help">
-                Tồn Bồ Sơn là số khách thấy trên web: đơn khách đặt online trừ ở Kho Bồ Sơn. Cửa hàng Nguyễn Cao chỉ bán cho khách tới mua tại cửa hàng (bán tại quầy trừ ở đây).
-                Đơn nhân viên tạo trừ ở kho chọn khi tạo đơn (mặc định Bồ Sơn). "Sắp hết" khi một kho còn từ {data.low_stock_at} trở xuống.
+                Cột "Bán web từ": khách thấy tồn của kho đó trên web và đơn khách đặt online trừ ở kho đó (mặc định Bồ Sơn). Chuyển hàng sang Cửa hàng Nguyễn Cao mà vẫn muốn bán online thì chọn Nguyễn Cao.
+                Bán tại quầy trừ ở cửa hàng. Đơn nhân viên tạo trừ ở kho chọn khi tạo đơn. "Sắp hết" khi kho bán web còn từ {data.low_stock_at} trở xuống.
               </p>
             </section>
 

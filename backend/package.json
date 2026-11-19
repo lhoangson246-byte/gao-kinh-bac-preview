@@ -35,6 +35,7 @@
     "test:staff": "node test/staff.mjs",
     "test:manual": "node test/manual-orders.mjs",
     "test:debts": "node test/debts.mjs",
+    "test:returns": "node test/returns.mjs",
     "check:live": "node test/live-security.mjs"
   },
   "dependencies": {

@@ -52,6 +52,13 @@ export function closingFigures(day, location = MAIN) {
     SELECT refund_method AS kind, COUNT(*) AS n, COALESCE(SUM(refund_amount), 0) AS s
     FROM retail_returns WHERE refund_method IN ('cash', 'transfer') AND ${localDate('created_at')} = ? GROUP BY kind
   `).all(day) : [];
+  // Khách trả hàng đơn online, hoàn tiền (19/11/2026): tính vào kho đã xuất đơn, theo ngày lập phiếu trả.
+  const onlineRefunds = db.prepare(`
+    SELECT r.refund_method AS kind, COUNT(*) AS n, COALESCE(SUM(r.refund_amount), 0) AS s
+    FROM order_returns r JOIN orders o ON o.id = r.order_id
+    WHERE r.return_type = 'return' AND r.refund_method IN ('cash', 'transfer') AND o.warehouse = ? AND ${localDate('r.created_at')} = ?
+    GROUP BY r.refund_method
+  `).all(location, day);
   const collected = db.prepare(`
     SELECT r.paid_method AS kind, COUNT(*) AS n, COALESCE(SUM(r.amount), 0) AS s
     FROM debt_records r JOIN orders o ON o.id = r.order_id
@@ -64,11 +71,14 @@ export function closingFigures(day, location = MAIN) {
     retail_cash: pick(retail, 'cash'), retail_transfer: pick(retail, 'transfer'),
     refund_cash: pick(refunds, 'cash'), refund_transfer: pick(refunds, 'transfer'),
     debt_collected_cash: pick(collected, 'cash'), debt_collected_transfer: pick(collected, 'transfer'),
+    online_refund_cash: pick(onlineRefunds, 'cash'), online_refund_transfer: pick(onlineRefunds, 'transfer'),
   };
-  const cash = lines.online_cash.s + lines.retail_cash.s - lines.refund_cash.s + lines.debt_collected_cash.s;
-  const transfer = lines.online_transfer.s + lines.retail_transfer.s - lines.refund_transfer.s + lines.debt_collected_transfer.s;
+  const cash = lines.online_cash.s + lines.retail_cash.s - lines.refund_cash.s + lines.debt_collected_cash.s - lines.online_refund_cash.s;
+  const transfer = lines.online_transfer.s + lines.retail_transfer.s - lines.refund_transfer.s + lines.debt_collected_transfer.s
+    - lines.online_refund_transfer.s;
   const revenue = lines.online_cash.s + lines.online_transfer.s + lines.online_debt.s
-    + lines.retail_cash.s + lines.retail_transfer.s - lines.refund_cash.s - lines.refund_transfer.s;
+    + lines.retail_cash.s + lines.retail_transfer.s - lines.refund_cash.s - lines.refund_transfer.s
+    - lines.online_refund_cash.s - lines.online_refund_transfer.s;
   const debtOpen = sum(`SELECT COALESCE(SUM(r.amount), 0) AS s FROM debt_records r JOIN orders o ON o.id = r.order_id
     WHERE r.status IN ('pending_accounting', 'open', 'paid_pending_final') AND o.warehouse = ?`, location).s;
   return { day, location, location_name: warehouseName(location), lines, details: closingDetails(day, lines, location), totals: { revenue, cash, transfer, debt_new: lines.online_debt.s, debt_open: debtOpen } };
@@ -106,6 +116,12 @@ function closingDetails(day, lines, location) {
     WHERE payment_method = 'transfer' AND ${localDate('created_at')} = ? ORDER BY created_at, id
   `).all(day).map((r) => ({ code: r.code, name: r.customer_name || 'Khách mua tại quầy', address: r.customer_address || '', amount: r.amount }));
   const group = (label, line, sign = 1) => (line.n ? [{ code: '', name: `${label} (${line.n})`, address: '', amount: sign * line.s }] : []);
+  // Phiếu khách trả hàng đơn online có hoàn tiền (19/11/2026).
+  const onlineReturns = (method) => db.prepare(`
+    SELECT r.code, r.refund_amount AS amount, o.code AS order_code, o.receiver_name FROM order_returns r JOIN orders o ON o.id = r.order_id
+    WHERE r.return_type = 'return' AND r.refund_method = ? AND o.warehouse = ? AND ${localDate('r.created_at')} = ?
+    ORDER BY r.id
+  `).all(method, location, day).map((r) => ({ code: r.code, name: `Trả hàng đơn ${r.order_code}: ${r.receiver_name}`, address: '', amount: r.amount }));
 
   return {
     debts: ordersOf("o.payment_status = 'debt'"),
@@ -114,13 +130,14 @@ function closingDetails(day, lines, location) {
       ...retailTransfers,
       ...collected('transfer'),
       ...group('Trả hàng hoàn chuyển khoản', lines.refund_transfer, -1),
+      ...onlineReturns('transfer').map((r) => ({ ...r, amount: -r.amount })),
     ],
     cash_in: [
       ...ordersOf("o.payment_status <> 'debt' AND o.payment_method <> 'bank'"),
       ...group('Bán lẻ tại quầy, tiền mặt — số hoá đơn', lines.retail_cash),
       ...collected('cash'),
     ],
-    cash_out: group('Trả hàng hoàn tiền mặt — số phiếu', lines.refund_cash),
+    cash_out: [...group('Trả hàng hoàn tiền mặt — số phiếu', lines.refund_cash), ...onlineReturns('cash')],
   };
 }
 

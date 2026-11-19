@@ -1768,6 +1768,43 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
 - `test:debts` 78/78: chuyển khoản lưu ảnh chuyển khoản và đổi đơn sang chuyển khoản; tiền mặt lưu ảnh giao hàng; bảng đơn của khách không lộ giá vốn; nhân viên giao không xem được (403).
 - Thử trên trình duyệt 13/13: in A5 ngang đúng 1 tờ cho đơn 2 món và đơn 18 món; Đóng ngày vẫn A4; bảng đơn khách; luồng giao hàng chọn chuyển khoản và tải ảnh.
 
+## Trả / đổi hàng đơn online; giờ hoàn thành; chọn kho bán web từng sản phẩm; xếp thứ tự bảng kho (19/11/2026)
+
+**Trả / đổi hàng (đơn đã giao xong):**
+- Mở ở Quản trị → mục "Hoàn thành": bảng đơn có cột "Thao tác" với nút **↩️ Trả / đổi**. Thẻ đơn (khi mở đơn từ thông báo) có nút "↩️ Trả / đổi hàng".
+- Trong phiếu:
+  - gõ số lượng khách trả từng món;
+  - chọn **Trả hàng, hoàn tiền** (tiền mặt / chuyển khoản) hoặc **Đổi hàng** (không hoàn tiền);
+  - tick "Nhập lại kho" và chọn kho;
+  - ghi lý do.
+- Tiền hoàn tự tính = tiền các món trả. Sửa bớt được, nhưng tổng các phiếu không vượt số tiền khách đã trả.
+- Hàng hỏng hoặc đổi cùng loại cho khách: bỏ tick "Nhập lại kho" để tồn không đổi.
+- Mã phiếu `TD000001`. Phiếu hiện trên dòng / thẻ đơn ("↩️ trả, hoàn 105.000đ").
+- Nhật ký kho ghi "Khách trả hàng, nhập lại kho". Điểm tích luỹ bị trừ lại theo tỉ lệ tiền hoàn, như phiếu trả ở quầy.
+- Tiền hoàn trừ vào Đóng ngày của kho đã xuất đơn, theo ngày lập phiếu:
+  - hoàn tiền mặt hiện ở cột Chi của bảng Tiền mặt;
+  - hoàn chuyển khoản là dòng âm ở bảng Chuyển khoản.
+- Báo cáo Doanh thu trừ tiền hoàn của cả đơn online lẫn hoá đơn quầy, ghi "trừ hoàn …".
+- Đơn công nợ chưa trả hàng ở đây được: báo kế toán điều chỉnh công nợ.
+- API: `POST /api/admin/orders/:id/returns` (quyền xử lý đơn). Bảng `order_returns`, `order_return_items`. Mã nằm ở `backend/src/order-returns.js`.
+
+**Giờ hoàn thành:** bảng đơn có cột "Giờ hoàn thành": giờ nhân viên giao bấm Hoàn thành, hoặc giờ cửa hàng bấm "Khách đã nhận hàng". Thẻ đơn ghi "✓ Hoàn thành dd/mm hh:mm".
+
+**Bán web từ kho nào (từng sản phẩm):**
+- Trang Kho có cột **"Bán web từ"** (Bồ Sơn / Nguyễn Cao). Hàng đã chuyển sang Cửa hàng Nguyễn Cao mà vẫn muốn bán online thì chọn Nguyễn Cao: khách thấy tồn cửa hàng và đơn web trừ ở cửa hàng.
+- Quyền đổi: điều chuyển kho hoặc quản lý sản phẩm. Cột `products.online_warehouse`, mặc định `KH_BS`.
+- Đơn web có món ở hai kho: mỗi dòng trừ đúng kho của nó (`order_items.warehouse`), huỷ đơn hoàn về đúng kho từng dòng. Cả đơn tính là đơn Kho Bồ Sơn khi đóng ngày; đơn chỉ có hàng bán ở cửa hàng tính cho Cửa hàng Nguyễn Cao.
+- Cảnh báo tồn, nút chuyển hàng nhanh, ô tồn kho / nút nhập kho ở trang Sản phẩm, danh sách "Đang upsale" đều theo kho bán web của từng sản phẩm.
+
+**Xếp thứ tự bảng kho:**
+- Nút **↕ Sắp xếp thứ tự** ở trang Kho: kéo tay nắm ⠿ (hoặc mũi tên lên / xuống), thả tay là lưu.
+- Thứ tự này riêng cho bảng kho (`products.stock_sort`), không đổi thứ tự trên web.
+
+**Kiểm tra:**
+- `test:returns` (mới) 26/26: kho bán web từng sản phẩm, đơn hai kho, huỷ hoàn đúng kho, xếp thứ tự, trả / đổi hàng (vượt số lượng, vượt tiền, chưa giao, phân quyền), đóng ngày và doanh thu trừ tiền hoàn.
+- Các bộ kiểm thử cũ vẫn đạt. Thử trên trình duyệt 9/9.
+- Cấu trúc cơ sở dữ liệu lên `schema:2026-11-19-v2`, Vercel tự cập nhật khi build.
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

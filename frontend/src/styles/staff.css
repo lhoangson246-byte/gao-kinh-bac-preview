@@ -310,3 +310,38 @@
 /* .profiles-list li (thẻ khách) không áp vào danh sách món bên trong bảng đơn. */
 .profiles-list .profile-order-items li { display: list-item; gap: 0; margin: 0 0 2px; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; line-height: 1.35; }
 .profile-order-items small { display: inline; color: var(--muted); }
+
+/* Đơn đã giao: giờ hoàn thành, trả / đổi hàng (19/11/2026) */
+.admin-order-card header time .done-time { display: block; color: var(--success); font-size: .76rem; font-weight: 750; }
+.order-returns-list { margin: 0 16px 10px; padding: 8px 12px; border-radius: 10px; background: #fff3d6; list-style: none; font-size: .86rem; }
+.order-returns-list li + li { margin-top: 4px; }
+.order-returns-list small { display: block; color: var(--muted); }
+.order-return { display: grid; gap: 10px; margin: 0 16px 12px; padding: 12px 14px; border: 2px solid var(--gold); border-radius: 12px; background: #fffaf0; }
+.order-return h3 { margin: 0; font-size: 1rem; }
+.order-return-type { display: flex; flex-wrap: wrap; gap: 8px; }
+.order-return-type button { min-height: 40px; padding: 6px 14px; border: 2px solid var(--border); border-radius: 10px; background: #fff; font-weight: 750; cursor: pointer; }
+.order-return-type button.active { border-color: var(--green-800); background: var(--green-100); }
+.order-return-items { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.order-return-items th, .order-return-items td { padding: 5px 6px; border-bottom: 1px solid #efe7d4; text-align: left; }
+.order-return-items .num { text-align: right; white-space: nowrap; }
+.order-return-items small { color: var(--muted); }
+.order-return-items input { width: 72px; min-height: 34px; padding: 4px 8px; text-align: right; }
+.order-return-refund { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.order-return-refund label, .order-return > label { display: flex; flex-direction: column; gap: 4px; font-weight: 700; font-size: .86rem; }
+.order-return-stock { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.order-return-stock select { width: auto; }
+.order-return-stock .field-help { flex-basis: 100%; }
+
+/* Trang kho: chọn kho bán web, kéo thả thứ tự (19/11/2026) */
+.inv-online { width: auto; min-width: 118px; min-height: 34px; padding: 4px 8px; font-weight: 750; }
+.inv-online.KH_NC { border-color: #d6a73c; background: #fff8e6; }
+.inv-online.KH_BS { border-color: #8fb3d9; background: #f1f6fc; }
+.inv-sort-toggle { margin-left: auto; }
+.inv-sort-hint { margin: 0 0 8px; }
+.inv-grip-cell { width: 34px; padding: 4px !important; }
+.inv-table tr.dragging td { background: var(--green-100) !important; }
+@media (max-width: 760px) { .inv-sort-toggle { margin-left: 0; } }
+.revenue-refund { display: block; color: var(--danger); font-size: .72rem; font-weight: 650; }
+.order-return-row td { padding: 0 !important; background: #fffaf0; }
+.order-return-row .order-return { position: sticky; left: 8px; box-sizing: border-box; width: min(820px, calc(100vw - 48px)); margin: 8px; }
+.btn.btn-small { min-height: 34px; padding: 4px 10px; font-size: .82rem; white-space: nowrap; }

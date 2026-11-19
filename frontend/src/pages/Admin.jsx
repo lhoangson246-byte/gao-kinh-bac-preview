@@ -8,7 +8,7 @@ const CustomerProfiles = lazy(() => import('../components/CustomerProfiles.jsx')
 const ProductsByGroup = lazy(() => import('../components/ProductsByGroup.jsx'));
 import OrderAlerts from '../components/OrderAlerts.jsx';
 import PushSettings from '../components/PushSettings.jsx';
-import { api, salePercent, PRODUCT_CATEGORIES, formatDateTime, formatVND, pointsForLines, mapLink, STATUS_LABEL, DELIVERY_SLOT_LABEL, deliveryDateLabel, vietnamDate } from '../api';
+import { api, salePercent, PRODUCT_CATEGORIES, formatDateTime, formatVND, pointsForLines, mapLink, STATUS_LABEL, DELIVERY_SLOT_LABEL, deliveryDateLabel, vietnamDate, webStock, webPlace } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
 const RevenueReport = lazy(() => import('../components/RevenueReport.jsx'));
 const CustomerManager = lazy(() => import('../components/CustomerManager.jsx'));
@@ -21,6 +21,7 @@ const WholesaleManager = lazy(() => import('../components/WholesaleManager.jsx')
 import ProductImage from '../components/ProductImage.jsx';
 import OrdersExportButton from '../components/OrdersExportButton.jsx';
 import OrdersTable from '../components/OrdersTable.jsx';
+import OrderReturnForm from '../components/OrderReturnForm.jsx';
 import OrderPrint from '../components/OrderPrint.jsx';
 import { ListSkeleton } from '../components/Skeleton.jsx';
 import useScrollTabs from '../components/useScrollTabs.js';
@@ -110,6 +111,7 @@ export default function Admin() {
   // Hàng nút lọc chỉ có sau khi tải xong và ở mục Đơn hàng, nên canh lại khi các trạng thái này đổi.
   const filterRef = useScrollTabs(`${filter}|${tab}|${loading}`);
   const [busyId, setBusyId] = useState(null);
+  const [returning, setReturning] = useState(null);   // id đơn đang lập phiếu trả / đổi hàng
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const navigate = useNavigate();
@@ -301,7 +303,7 @@ export default function Admin() {
 
   // Tồn (Cửa hàng Nguyễn Cao) của sản phẩm đang sửa, để biết ô tồn có bị đổi hay không.
   // Ô tồn kho ở trang Sản phẩm là tồn Kho Bồ Sơn — kho bán online, số khách thấy trên web (18/11/2026).
-  const stockOriginal = editingId ? products.find((p) => p.id === editingId)?.stock_bs : null;
+  const stockOriginal = editingId ? webStock(products.find((p) => p.id === editingId)) : null;
   const stockUnchanged = editingId != null && form.stock !== '' && Number(form.stock) === stockOriginal;
 
   /** Kiểm tra ngay tại trình duyệt; máy chủ vẫn kiểm tra lại lần nữa. */
@@ -388,7 +390,7 @@ export default function Admin() {
       cost_price: product.cost_price || '', unit: product.unit,
       original_price: product.original_price || '', category: product.category || 'gao',
       weight_kg: product.weight_kg || '',
-      stock: product.stock_bs, description: product.description || '', image_url: product.image_url || '',
+      stock: webStock(product), description: product.description || '', image_url: product.image_url || '',
       points_custom: product.points_per_unit != null,
       points_per_unit: product.points_per_unit ?? '',
       is_reward: !!product.is_reward,
@@ -484,10 +486,10 @@ export default function Admin() {
         )}
       </div>
       <div className="inventory">
-        <span>Còn trên web (Bồ Sơn)</span>
-        <strong className={product.is_active && product.stock_bs <= 10 ? 'low-stock' : ''}>
-          {Number(product.stock_bs).toLocaleString('vi-VN', { maximumFractionDigits: 3 })} {product.unit}
-          {product.is_active && product.stock_bs <= 0 && ' · đã hết'}
+        <span>Còn trên web ({webPlace(product)})</span>
+        <strong className={product.is_active && webStock(product) <= 10 ? 'low-stock' : ''}>
+          {webStock(product).toLocaleString('vi-VN', { maximumFractionDigits: 3 })} {product.unit}
+          {product.is_active && webStock(product) <= 0 && ' · đã hết'}
         </strong>
       </div>
       <span className={`visibility ${product.is_active ? 'shown' : ''}`}>{product.is_active ? 'Đang bán' : 'Đang ẩn'}</span>
@@ -739,7 +741,8 @@ export default function Admin() {
                   {visibleOrders.length === 0 ? (
                     <div className="admin-empty"><span>✓</span><h2>Không có đơn nào ở mục này</h2><p>{dateFrom ? 'Không có đơn trong ngày đã chọn.' : 'Bạn đã xử lý xong phần việc hiện tại.'}</p></div>
                   ) : view === 'table' ? (
-                    <OrdersTable orders={visibleOrders} />
+                    <OrdersTable orders={visibleOrders} canReturn={canManageOrders}
+                                 onReturned={(message) => { notify(message); reload({ refreshProducts: false }); }} />
                   ) : (
                     <div className="admin-orders">
                       {visibleOrders.map((order) => {
@@ -748,7 +751,7 @@ export default function Admin() {
                           <article key={order.id} id={`admin-order-${order.id}`} className={`admin-order-card${highlightId === order.id ? ' highlight' : ''}`}>
                             <header>
                               <div><span className="order-number">Đơn {order.code || `#${order.id}`}</span><span className={`status ${order.status}`}>{STATUS_LABEL[order.status]}</span>{order.source === 'staff' ? <span className="guest-tag staff">Nhân viên tạo</span> : !!order.is_guest && <span className="guest-tag" title="Khách đặt không cần đăng nhập">Mua nhanh</span>}{order.fulfillment === 'pickup' && <span className="guest-tag pickup">Lấy tại cửa hàng</span>}{order.payment_status === 'debt' && <span className="guest-tag debt">Công nợ</span>}</div>
-                              <time>{formatDateTime(order.created_at)}</time>
+                              <time>{formatDateTime(order.created_at)}{order.completed_at && order.status === 'completed' && <small className="done-time">✓ Hoàn thành {formatDateTime(order.completed_at)}</small>}</time>
                             </header>
                             <div className="admin-order-grid">
                               <section>
@@ -829,6 +832,21 @@ export default function Admin() {
                                   )}
                               </section>
                             </div>
+                            {order.returns?.length > 0 && (
+                              <ul className="order-returns-list">
+                                {order.returns.map((r) => (
+                                  <li key={r.code}>
+                                    <strong>↩️ {r.code}</strong> · {r.return_type === 'return' ? `Trả hàng, hoàn ${formatVND(r.refund_amount)} ${r.refund_method === 'cash' ? 'tiền mặt' : 'chuyển khoản'}` : 'Đổi hàng'}
+                                    {' · '}{r.restock ? `nhập lại ${r.warehouse === 'KH_NC' ? 'Nguyễn Cao' : 'Bồ Sơn'}` : 'không nhập lại kho'} · {formatDateTime(r.created_at)}{r.actor_name ? ` · ${r.actor_name}` : ''}
+                                    <small>Lý do: {r.reason}</small>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                            {returning === order.id && (
+                              <OrderReturnForm order={order} onCancel={() => setReturning(null)}
+                                               onDone={(message) => { setReturning(null); notify(message); reload({ refreshProducts: false }); }} />
+                            )}
                             <footer>
                               <span>{next ? (canManageOrders ? 'Bước tiếp theo:' : `Trạng thái: ${STATUS_LABEL[order.status]}`) : `Đơn đã ${order.status === 'cancelled' ? 'huỷ' : 'kết thúc'}`}</span>
                               <div>
@@ -847,6 +865,10 @@ export default function Admin() {
                                 )}
                                 {order.delivery_photo && (
                                   <a className="shipper-tag photo" href={order.delivery_photo} target="_blank" rel="noopener noreferrer">📷 Ảnh giao hàng</a>
+                                )}
+                                {canManageOrders && order.status === 'completed' && order.payment_status !== 'debt' && returning !== order.id
+                                  && order.items.some((i) => i.quantity - (i.returned || 0) > 0) && (
+                                  <button type="button" className="btn btn-secondary" onClick={() => setReturning(order.id)}>↩️ Trả / đổi hàng</button>
                                 )}
                                 {(!canManageOrders || ['completed', 'cancelled'].includes(order.status)) && order.shipper_name && (
                                   <span className="shipper-tag">🛵 {order.shipper_name}</span>

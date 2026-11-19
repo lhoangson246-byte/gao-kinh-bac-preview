@@ -19,9 +19,18 @@ export const WAREHOUSES = [
   { code: MAIN, name: 'Kho Bồ Sơn', short: 'Bồ Sơn', kind: 'main' },
 ];
 const COLUMN = { [STORE]: 'stock', [MAIN]: 'stock_bs' };
-/** Kho bán online: số tồn khách thấy trên web và kho đơn web trừ hàng (18/11/2026: Kho Bồ Sơn). */
+/** Kho bán online MẶC ĐỊNH: số tồn khách thấy trên web và kho đơn web trừ hàng (18/11/2026: Kho Bồ Sơn). */
 export const ONLINE = MAIN;
 export const ONLINE_COLUMN = COLUMN[ONLINE];
+/**
+ * Từng sản phẩm chọn được kho bán online (19/11/2026, cột products.online_warehouse): hàng đã chuyển sang
+ * Cửa hàng Nguyễn Cao mà vẫn muốn khách mua trên web thì đặt KH_NC.
+ *  - onlineWarehouseOf(product): 'KH_BS' | 'KH_NC'
+ *  - ONLINE_STOCK_SQL: biểu thức SQL tồn bán online (dùng được với bí danh bảng qua onlineStockSql('p.')).
+ */
+export const onlineWarehouseOf = (product) => (product?.online_warehouse === STORE ? STORE : MAIN);
+export const onlineStockSql = (prefix = '') => `(CASE ${prefix}online_warehouse WHEN '${STORE}' THEN ${prefix}stock ELSE ${prefix}stock_bs END)`;
+export const ONLINE_STOCK_SQL = onlineStockSql();
 
 export const isWarehouse = (code) => Object.hasOwn(COLUMN, code);
 
@@ -61,12 +70,13 @@ export const MOVEMENT_KINDS = {
   counter: 'Bán tại quầy',
   count: 'Kiểm kê',
   edit: 'Sửa tồn ở trang Sản phẩm',
+  order_return: 'Khách trả hàng, nhập lại kho',
 };
 /** Nhóm để lọc nhật ký kho. */
 export const MOVEMENT_GROUPS = {
   in: ['opening', 'receipt'],
   transfer: ['transfer_out', 'transfer_in', 'transfer_cancel'],
-  sale: ['order', 'order_wholesale', 'order_cancel', 'counter'],
+  sale: ['order', 'order_wholesale', 'order_cancel', 'counter', 'order_return'],
   count: ['count', 'edit'],
 };
 
@@ -118,16 +128,22 @@ export function inTransitByProduct() {
 }
 
 /**
- * Trạng thái cảnh báo của một dòng trong bảng tồn kho. Kho Bồ Sơn bán online nên xét trước:
- * Bồ Sơn hết thì web báo hết hàng dù cửa hàng còn.
+ * Trạng thái cảnh báo của một dòng trong bảng tồn kho. Kho bán online của sản phẩm (mặc định Bồ Sơn) xét
+ * trước: kho đó hết thì web báo hết hàng dù kho kia còn.
  */
-export function stockStatus({ stock_nc: nc, stock_bs: bs, moving_to_nc: toNc = 0, moving_to_bs: toBs = 0 }) {
+export function stockStatus({ stock_nc: nc, stock_bs: bs, moving_to_nc: toNc = 0, moving_to_bs: toBs = 0, online = MAIN }) {
+  const webAtStore = online === STORE;
+  const web = webAtStore ? nc : bs;
+  const toWeb = webAtStore ? toNc : toBs;
+  const webName = webAtStore ? 'cửa hàng' : 'Bồ Sơn';
   if (nc < 0 || bs < 0) return { level: 'red', code: 'negative', label: 'Âm kho, cần kiểm kê' };
   if (nc + bs <= 0) return { level: 'red', code: 'out', label: toNc + toBs > 0 ? 'Hết hàng, đang chuyển về' : 'Hết hàng, cần nhập' };
-  if (bs <= 0) return { level: 'red', code: 'web_out', label: toBs > 0 ? 'Web hết hàng, đang chuyển về Bồ Sơn' : 'Web báo hết (chỉ còn ở cửa hàng)' };
-  if (bs <= LOW_STOCK_AT) return { level: 'yellow', code: 'low', label: 'Sắp hết ở Bồ Sơn (web)' };
-  if (nc <= 0) return { level: 'blue', code: 'store_empty', label: toNc > 0 ? 'Đang chuyển về cửa hàng' : 'Cửa hàng hết, chỉ có ở Bồ Sơn' };
-  if (nc <= LOW_STOCK_AT) return { level: 'yellow', code: 'store_low', label: 'Sắp hết ở cửa hàng' };
+  if (web <= 0) {
+    return { level: 'red', code: 'web_out', label: toWeb > 0 ? `Web hết hàng, đang chuyển về ${webName}` : `Web báo hết (chỉ còn ở ${webAtStore ? 'Bồ Sơn' : 'cửa hàng'})` };
+  }
+  if (web <= LOW_STOCK_AT) return { level: 'yellow', code: 'low', label: `Sắp hết ở ${webName} (web)` };
+  if (!webAtStore && nc <= 0) return { level: 'blue', code: 'store_empty', label: toNc > 0 ? 'Đang chuyển về cửa hàng' : 'Cửa hàng hết, chỉ có ở Bồ Sơn' };
+  if (!webAtStore && nc <= LOW_STOCK_AT) return { level: 'yellow', code: 'store_low', label: 'Sắp hết ở cửa hàng' };
   return { level: 'green', code: 'ok', label: 'Đủ hàng' };
 }
 

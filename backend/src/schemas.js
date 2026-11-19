@@ -186,6 +186,12 @@ add('admin', 'POST', /^\/products\/order\/?$/, obj({ ids: z.array(id).min(1).max
 add('admin', 'PUT', /^\/products\/[^/]+\/?$/, obj(product).partial());
 add('admin', 'DELETE', /^\/products\/[^/]+\/?$/);
 add('admin', 'DELETE', /^\/products\/[^/]+\/permanent\/?$/);
+add('admin', 'POST', /^\/orders\/[^/]+\/returns\/?$/, obj({
+  return_type: z.enum(['return', 'exchange']), reason: text(LIMITS.note), note,
+  refund_amount: z.union([integer(0, 10_000_000_000), z.literal('')]).nullable().optional(),
+  refund_method: z.enum(['cash', 'transfer']).optional(), restock: z.boolean().optional(), warehouse: z.enum(['KH_BS', 'KH_NC']).optional(),
+  items: z.array(obj({ order_item_id: id, quantity: integer(0, 100000) })).min(1).max(100),
+}));
 add('admin', 'POST', /^\/products\/[^/]+\/stock\/?$/, obj({ quantity: integer(1, 100000), cost_price: product.cost_price, note }));
 add('admin', 'GET', /^\/products\/[^/]+\/stock\/?$/);
 add('admin', 'GET', /^\/(stock-entries|activity)\/?$/, empty, obj({ limit: page.limit }));
@@ -295,6 +301,8 @@ const warehouseCode = z.enum(['KH_NC', 'KH_BS']);
 const stockQty = decimal(0, 100_000).or(z.literal('')).nullable().optional();
 add('inventory', 'GET', /^\/?$/);
 add('inventory', 'GET', /^\/(stock|receipts)\/?$/);
+add('inventory', 'PUT', /^\/products\/[^/]+\/online\/?$/, obj({ warehouse: z.enum(['KH_BS', 'KH_NC']) }));
+add('inventory', 'PUT', /^\/order\/?$/, obj({ ids: z.array(id).min(1).max(5000) }));
 add('inventory', 'GET', /^\/movements\/?$/, empty, obj({
   product_id: id.optional(), warehouse: warehouseCode.optional(), group: z.enum(['in', 'transfer', 'sale', 'count']).optional(),
   from: day.optional(), to: day.optional(), ...page,

@@ -167,6 +167,9 @@ export const api = {
   customerProfileLookup: (phone, signal) => request(`/admin/customer-profiles/lookup?${new URLSearchParams({ phone })}`, { auth: true, signal }),
   customerProfiles: ({ q = '', offset = 0 } = {}) => request(`/admin/customer-profiles?${new URLSearchParams({ ...(q ? { q } : {}), ...(offset ? { offset } : {}) })}`, { auth: true }),
   deliverySetStatus: (orderId, status, photo, paidBy) => request(`/delivery/orders/${orderId}/status`, { method: 'PATCH', auth: true, body: { status, ...(photo ? { photo } : {}), ...(paidBy ? { paid_by: paidBy } : {}) } }),
+  adminOrderReturn: (orderId, body) => request(`/admin/orders/${orderId}/returns`, { method: 'POST', auth: true, body }),
+  inventorySetOnline: (productId, warehouse) => request(`/admin/inventory/products/${productId}/online`, { method: 'PUT', auth: true, body: { warehouse } }),
+  inventoryReorder: (ids) => request('/admin/inventory/order', { method: 'PUT', auth: true, body: { ids } }),
   customerOrders: (phone) => request(`/admin/customer-profiles/orders?${new URLSearchParams({ phone })}`, { auth: true }),
   deliveryDebt: (orderId, body) => request(`/delivery/orders/${orderId}/debt`, { method: 'POST', auth: true, body }),
   // Ảnh chứng từ (giao hàng, hoá đơn nợ): riêng tư, chỉ người trong cửa hàng xem được.
@@ -718,6 +721,10 @@ export const formatDateTime = (value) => {
   }
   return dateFormatters.get(locale).format(date);
 };
+
+/** Tồn bán online của một sản phẩm (danh sách quản trị): kho bán web của sản phẩm, mặc định Kho Bồ Sơn (19/11/2026). */
+export const webStock = (p) => Number(p?.online_warehouse === 'KH_NC' ? p.stock : p?.stock_bs) || 0;
+export const webPlace = (p) => (p?.online_warehouse === 'KH_NC' ? 'Nguyễn Cao' : 'Bồ Sơn');
 
 export const STATUS_LABEL = {
   pending: 'Chờ xác nhận',

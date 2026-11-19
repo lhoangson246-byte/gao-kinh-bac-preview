@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, formatVND } from '../api';
+import { api, formatVND, webStock } from '../api';
 
 const MAX_UPSELL = 12;
 
@@ -14,7 +14,7 @@ export default function UpsellManager({ products, onSaved, notify }) {
   const [open, setOpen] = useState(true);
   const chosen = products.filter((p) => p.upsell_rank != null).sort((a, b) => a.upsell_rank - b.upsell_rank);
   const others = products.filter((p) => p.upsell_rank == null)
-    .sort((a, b) => (b.is_active - a.is_active) || ((b.stock_bs >= 1) - (a.stock_bs >= 1)) || a.name.localeCompare(b.name, 'vi'));
+    .sort((a, b) => (b.is_active - a.is_active) || ((webStock(b) >= 1) - (webStock(a) >= 1)) || a.name.localeCompare(b.name, 'vi'));
 
   const save = async (ids, message) => {
     setBusy(true);
@@ -43,7 +43,7 @@ export default function UpsellManager({ products, onSaved, notify }) {
     save(next, 'Đã đổi thứ tự mua kèm.');
   };
   const remove = (product) => save(ids.filter((id) => id !== product.id), `Đã bỏ “${product.name}” khỏi mua kèm.`);
-  const problem = (p) => (!p.is_active ? 'đang ẩn, khách không thấy' : p.stock_bs < 1 ? 'hết hàng, khách không thấy' : p.price <= 0 ? 'chưa có giá' : '');
+  const problem = (p) => (!p.is_active ? 'đang ẩn, khách không thấy' : webStock(p) < 1 ? 'hết hàng, khách không thấy' : p.price <= 0 ? 'chưa có giá' : '');
 
   return (
     <section className="upsell-manager form-card flat" aria-labelledby="upsell-manager-title">
@@ -69,7 +69,7 @@ export default function UpsellManager({ products, onSaved, notify }) {
                   <span className="banner-order">{index + 1}</span>
                   <span className="upsell-name">
                     <strong>{p.name}</strong>
-                    <small>{formatVND(p.price)} / {p.unit} · còn {Math.floor(Math.max(p.stock_bs, 0))}{problem(p) ? ` · ⚠️ ${problem(p)}` : ''}</small>
+                    <small>{formatVND(p.price)} / {p.unit} · còn {Math.floor(Math.max(webStock(p), 0))}{problem(p) ? ` · ⚠️ ${problem(p)}` : ''}</small>
                   </span>
                   <span className="upsell-actions">
                     <button type="button" className="btn btn-secondary" disabled={busy || index === 0} onClick={() => move(index, -1)} aria-label={`Đưa ${p.name} lên trên`}>↑</button>

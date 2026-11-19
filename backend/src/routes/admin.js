@@ -21,7 +21,8 @@ import {
 } from '../product-groups.js';
 import { getWholesale, wholesalePrices } from '../wholesale.js';
 import { MAP_ONLY_ADDRESS, parseMapLink, splitAddressMap } from '../map-link.js';
-import { ONLINE, ONLINE_COLUMN, isWarehouse, moveStock } from '../inventory.js';
+import { ONLINE, ONLINE_STOCK_SQL, isWarehouse, moveStock, onlineWarehouseOf, stockColumn } from '../inventory.js';
+import { createOrderReturn } from '../order-returns.js';
 
 const router = Router();
 
@@ -34,6 +35,7 @@ router.use(requireAuth, requireStaff, accessTable([
   ['PATCH', /^\/orders\/[^/]+\/status\/?$/, ['orders.manage']],
   ['PATCH', /^\/orders\/[^/]+\/shipper\/?$/, ['orders.manage']],
   ['PATCH', /^\/orders\/[^/]+\/transfer\/?$/, ['orders.manage']],
+  ['POST', /^\/orders\/[^/]+\/returns\/?$/, ['orders.manage']],
   ['GET', /^\/shippers\/?$/, ['orders.manage', 'orders.create']],
   ['GET', /^\/stats\/?$/, ['orders.view', 'products.manage']],
   ['GET', /^\/export\/orders\/?$/, ['orders.export']],
@@ -57,6 +59,27 @@ router.get('/orders', (req, res, next) => {
     const to = req.query.to || req.query.from || null;
     if (from && to && from > to) throw new HttpError(400, '"Từ ngày" phải trước hoặc bằng "đến ngày".');
     res.json(listAdminOrders({ status, from, to, limit, offset, transferPending: req.query.transfer === 'pending' }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/admin/orders/:id/returns — trả / đổi hàng cho đơn đã giao xong (19/11/2026).
+ *  body: { return_type: 'return'|'exchange', reason, items: [{ order_item_id, quantity }], refund_amount?,
+ *          refund_method?: 'cash'|'transfer', restock?: boolean, warehouse?: 'KH_BS'|'KH_NC', note? }
+ */
+router.post('/orders/:id/returns', (req, res, next) => {
+  try {
+    const orderId = toInteger(req.params.id, { min: 1 });
+    if (!orderId) throw new HttpError(404, 'Không tìm thấy đơn hàng.');
+    const saved = createOrderReturn(orderId, req.body, { id: req.user.id, full_name: req.user.full_name });
+    writeAdminAudit(req, {
+      action: 'order_return', entityType: 'order', entityId: orderId,
+      after: { code: saved.code, return_type: saved.return_type, refund_amount: saved.refund_amount, refund_method: saved.refund_method,
+        restock: saved.restock, warehouse: saved.warehouse, items: saved.items.map((i) => `${i.product_name} × ${i.quantity}`) },
+    });
+    res.status(201).json({ return: saved });
   } catch (err) {
     next(err);
   }
@@ -637,11 +660,12 @@ router.post('/products/:id/stock', (req, res, next) => {
       const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
       if (!product) throw new HttpError(404, 'Không tìm thấy loại gạo.');
 
-      const stockAfter = product[ONLINE_COLUMN] + quantity;
+      const online = onlineWarehouseOf(product);
+      const stockAfter = product[stockColumn(online)] + quantity;
       if (stockAfter > LIMITS.stock) throw new HttpError(400, 'Tồn kho vượt giới hạn cho phép.');
-      // Nút "Nhập kho" ở trang Sản phẩm nhập thẳng vào kho bán online (Kho Bồ Sơn), có ghi nhật ký kho.
+      // Nút "Nhập kho" ở trang Sản phẩm nhập thẳng vào kho bán online của sản phẩm (mặc định Kho Bồ Sơn), có ghi nhật ký kho.
       moveStock({
-        productId, warehouse: ONLINE, delta: quantity, kind: 'receipt',
+        productId, warehouse: online, delta: quantity, kind: 'receipt',
         note: note || 'Nhập kho nhanh ở trang Sản phẩm', actor: req.user,
       });
       // Khai giá nhập ở lần nhập này thì cập nhật luôn giá nhập của sản phẩm.
@@ -661,8 +685,8 @@ router.post('/products/:id/stock', (req, res, next) => {
     const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
     writeAdminAudit(req, {
       action: 'receive_stock', entityType: 'product', entityId: productId,
-      before: { stock_bs: before[ONLINE_COLUMN], cost_price: before.cost_price },
-      after: { stock_bs: product[ONLINE_COLUMN], cost_price: product.cost_price, quantity, note },
+      before: { web_stock: before[stockColumn(onlineWarehouseOf(before))], cost_price: before.cost_price },
+      after: { web_stock: product[stockColumn(onlineWarehouseOf(product))], cost_price: product.cost_price, quantity, note },
     });
     res.status(201).json({
       product,
@@ -770,9 +794,10 @@ router.put('/products/:id', (req, res, next) => {
       // Sửa ô tồn kho ở trang Sản phẩm = điều chỉnh tồn kho bán online (Kho Bồ Sơn); đi qua nhật ký kho
       // để ai sửa, sửa bao nhiêu đều để lại dấu.
       if (data.stock !== undefined) {
-        const current = db.prepare(`SELECT ${ONLINE_COLUMN} AS stock FROM products WHERE id = ?`).get(productId).stock;
+        const online = onlineWarehouseOf(before);
+        const current = before[stockColumn(online)];
         if (data.stock !== current) {
-          moveStock({ productId, warehouse: ONLINE, delta: data.stock - current, kind: 'edit', actor: req.user, strict: false });
+          moveStock({ productId, warehouse: online, delta: data.stock - current, kind: 'edit', actor: req.user, strict: false });
         }
       }
       const columns = fields.filter((f) => f !== 'stock');
@@ -957,7 +982,7 @@ router.get('/stats', (req, res) => {
       orders: db.prepare('SELECT COUNT(*) c FROM orders').get().c,
       pending: countOrders.get('pending').c,
       shipping: countOrders.get('shipping').c,
-      lowStock: db.prepare('SELECT COUNT(*) c FROM products WHERE is_active = 1 AND stock_bs <= 10').get().c,
+      lowStock: db.prepare('SELECT COUNT(*) c FROM products WHERE is_active = 1 AND ' + ONLINE_STOCK_SQL + ' <= 10').get().c,
       missingPrice: db.prepare('SELECT COUNT(*) c FROM products WHERE is_active = 1 AND price <= 0').get().c,
       missingCost: db.prepare('SELECT COUNT(*) c FROM products WHERE is_active = 1 AND cost_price <= 0').get().c,
       // Giá trị vốn của hàng đang nằm trong kho.
@@ -1085,19 +1110,34 @@ router.get('/revenue', (req, res, next) => {
       WHERE ${localDate('created_at')} BETWEEN ? AND ?
     `).get(...range);
 
+    // Tiền hoàn khi khách trả hàng (đơn online và hoá đơn quầy), tính theo ngày lập phiếu trả (19/11/2026).
+    const refunds = db.prepare(`
+      SELECT COALESCE(SUM(s), 0) s FROM (
+        SELECT refund_amount s FROM order_returns WHERE return_type = 'return' AND ${localDate('created_at')} BETWEEN ? AND ?
+        UNION ALL
+        SELECT refund_amount s FROM retail_returns WHERE return_type = 'return' AND ${localDate('created_at')} BETWEEN ? AND ?
+      )
+    `).get(...range, ...range).s;
+
     // Chi tiết theo từng ngày để thấy ngày nào bán được nhiều.
     const daily = db.prepare(`
-      SELECT day, SUM(online) online, SUM(retail) retail, SUM(online_n) online_orders, SUM(retail_n) retail_invoices FROM (
-        SELECT ${localDate('created_at')} day, total online, 0 retail, 1 online_n, 0 retail_n
+      SELECT day, SUM(online) online, SUM(retail) retail, SUM(refund) refund, SUM(online_n) online_orders, SUM(retail_n) retail_invoices FROM (
+        SELECT ${localDate('created_at')} day, total online, 0 retail, 0 refund, 1 online_n, 0 retail_n
         FROM orders
         WHERE status = 'completed' AND ${localDate('created_at')} BETWEEN ? AND ?
         UNION ALL
-        SELECT ${localDate('created_at')} day, 0 online, total retail, 0 online_n, 1 retail_n
+        SELECT ${localDate('created_at')} day, 0 online, total retail, 0 refund, 0 online_n, 1 retail_n
         FROM retail_invoices
         WHERE ${localDate('created_at')} BETWEEN ? AND ?
+        UNION ALL
+        SELECT ${localDate('created_at')} day, 0, 0, refund_amount, 0, 0 FROM order_returns
+        WHERE return_type = 'return' AND ${localDate('created_at')} BETWEEN ? AND ?
+        UNION ALL
+        SELECT ${localDate('created_at')} day, 0, 0, refund_amount, 0, 0 FROM retail_returns
+        WHERE return_type = 'return' AND ${localDate('created_at')} BETWEEN ? AND ?
       )
       GROUP BY day ORDER BY day
-    `).all(...range, ...range);
+    `).all(...range, ...range, ...range, ...range);
 
     // Giá vốn được chép vào từng dòng hàng lúc bán, nên đổi giá nhập về sau
     // không làm sai lãi của các đơn cũ.
@@ -1113,7 +1153,7 @@ router.get('/revenue', (req, res, next) => {
     `).get(...range).c;
 
     const cost = onlineCost + retailCost;
-    const revenue = online.s + retail.s;
+    const revenue = online.s + retail.s - refunds;
     // Chỉ có ý nghĩa khi mọi loại gạo đã khai giá nhập.
     const missingCost = db.prepare(
       'SELECT COUNT(*) c FROM products WHERE is_active = 1 AND cost_price <= 0'
@@ -1123,9 +1163,10 @@ router.get('/revenue', (req, res, next) => {
       period: { ...period },
       online: { revenue: online.s, orders: online.c },
       retail: { revenue: retail.s, invoices: retail.c, discount: retail.d },
+      refunds,
       total: { revenue, transactions: online.c + retail.c },
       profit: { cost, gross: revenue - cost, missingCostProducts: missingCost },
-      daily: daily.map((d) => ({ ...d, total: d.online + d.retail, orders: d.online_orders + d.retail_invoices })),
+      daily: daily.map((d) => ({ ...d, total: d.online + d.retail - d.refund, orders: d.online_orders + d.retail_invoices })),
     });
   } catch (err) {
     next(err);

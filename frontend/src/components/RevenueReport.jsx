@@ -152,7 +152,7 @@ export default function RevenueReport() {
             <div className="stat urgent">
               <span>Tổng doanh thu</span>
               <strong>{formatVND(data.total.revenue)}</strong>
-              <small>{data.total.transactions} giao dịch</small>
+              <small>{data.total.transactions} giao dịch{data.refunds > 0 ? ` · đã trừ ${formatVND(data.refunds)} hoàn trả hàng` : ''}</small>
             </div>
             <div className="stat">
               <span>Bán online</span>
@@ -201,7 +201,7 @@ export default function RevenueReport() {
                       </td>
                       <td data-label="Online">{d.online > 0 ? formatVND(d.online) : '—'}</td>
                       <td data-label="Tại quầy">{d.retail > 0 ? formatVND(d.retail) : '—'}</td>
-                      <td data-label="Tổng"><strong>{formatVND(d.total)}</strong></td>
+                      <td data-label="Tổng"><strong>{formatVND(d.total)}</strong>{d.refund > 0 && <small className="revenue-refund">trừ hoàn {formatVND(d.refund)}</small>}</td>
                       <td className="revenue-bar-col">
                         <span className="revenue-bar" aria-hidden="true">
                           <i style={{ width: `${maxDay ? (d.total / maxDay) * 100 : 0}%` }} />
@@ -216,7 +216,7 @@ export default function RevenueReport() {
                     <td className="revenue-count" data-label="Số đơn"><strong>{data.total.transactions}</strong><small>{data.online.orders} online · {data.retail.invoices} tại quầy</small></td>
                     <td data-label="Online">{formatVND(data.online.revenue)}</td>
                     <td data-label="Tại quầy">{formatVND(data.retail.revenue)}</td>
-                    <td data-label="Tổng"><strong>{formatVND(data.total.revenue)}</strong></td>
+                    <td data-label="Tổng"><strong>{formatVND(data.total.revenue)}</strong>{data.refunds > 0 && <small className="revenue-refund">trừ hoàn {formatVND(data.refunds)}</small>}</td>
                     <td className="revenue-bar-col"></td>
                   </tr>
                 </tfoot>

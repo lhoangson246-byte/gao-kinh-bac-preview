@@ -1338,5 +1338,50 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(deleteTestOrd
     );
   `);
 
+  // 19/11/2026 (2):
+  //  - products.online_warehouse: kho bán online của từng sản phẩm (mặc định Kho Bồ Sơn; chuyển hàng sang
+  //    Cửa hàng Nguyễn Cao mà vẫn muốn bán trên web thì đặt KH_NC).
+  //  - products.stock_sort: thứ tự riêng của bảng tồn kho (không đụng thứ tự trên web).
+  //  - order_items.warehouse: kho đã trừ của từng dòng (một đơn web có thể lấy hàng ở hai kho).
+  //  - order_returns / order_return_items: phiếu trả / đổi hàng của đơn online đã giao xong.
+  {
+    const pcols = db.prepare('PRAGMA table_info(products)').all().map((c) => c.name);
+    if (!pcols.includes('online_warehouse')) db.exec("ALTER TABLE products ADD COLUMN online_warehouse TEXT NOT NULL DEFAULT 'KH_BS'");
+    if (!pcols.includes('stock_sort')) db.exec('ALTER TABLE products ADD COLUMN stock_sort INTEGER');
+    const icols = db.prepare('PRAGMA table_info(order_items)').all().map((c) => c.name);
+    if (!icols.includes('warehouse')) db.exec('ALTER TABLE order_items ADD COLUMN warehouse TEXT');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS order_returns (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        code           TEXT UNIQUE,
+        order_id       INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+        return_type    TEXT NOT NULL CHECK (return_type IN ('return', 'exchange')),
+        reason         TEXT NOT NULL,
+        refund_amount  INTEGER NOT NULL DEFAULT 0,
+        refund_method  TEXT NOT NULL DEFAULT 'none' CHECK (refund_method IN ('cash', 'transfer', 'none')),
+        restock        INTEGER NOT NULL DEFAULT 1,
+        warehouse      TEXT,
+        note           TEXT,
+        points_removed INTEGER NOT NULL DEFAULT 0,
+        created_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        actor_name     TEXT,
+        created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_order_returns_order ON order_returns(order_id);
+      CREATE INDEX IF NOT EXISTS idx_order_returns_created ON order_returns(created_at);
+      CREATE TABLE IF NOT EXISTS order_return_items (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        return_id     INTEGER NOT NULL REFERENCES order_returns(id) ON DELETE CASCADE,
+        order_item_id INTEGER NOT NULL REFERENCES order_items(id) ON DELETE CASCADE,
+        product_id    INTEGER REFERENCES products(id) ON DELETE SET NULL,
+        product_name  TEXT NOT NULL,
+        unit          TEXT NOT NULL,
+        price         INTEGER NOT NULL,
+        quantity      INTEGER NOT NULL CHECK (quantity > 0)
+      );
+      CREATE INDEX IF NOT EXISTS idx_order_return_items_return ON order_return_items(return_id);
+    `);
+  }
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

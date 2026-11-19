@@ -14,7 +14,7 @@ import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../val
 import { readLocation } from './addresses.js';
 import { promoGiftFor } from '../promotions.js';
 import { attachItems } from '../order-lists.js';
-import { ONLINE, ONLINE_COLUMN, moveStock, stockColumn, warehouseName } from '../inventory.js';
+import { MAIN, ONLINE_STOCK_SQL, moveStock, onlineWarehouseOf, stockColumn, warehouseName } from '../inventory.js';
 import { loyaltyProfile, refundPoints, spendPoints } from '../loyalty.js';
 import { notifyNewOrder, notifyTransferReported, siteOrigin } from '../push.js';
 import { trackOrder, trackOrdersByPhone } from '../order-tracking.js';
@@ -87,9 +87,10 @@ export function placeOrder({
   wholesaleCustomerId = null, priceOverrides = null,
   // Link định vị nhân viên dán khi tạo đơn (đã kiểm tra bằng parseMapLink).
   mapUrl = null,
-  // Kho xuất hàng: đơn khách đặt trên web luôn trừ kho bán online (Kho Bồ Sơn, từ 18/11/2026); đơn
-  // nhân viên tạo thì theo kho nhân viên chọn. stockActor: người tạo đơn, ghi vào nhật ký kho.
-  warehouse = ONLINE, stockActor = null,
+  // Kho xuất hàng: đơn khách đặt trên web (warehouse = null) trừ ở kho bán online của TỪNG sản phẩm
+  // (mặc định Kho Bồ Sơn, 19/11/2026); đơn nhân viên tạo thì cả đơn theo kho nhân viên chọn.
+  // stockActor: người tạo đơn, ghi vào nhật ký kho.
+  warehouse = null, stockActor = null,
 }) {
   const rewardCount = vouchers + [...wantedRewards.values()].reduce((sum, q) => sum + q, 0);
   return db.transaction(() => {
@@ -105,14 +106,14 @@ export function placeOrder({
     );
     const insItem = db.prepare(
       `INSERT INTO order_items (order_id, product_id, product_name, unit, price, quantity, cost_price,
-                                points_per_unit, is_reward)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                                points_per_unit, is_reward, warehouse)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     // Trừ kho có điều kiện: nếu người khác vừa mua trước thì không dòng nào đổi
     // và cả transaction bị huỷ bỏ, tránh bán vượt tồn kho. Mỗi lần trừ ghi một dòng nhật ký kho.
-    const column = stockColumn(warehouse);
-    const takeStock = (productId, quantity, orderId) => moveStock({
-      productId, warehouse, delta: -quantity, kind: wholesaleCustomerId ? 'order_wholesale' : 'order',
+    const whOf = (product) => warehouse || onlineWarehouseOf(product);
+    const takeStock = (product, quantity, orderId) => moveStock({
+      productId: product.id, warehouse: whOf(product), delta: -quantity, kind: wholesaleCustomerId ? 'order_wholesale' : 'order',
       ref: { type: 'order', id: orderId, code: orderCode(orderId) }, actor: stockActor,
     });
 
@@ -132,9 +133,9 @@ export function placeOrder({
         // Cửa hàng chưa nhập giá — không được để khách đặt với giá 0 đồng.
         throw new HttpError(400, `“${product.name}” chưa có giá bán. Vui lòng liên hệ cửa hàng.`);
       }
-      const available = Math.floor(Math.max(product[column], 0));
+      const available = Math.floor(Math.max(product[stockColumn(whOf(product))], 0));
       if (available < quantity) {
-        throw new HttpError(400, `“${product.name}” chỉ còn ${available} ${product.unit}${staff ? ` ở ${warehouseName(warehouse)}` : ''}.`);
+        throw new HttpError(400, `“${product.name}” chỉ còn ${available} ${product.unit}${staff ? ` ở ${warehouseName(whOf(product))}` : ''}.`);
       }
       lines.push({ product, quantity });
       subtotal += product.price * quantity;
@@ -186,9 +187,12 @@ export function placeOrder({
       customerNote, paymentMethod, subtotal, discount, shippingFee, total, deliverySlot, lat, lng,
       voucherDiscount, pointsUsed, pointsUsed > 0 ? pointsPhone : null, guest ? 1 : 0, guestTokenHash
     ).lastInsertRowid;
+    // Kho của cả đơn (đóng ngày theo nơi, thẻ "Lấy hàng ở…"): đơn web lấy hàng ở cả hai kho thì tính Kho Bồ Sơn.
+    const allLines = [...lines, ...rewardLines];
+    const orderWarehouse = warehouse || (allLines.length && allLines.every(({ product }) => whOf(product) !== MAIN) ? whOf(allLines[0].product) : MAIN);
     // Mã đơn tự tạo từ số thứ tự: DH000123, cùng kiểu mã hoá đơn quầy HD000123.
     db.prepare('UPDATE orders SET code = ?, discount_code = ?, code_discount = ?, wholesale_customer_id = ?, map_url = ?, warehouse = ? WHERE id = ?')
-      .run(orderCode(orderId), useCode ? codeRow.code : null, codeDiscount, wholesaleCustomerId, mapUrl, warehouse, orderId);
+      .run(orderCode(orderId), useCode ? codeRow.code : null, codeDiscount, wholesaleCustomerId, mapUrl, orderWarehouse, orderId);
     // Đơn nhân viên nhập tay (khách gọi điện / nhắn Zalo): đã xác nhận ngay, ghi người tạo, cách
     // nhận hàng và người giao — trong cùng transaction với đơn.
     if (staff) {
@@ -199,21 +203,21 @@ export function placeOrder({
     }
 
     for (const { product, quantity } of lines) {
-      const changed = takeStock(product.id, quantity, orderId);
+      const changed = takeStock(product, quantity, orderId);
       if (!changed) {
         throw new HttpError(409, `“${product.name}” vừa được mua hết. Vui lòng thử lại.`);
       }
       insItem.run(orderId, product.id, product.name, product.unit, product.price, quantity,
-        product.cost_price ?? 0, product.points_per_unit ?? null, 0);
+        product.cost_price ?? 0, product.points_per_unit ?? null, 0, whOf(product));
     }
     for (const { product, quantity } of rewardLines) {
-      const changed = takeStock(product.id, quantity, orderId);
+      const changed = takeStock(product, quantity, orderId);
       if (!changed) {
         throw new HttpError(409, `Quà “${product.name}” vừa hết hàng. Vui lòng chọn quà khác.`);
       }
       // Quà ghi giá 0 nhưng giữ giá vốn để báo cáo lãi không bị thổi phồng.
       insItem.run(orderId, product.id, product.name, product.unit, 0, quantity,
-        product.cost_price ?? 0, 0, 1);
+        product.cost_price ?? 0, 0, 1, whOf(product));
     }
 
     // Quà khuyến mãi theo đợt (ví dụ 20/10: mỗi 15kg gạo tặng 1kg nếp, tối đa 3kg). Máy chủ tự
@@ -223,13 +227,13 @@ export function placeOrder({
     if (gift) {
       const insGift = db.prepare(
         `INSERT INTO order_items (order_id, product_id, product_name, unit, price, quantity, cost_price,
-                                  points_per_unit, is_reward, promo)
-         VALUES (?, ?, ?, ?, 0, ?, ?, 0, 0, ?)`
+                                  points_per_unit, is_reward, promo, warehouse)
+         VALUES (?, ?, ?, ?, 0, ?, ?, 0, 0, ?, ?)`
       );
-      const stocked = gift.product && takeStock(gift.product.id, gift.kg, orderId);
+      const stocked = gift.product && takeStock(gift.product, gift.kg, orderId);
       insGift.run(orderId, stocked ? gift.product.id : null,
         gift.product?.name || gift.choice.name, gift.product?.unit || 'kg', gift.kg,
-        gift.product?.cost_price ?? 0, gift.promo.code);
+        gift.product?.cost_price ?? 0, gift.promo.code, stocked ? whOf(gift.product) : null);
     }
 
     // Hồ sơ khách theo số điện thoại: tên, địa chỉ, định vị mới nhất (18/11/2026).
@@ -514,8 +518,8 @@ router.get('/discount', requireAuth, (req, res) => {
     pointsPerReward: RETAIL_POINTS_PER_REWARD,
     voucherAmount: REWARD_VOUCHER_AMOUNT,
     rewards: db.prepare(`
-      SELECT id, name, unit, image_url, CAST(${ONLINE_COLUMN} AS INTEGER) AS stock FROM products
-      WHERE is_reward = 1 AND is_active = 1 AND ${ONLINE_COLUMN} >= 1 ORDER BY id
+      SELECT id, name, unit, image_url, CAST(${ONLINE_STOCK_SQL} AS INTEGER) AS stock FROM products
+      WHERE is_reward = 1 AND is_active = 1 AND ${ONLINE_STOCK_SQL} >= 1 ORDER BY id
     `).all(),
   });
 });
@@ -584,13 +588,13 @@ export { guestAccountId, normalizeItems };
 export function restoreStockForOrder(orderId, actor = null) {
   const order = db.prepare('SELECT code, warehouse, points_used, points_phone FROM orders WHERE id = ?').get(orderId);
   const items = db
-    .prepare('SELECT product_id, quantity FROM order_items WHERE order_id = ?')
+    .prepare('SELECT product_id, quantity, warehouse FROM order_items WHERE order_id = ?')
     .all(orderId);
-  // Hàng trả về đúng kho đã xuất (đơn khách buôn có thể xuất từ Kho Bồ Sơn), có ghi nhật ký kho.
+  // Hàng trả về đúng kho đã xuất của từng dòng (đơn cũ chưa ghi kho từng dòng thì theo kho của đơn), có ghi nhật ký kho.
   for (const item of items) {
     if (!item.product_id) continue;
     moveStock({
-      productId: item.product_id, warehouse: order?.warehouse || 'KH_NC', delta: item.quantity, kind: 'order_cancel',
+      productId: item.product_id, warehouse: item.warehouse || order?.warehouse || 'KH_NC', delta: item.quantity, kind: 'order_cancel',
       ref: { type: 'order', id: orderId, code: order?.code }, actor,
     });
   }

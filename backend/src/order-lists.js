@@ -47,6 +47,17 @@ export function listAdminOrders({ status, from = null, to = null, limit = 30, of
   }
   const items = db.prepare(`SELECT * FROM order_items WHERE order_id IN (${page})
     ORDER BY order_id, id`).all(...args);
+  // Trả / đổi hàng (19/11/2026): số đã trả của từng dòng và danh sách phiếu của từng đơn.
+  const returned = new Map(db.prepare(`
+    SELECT ri.order_item_id AS id, SUM(ri.quantity) AS q FROM order_return_items ri JOIN order_returns r ON r.id = ri.return_id
+    WHERE r.order_id IN (${page}) GROUP BY ri.order_item_id
+  `).all(...args).map((r) => [r.id, r.q]));
+  for (const item of items) item.returned = returned.get(item.id) || 0;
+  const returns = db.prepare(`
+    SELECT order_id, code, return_type, refund_amount, refund_method, restock, warehouse, reason, actor_name, created_at
+    FROM order_returns WHERE order_id IN (${page}) ORDER BY id
+  `).all(...args);
+  for (const row of rows) row.returns = returns.filter((r) => r.order_id === row.id);
   const counts = Object.fromEntries(ORDER_STATUSES.map(s => [s, 0]));
   const countClause = range.length ? `WHERE ${range[0]}` : '';
   for (const row of db.prepare(`SELECT status, COUNT(*) AS n FROM orders ${countClause} GROUP BY status`).all(...rangeArgs)) counts[row.status] = row.n;

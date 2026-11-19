@@ -42,13 +42,15 @@ function overview() {
       if (weight > 0) totals[key].kg += quantity * weight; else totals[key].other_units += quantity;
     }
   };
+  // Thứ tự riêng của bảng tồn (stock_sort, kéo thả ở trang Kho); chưa xếp thì theo thứ tự trên web.
   const products = db.prepare(`
-    SELECT id, sku, name, unit, weight_kg, is_active, stock, stock_bs FROM products ORDER BY sort_order, id
+    SELECT id, sku, name, unit, weight_kg, is_active, stock, stock_bs, online_warehouse FROM products
+    ORDER BY stock_sort IS NULL, stock_sort, sort_order, id
   `).all().map((p) => {
     const transit = moving.get(p.id);
     const row = {
       id: p.id, sku: p.sku || null, name: p.name, unit: p.unit, weight_kg: p.weight_kg || 0, is_active: p.is_active,
-      stock_nc: p.stock, stock_bs: p.stock_bs, total: p.stock + p.stock_bs,
+      stock_nc: p.stock, stock_bs: p.stock_bs, total: p.stock + p.stock_bs, online: p.online_warehouse === STORE ? STORE : MAIN,
       moving_to_nc: transit?.[STORE] || 0, moving_to_bs: transit?.[MAIN] || 0,
     };
     addTotal(STORE, row.stock_nc, row.weight_kg);
@@ -89,6 +91,41 @@ const transfersList = (where = '', args = [], limit = 50) => withItems(
 /** GET /api/admin/inventory — bảng tồn hai kho, tổng theo kho và các lệnh chuyển đang trên đường. */
 router.get('/', view, (req, res) => {
   res.json({ ...overview(), transfers: transfersList("WHERE status = 'in_transit'") });
+});
+
+/**
+ * PUT /api/admin/inventory/products/:id/online { warehouse } — kho bán online của một sản phẩm (19/11/2026).
+ * Chuyển hàng sang Cửa hàng Nguyễn Cao mà vẫn muốn khách mua trên web thì chọn KH_NC: web hiện tồn cửa hàng
+ * và đơn web trừ ở cửa hàng. Không đổi số tồn nào.
+ */
+router.put('/products/:id/online', allow('inventory.transfer', 'products.manage'), (req, res, next) => {
+  try {
+    const productId = toInteger(req.params.id, { min: 1 });
+    const { warehouse } = req.body;
+    if (!productId || !isWarehouse(warehouse)) throw new HttpError(400, 'Chọn kho bán online.');
+    const before = db.prepare('SELECT id, name, online_warehouse FROM products WHERE id = ?').get(productId);
+    if (!before) throw new HttpError(404, 'Không tìm thấy sản phẩm.');
+    db.prepare('UPDATE products SET online_warehouse = ? WHERE id = ?').run(warehouse, productId);
+    writeAdminAudit(req, {
+      action: 'online_warehouse', entityType: 'product', entityId: productId,
+      before: { online_warehouse: before.online_warehouse }, after: { online_warehouse: warehouse },
+    });
+    res.json({ ...overview(), transfers: transfersList("WHERE status = 'in_transit'"),
+      message: `“${before.name}” giờ bán trên web từ ${warehouseName(warehouse)}.` });
+  } catch (err) { next(err); }
+});
+
+/** PUT /api/admin/inventory/order { ids } — thứ tự dòng trong bảng tồn kho (kéo thả, 19/11/2026). */
+router.put('/order', allow('inventory.receive', 'inventory.transfer', 'inventory.count', 'products.manage'), (req, res, next) => {
+  try {
+    const ids = [...new Set((req.body.ids || []).map((v) => toInteger(v, { min: 1 })).filter(Boolean))];
+    if (!ids.length) throw new HttpError(400, 'Danh sách sản phẩm trống.');
+    db.transaction(() => {
+      const set = db.prepare('UPDATE products SET stock_sort = ? WHERE id = ?');
+      ids.forEach((id, index) => set.run(index + 1, id));
+    })();
+    res.json({ ...overview(), transfers: transfersList("WHERE status = 'in_transit'") });
+  } catch (err) { next(err); }
 });
 
 /** GET /api/admin/inventory/stock — tồn từng kho của hàng đang bán, cho form tạo đơn chọn kho xuất. */
