@@ -330,7 +330,10 @@ add('customer-profiles', 'GET', /^\/lookup\/?$/, empty, obj({ phone: z.string().
 add('customer-profiles', 'GET', /^\/?$/, empty, obj({ q: z.string().max(80).optional(), offset: integer(0, 100000).optional() }));
 add('closing', 'GET', /^\/history\/?$/);
 add('closing', 'GET', /^\/export\/?$/, empty, obj({ day: z.string().max(10) }));
-add('closing', 'POST', /^\/?$/, obj({ day: z.string().max(10), counts: z.record(z.string().max(7), z.union([z.number(), z.string().max(7)])).optional(), note: optionalText(1000) }));
+add('closing', 'POST', /^\/?$/, obj({
+  day: z.string().max(10), counts: z.record(z.string().max(7), z.union([z.number(), z.string().max(7)])).optional(), note: optionalText(1000),
+  extras: z.array(obj({ type: z.enum(['in', 'out']), label: z.string().max(200), amount: z.union([z.number(), z.string().max(14)]) })).max(50).optional(),
+}));
 
 export function validateRoutes(group) {
   return (req, res, next) => {

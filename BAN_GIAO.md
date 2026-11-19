@@ -1688,6 +1688,30 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
 - Các bộ smoke / retail / manage / shipping / manual đã cập nhật theo vai mới.
 - Thử trên trình duyệt: 5 khung ở đặt nhanh và đặt hàng (360px và 1280px), đặt đơn khung 17h30–18h40 lưu `chieu3` và trừ Bồ Sơn.
 
+## Đóng ngày theo mẫu bảng tính; tên công ty ở khung chuyển khoản (19/11/2026)
+
+**Trang Đóng ngày (`/quan-tri/dong-ngay`) dựng lại theo 4 bảng kế toán đang dùng:**
+- **TỔNG NHÀ NỢ NGÀY dd/mm** (máy tự tổng hợp): từng đơn giao xong trong ngày mà khách nợ. Tên lấy theo tài khoản công nợ / khách buôn, không có thì lấy người nhận; kèm địa chỉ, mã đơn, số tiền.
+- **TỔNG CHUYỂN KHOẢN** (tự tổng hợp): đơn online chuyển khoản, hoá đơn quầy chuyển khoản, thu nợ bằng chuyển khoản. Hoàn tiền chuyển khoản trừ ở cuối.
+- **TỔNG TIỀN MẶT — Diễn giải / Thu / Chi:**
+  - Phần thu máy tự ghi: từng đơn online trả tiền mặt, một dòng gộp "Bán lẻ tại quầy", thu nợ tiền mặt. Hoàn tiền mặt ghi ở cột chi.
+  - Kế toán bấm "+ Thêm khoản chi" (đổ xăng…) hoặc "+ Thêm khoản thu khác", gõ diễn giải và số tiền (tự thêm dấu chấm).
+  - Dòng TỔNG (đỏ) và CÒN LẠI (vàng) = thu − chi.
+- **TỔNG TIỀN MẶT — kê loại tiền** (kế toán kê): số tờ từng mệnh giá. Dòng TỔNG (nền đỏ) phải khớp CÒN LẠI; lệch thì ghi giải trình như trước.
+
+**Lưu, in, xuất:**
+- Phiếu lưu thêm `extras` (khoản thu / chi thêm) và `expected_cash` (CÒN LẠI). Bảng kê từng dòng nằm trong `figures.details`.
+- Đầu trang và đầu bản in ghi "CTY CP LƯƠNG THỰC LÚA VÀNG CHÂU Á".
+- Bản in: một trang A4, 4 bảng xếp 2×2, có chỗ ký người lập / chủ cửa hàng.
+- File Excel cũng theo đúng 4 bảng này. Phiếu cũ (trước 19/11) vẫn tải được.
+- Màn điện thoại: 4 bảng xếp một cột.
+
+**Khung chuyển khoản:** thêm dòng "Chủ tài khoản: CTY CP LƯƠNG THỰC LÚA VÀNG CHÂU Á" dưới số tài khoản (có cả bản tiếng Anh và tiếng Trung). Tên nằm ở `COMPANY_SHORT` trong `frontend/src/shopInfo.js`.
+
+**Kiểm tra:**
+- `test:debts` 64/64: tổng mỗi bảng khớp số tổng; chi đổ xăng 70.000 làm CÒN LẠI giảm đúng; khoản chi thiếu số tiền hoặc sai loại thì bị từ chối.
+- Thử trên trình duyệt 18/18: đóng ngày có khoản chi, mở lại vẫn còn, bản in 2×2, điện thoại một cột, khung chuyển khoản có tên công ty.
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

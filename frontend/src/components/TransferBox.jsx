@@ -90,6 +90,7 @@ export default function TransferBox({ amount, order = null, guestToken = null })
         <div className="transfer-row">
           <span>{t('transfer.account', { bank: BANK_ACCOUNT.bank })} <b>{BANK_ACCOUNT.number}</b></span>
           <CopyButton what="account" text={BANK_ACCOUNT.number} label={t('transfer.copyAccount')} />
+          <span className="transfer-holder">{t('transfer.holder')} <b>{BANK_ACCOUNT.holder}</b></span>
         </div>
         {order ? (
           <div className="transfer-row">

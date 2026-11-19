@@ -153,6 +153,15 @@ try {
   check('Đóng ngày: công nợ phát sinh tách riêng, không tính vào tiền mặt', L?.online_debt.s === d1.total + d2.total, JSON.stringify(L?.online_debt));
   check('Đóng ngày: tiền thu nợ chuyển khoản tính vào chuyển khoản', L?.debt_collected_transfer.s === d1.total
     && closing.figures.totals.transfer >= d1.total, JSON.stringify(L?.debt_collected_transfer));
+  // Bảng kê từng dòng theo mẫu bảng tính (19/11/2026): tổng mỗi bảng khớp số tổng.
+  const D = closing.figures?.details;
+  const sumOf = (rows) => (rows || []).reduce((s, r) => s + r.amount, 0);
+  check('Bảng "Tổng nhà nợ ngày": từng đơn nợ, có tên công ty, tổng khớp', D?.debts?.length >= 2 && sumOf(D.debts) === L.online_debt.s
+    && D.debts.some((x) => x.code === d2.code && x.amount === d2.total && x.name), JSON.stringify(D?.debts));
+  check('Bảng "Tổng chuyển khoản": có dòng thu nợ chuyển khoản, tổng khớp', sumOf(D?.transfers) === closing.figures.totals.transfer
+    && D.transfers.some((x) => x.code === d1.code && /^Thu nợ/.test(x.name)), JSON.stringify(D?.transfers));
+  check('Tiền mặt: thu − chi máy tính đúng bằng tiền mặt sổ sách', sumOf(D?.cash_in) - sumOf(D?.cash_out) === closing.figures.totals.cash
+    && D.cash_in.some((x) => x.code === o1.code));
   check('Có danh sách mệnh giá để kê tiền', JSON.stringify(closing.denominations) === '[500000,200000,100000,50000,20000,10000,5000,2000,1000]');
   check('Còn đơn nợ chờ duyệt: báo trong phiếu đóng ngày', closing.pending_debts?.some((p) => p.code === d2.code) && closing.can_close === true);
   const blocked = await call('/admin/closing', { method: 'POST', token: accountant, body: { day: vnToday, counts: {}, note: 'Thử đóng khi còn nợ chưa duyệt' } });
@@ -170,6 +179,20 @@ try {
   const saved = (await call('/admin/closing', { method: 'POST', token: accountant, body: { day: vnToday, counts: exact, note: 'Đủ tiền' } })).data.saved;
   check('Duyệt hết công nợ + tiền khớp: đóng ngày được', saved?.counted_cash === cashBook && saved.difference === 0 && saved.closer_name === 'Chị Kế Toán',
     JSON.stringify(saved && { c: saved.counted_cash, d: saved.difference }));
+  // Khoản chi thêm (đổ xăng 70.000): "còn lại" giảm, tiền đếm phải khớp còn lại.
+  const fuel = [{ type: 'out', label: 'Đổ xăng', amount: 70000 }];
+  const noFuel = await call('/admin/closing', { method: 'POST', token: accountant, body: { day: vnToday, counts: exact, extras: fuel } });
+  check('Ghi chi đổ xăng mà tiền đếm vẫn như cũ: thừa 70.000, phải giải trình (400)', noFuel.status === 400 && /thừa 70\.000/.test(noFuel.data.message), noFuel.data.message);
+  let left = cashBook - 70000;
+  const exact2 = {};
+  for (const v of closing.denominations) { exact2[v] = Math.floor(left / v); left -= exact2[v] * v; }
+  const withFuel = await call('/admin/closing', { method: 'POST', token: accountant, body: { day: vnToday, counts: exact2, extras: fuel } });
+  check('Chi đổ xăng + tiền đếm khớp còn lại: đóng được, lưu khoản chi', withFuel.status === 200 && withFuel.data.saved.difference === 0
+    && withFuel.data.saved.expected_cash === cashBook - 70000 && withFuel.data.saved.extras?.[0]?.label === 'Đổ xăng', JSON.stringify(withFuel.data).slice(0, 300));
+  const fuelFile = await fetch(`${app.base}/api/admin/closing/export?day=${vnToday}`, { headers: { Authorization: `Bearer ${accountant}` } });
+  check('Tải Excel phiếu có khoản chi thêm', fuelFile.status === 200 && (await fuelFile.arrayBuffer()).byteLength > 1000);
+  check('Khoản chi thiếu số tiền bị từ chối (400)', (await call('/admin/closing', { method: 'POST', token: accountant, body: { day: vnToday, counts: exact2, extras: [{ type: 'out', label: 'Đổ xăng', amount: 0 }] } })).status === 400);
+  check('Loại khoản lạ bị từ chối (400)', (await call('/admin/closing', { method: 'POST', token: accountant, body: { day: vnToday, counts: exact2, extras: [{ type: 'khac', label: 'x', amount: 1000 }] } })).status === 400);
   const explained = await call('/admin/closing', { method: 'POST', token: accountant, body: { day: vnToday, counts: { ...exact, 1000: exact[1000] + 2 }, note: 'Thừa 2.000đ do khách gửi lại tiền lẻ' } });
   check('Lệch nhưng có giải trình thì lưu được', explained.status === 200 && explained.data.saved.difference === 2000);
   check('Mở lại ngày đã đóng thấy phiếu đã lưu', /khách gửi lại/.test((await call(`/admin/closing?day=${vnToday}`, { token: owner })).data.saved?.note || ''));

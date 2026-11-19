@@ -93,6 +93,8 @@
 /* Chuyển khoản: số tài khoản, nội dung, mỗi dòng một nút sao chép báo "Đã chép!". */
 .transfer-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; padding: 8px 10px; border-radius: 10px; background: #fff; font-size: .9rem; }
 .transfer-row b { font-size: 1.02rem; letter-spacing: .03em; font-variant-numeric: tabular-nums; }
+.transfer-row .transfer-holder { flex-basis: 100%; order: 3; color: var(--muted); font-size: .82rem; }
+.transfer-row .transfer-holder b { color: var(--ink); font-size: .86rem; letter-spacing: .01em; }
 .copy-button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 12px; border: 1.5px solid #0b3a82; border-radius: 99px; background: #fff; color: #0b3a82; font-size: .82rem; font-weight: 800; cursor: pointer; }
 .copy-button.done { border-color: var(--success); background: var(--success); color: #fff; }
 

@@ -187,3 +187,53 @@
 .inv-unit button.active { background: var(--green-950); color: #fff; }
 .inv-conv { color: var(--success); font-weight: 750; }
 .inv-count .inv-conv { display: block; font-size: .72rem; }
+
+/* ---------- Đóng ngày theo mẫu bảng tính của kế toán (19/11/2026) ---------- */
+.closing-company { margin: 0; color: var(--green-900); font-size: .82rem; font-weight: 850; letter-spacing: .04em; }
+.closing-main { max-width: 1100px; }
+.closing-sheets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; margin-bottom: 12px; }
+.closing-sheet { min-width: 0; border: 1px solid #b9b9b9; background: #fff; }
+.closing-sheet h2 { margin: 0; padding: 8px 10px; border-bottom: 1px solid #b9b9b9; background: #d9ead3; color: #111; font-size: 1.25rem; font-weight: 800; text-align: center; letter-spacing: .01em; }
+.closing-sheet h2.cash-title { background: #ffff00; }
+.closing-sheet h2 small { font-size: .78rem; font-weight: 600; color: #555; }
+.closing-grid { width: 100%; border-collapse: collapse; font-size: .95rem; }
+.closing-grid th, .closing-grid td { padding: 7px 10px; border-bottom: 1px solid #d6d6d6; text-align: left; font-weight: 500; vertical-align: middle; }
+.closing-grid td + td, .closing-grid th + td, .closing-grid th + th { border-left: 1px solid #d6d6d6; }
+.closing-grid thead th { background: #e6efe3; color: #a00000; font-weight: 800; font-size: .82rem; text-transform: uppercase; }
+.closing-grid .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.closing-grid tbody th small { display: block; color: var(--muted); font-size: .76rem; font-weight: 450; overflow-wrap: anywhere; }
+.closing-grid tr.total th, .closing-grid tr.total td { color: #c00000; font-weight: 850; font-size: 1.02rem; }
+.closing-grid tbody tr.total th { text-align: center; }
+.closing-grid tr.remain th, .closing-grid tr.remain td { background: #ffff00; color: #333; font-weight: 850; font-size: 1.05rem; }
+.closing-grid tr.grand th, .closing-grid tr.grand td { background: #ff1a1a; color: #fff; font-weight: 850; font-size: 1.05rem; }
+.closing-grid .muted { color: var(--muted); font-style: italic; }
+.closing-grid tr.ok td, .closing-grid tr.ok th { color: var(--success); font-weight: 750; }
+.closing-grid tr.diff td, .closing-grid tr.diff th { color: var(--danger); font-weight: 750; }
+.closing-grid input.input { min-height: 34px; padding: 4px 8px; }
+.closing-grid.cash-count input { width: 80px; text-align: right; }
+.closing-grid input.money { width: 110px; text-align: right; }
+.closing-grid .extra-line { display: flex; align-items: center; gap: 6px; }
+.closing-grid .extra-line input { flex: 1; min-width: 0; }
+.closing-grid tr.add-extra td { display: flex; flex-wrap: wrap; gap: 14px; border-left: 0; }
+.closing-debt-open { margin: 4px 0 10px; color: var(--ink-soft, #3d433d); }
+.closing-sign { justify-content: space-around; margin-top: 26px; text-align: center; font-weight: 700; }
+.closing-sign span { min-height: 70px; }
+@media (max-width: 860px) {
+  .closing-sheets { grid-template-columns: 1fr; }
+}
+@media print {
+  @page { size: A4; margin: 10mm; }
+  .closing-sheets { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .closing-sheet { break-inside: avoid; }
+  .closing-sheet h2 { font-size: 1rem; padding: 4px 6px; }
+  .closing-grid { font-size: .78rem; }
+  .closing-grid th, .closing-grid td { padding: 3px 6px; }
+  .closing-grid input.input { min-height: 0; padding: 0; border: 0; background: none; box-shadow: none; }
+  .closing-summary { margin-bottom: 8px; }
+  .closing-summary div { padding: 6px 8px; }
+  .closing-sheet h2, .closing-grid thead th, .closing-grid tr.remain th, .closing-grid tr.remain td, .closing-grid tr.grand th, .closing-grid tr.grand td {
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .closing-sign.print-only { display: flex; }
+  .closing-note textarea { border: 0; padding: 0; resize: none; }
+}

@@ -55,8 +55,75 @@ export function closingFigures(day) {
   const revenue = lines.online_cash.s + lines.online_transfer.s + lines.online_debt.s
     + lines.retail_cash.s + lines.retail_transfer.s - lines.refund_cash.s - lines.refund_transfer.s;
   const debtOpen = sum("SELECT COALESCE(SUM(amount), 0) AS s FROM debt_records WHERE status IN ('pending_accounting', 'open', 'paid_pending_final')").s;
-  return { day, lines, totals: { revenue, cash, transfer, debt_new: lines.online_debt.s, debt_open: debtOpen } };
+  return { day, lines, details: closingDetails(day, lines), totals: { revenue, cash, transfer, debt_new: lines.online_debt.s, debt_open: debtOpen } };
 }
+
+/** Tên khách hiện trên phiếu: tên công ty / khách buôn / người liên hệ công nợ, không có thì người nhận. */
+const who = (r) => r.company || r.contact_name || r.receiver_name || r.customer_name || 'Khách lẻ';
+
+/**
+ * Bảng kê từng dòng cho phiếu đóng ngày (19/11/2026, theo mẫu bảng tính của kế toán):
+ *  - debts: "Tổng nhà nợ ngày" — đơn giao xong trong ngày mà khách nợ.
+ *  - transfers: "Tổng chuyển khoản" — đơn online, hoá đơn quầy, thu nợ bằng chuyển khoản (trừ hoàn tiền).
+ *  - cash_in / cash_out: phần thu / chi tiền mặt máy tự tính; kế toán ghi thêm khoản thu / chi khác khi đóng.
+ * Tổng mỗi bảng khớp đúng các con số trong `lines` / `totals`.
+ */
+function closingDetails(day, lines) {
+  const ordersOf = (where) => db.prepare(`
+    SELECT o.code, o.receiver_name, o.address, o.total AS amount, w.company, a.contact_name, a.company AS debt_company
+    FROM orders o
+    LEFT JOIN wholesale_customers w ON w.id = o.wholesale_customer_id
+    LEFT JOIN debt_records r ON r.order_id = o.id
+    LEFT JOIN debt_accounts a ON a.id = r.account_id
+    WHERE o.status = 'completed' AND ${localDate('COALESCE(o.completed_at, o.created_at)')} = ? AND ${where}
+    ORDER BY COALESCE(o.completed_at, o.created_at), o.id
+  `).all(day).map((r) => ({ code: r.code, name: who({ ...r, company: r.company || r.debt_company }), address: r.address || '', amount: r.amount }));
+  const collected = (method) => db.prepare(`
+    SELECT o.code, r.amount, a.contact_name, a.company FROM debt_records r
+    JOIN orders o ON o.id = r.order_id JOIN debt_accounts a ON a.id = r.account_id
+    WHERE r.paid_at IS NOT NULL AND r.status IN ('paid_pending_final', 'settled') AND r.paid_method = ? AND ${localDate('r.paid_at')} = ?
+    ORDER BY r.paid_at, r.id
+  `).all(method, day).map((r) => ({ code: r.code, name: `Thu nợ: ${who(r)}`, address: '', amount: r.amount }));
+  const retailTransfers = db.prepare(`
+    SELECT code, customer_name, customer_address, total AS amount FROM retail_invoices
+    WHERE payment_method = 'transfer' AND ${localDate('created_at')} = ? ORDER BY created_at, id
+  `).all(day).map((r) => ({ code: r.code, name: r.customer_name || 'Khách mua tại quầy', address: r.customer_address || '', amount: r.amount }));
+  const group = (label, line, sign = 1) => (line.n ? [{ code: '', name: `${label} (${line.n})`, address: '', amount: sign * line.s }] : []);
+
+  return {
+    debts: ordersOf("o.payment_status = 'debt'"),
+    transfers: [
+      ...ordersOf("o.payment_status <> 'debt' AND o.payment_method = 'bank'"),
+      ...retailTransfers,
+      ...collected('transfer'),
+      ...group('Trả hàng hoàn chuyển khoản', lines.refund_transfer, -1),
+    ],
+    cash_in: [
+      ...ordersOf("o.payment_status <> 'debt' AND o.payment_method <> 'bank'"),
+      ...group('Bán lẻ tại quầy, tiền mặt — số hoá đơn', lines.retail_cash),
+      ...collected('cash'),
+    ],
+    cash_out: group('Trả hàng hoàn tiền mặt — số phiếu', lines.refund_cash),
+  };
+}
+
+export const EXTRA_LIMIT = 50;
+/** Khoản thu / chi tiền mặt kế toán ghi thêm (đổ xăng, mua đồ, tiền khác…): [{ type: 'in'|'out', label, amount }]. */
+export function readExtras(list) {
+  if (list == null) return [];
+  if (!Array.isArray(list) || list.length > EXTRA_LIMIT) throw new HttpError(400, `Tối đa ${EXTRA_LIMIT} khoản thu / chi thêm.`, { extras: 'Danh sách khoản thu / chi không hợp lệ.' });
+  return list.map((row) => {
+    const label = cleanText(row?.label, 120);
+    const amount = Number(row?.amount);
+    if (!['in', 'out'].includes(row?.type) || !label || !Number.isInteger(amount) || amount < 1 || amount > 10_000_000_000) {
+      throw new HttpError(400, 'Mỗi khoản thu / chi cần ghi diễn giải và số tiền (số nguyên lớn hơn 0).', { extras: 'Ghi đủ diễn giải và số tiền.' });
+    }
+    return { type: row.type, label, amount };
+  });
+}
+/** Tiền mặt phải có = tiền mặt máy tính + thu thêm − chi thêm. */
+export const cashExpected = (figures, extras) => figures.totals.cash
+  + extras.reduce((s, e) => s + (e.type === 'in' ? e.amount : -e.amount), 0);
 
 /**
  * Đơn nợ còn chờ duyệt tính tới hết ngày `day`: kế toán chưa duyệt (hoặc bị trả lại) với ngày giao ≤ day,
@@ -125,55 +192,86 @@ async function closingWorkbook(day, data, closer, savedAt) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Gạo Kinh Bắc';
   const ws = wb.addWorksheet('Đóng ngày');
-  ws.columns = [{ width: 46 }, { width: 12 }, { width: 20 }];
+  ws.columns = [{ width: 40 }, { width: 14 }, { width: 18 }, { width: 18 }];
   const { lines, totals } = data.figures;
-  const title = ws.addRow([`BÁO CÁO ĐÓNG NGÀY ${day.split('-').reverse().join('/')} — GẠO KINH BẮC`]);
-  title.font = { bold: true, size: 14 };
-  ws.addRow([`Người đóng: ${closer || ''} · Lưu lúc: ${savedAt} (giờ máy chủ, UTC)`]);
-  ws.addRow([]);
-  const section = (name) => { const r = ws.addRow([name]); r.font = { bold: true }; r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6EFE8' } }; };
-  const line = (label, value, n = '', bold = false) => {
-    const r = ws.addRow([label, n === '' ? '' : n, value]);
-    r.getCell(3).numFmt = '#,##0';
-    if (bold) r.font = { bold: true };
+  // Phiếu lưu trước 19/11/2026 chưa có bảng kê từng dòng: dựng lại từ số tổng.
+  const details = data.figures.details || { debts: [], transfers: [], cash_in: [], cash_out: [] };
+  const extras = data.extras || [];
+  const dd = day.split('-').reverse().join('/');
+  const money = '#,##0';
+  const head = (text, fill = 'FFD9EAD3') => {
+    const r = ws.addRow([text]);
+    ws.mergeCells(r.number, 1, r.number, 4);
+    r.font = { bold: true, size: 13 };
+    r.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
+    r.alignment = { horizontal: 'center' };
   };
-  section('DOANH THU HÔM NAY');
-  line('Đơn online giao xong — tiền mặt', lines.online_cash.s, lines.online_cash.n);
-  line('Đơn online giao xong — chuyển khoản', lines.online_transfer.s, lines.online_transfer.n);
-  line('Đơn online giao xong — công nợ (chưa thu)', lines.online_debt.s, lines.online_debt.n);
-  line('Bán tại quầy — tiền mặt', lines.retail_cash.s, lines.retail_cash.n);
-  line('Bán tại quầy — chuyển khoản', lines.retail_transfer.s, lines.retail_transfer.n);
-  line('Trả hàng hoàn tiền mặt', -lines.refund_cash.s, lines.refund_cash.n);
-  line('Trả hàng hoàn chuyển khoản', -lines.refund_transfer.s, lines.refund_transfer.n);
-  line('Tổng doanh thu', totals.revenue, '', true);
+  const total = (label, value, col = 4) => {
+    const r = ws.addRow([label]);
+    r.getCell(col).value = value;
+    r.getCell(col).numFmt = money;
+    r.font = { bold: true, color: { argb: 'FFC00000' } };
+  };
+  const item = (row) => {
+    const r = ws.addRow([row.name + (row.address ? ` — ${row.address}` : ''), row.code || '', '', row.amount]);
+    r.getCell(4).numFmt = money;
+  };
+
+  const company = ws.addRow(['CTY CP LƯƠNG THỰC LÚA VÀNG CHÂU Á']);
+  company.font = { bold: true, size: 12 };
+  const title = ws.addRow([`BÁO CÁO ĐÓNG NGÀY ${dd} — GẠO KINH BẮC`]);
+  title.font = { bold: true, size: 14 };
+  ws.addRow([`Người đóng: ${closer || ''} · Lưu lúc: ${savedAt} (giờ máy chủ, UTC) · Doanh thu: ${totals.revenue.toLocaleString('vi-VN')}đ`]);
   ws.addRow([]);
-  section('CHUYỂN KHOẢN');
-  line('Đơn online', lines.online_transfer.s);
-  line('Bán tại quầy', lines.retail_transfer.s);
-  line('Thu nợ bằng chuyển khoản', lines.debt_collected_transfer.s, lines.debt_collected_transfer.n);
-  line('Hoàn tiền chuyển khoản', -lines.refund_transfer.s);
-  line('Tổng chuyển khoản', totals.transfer, '', true);
+
+  head(`TỔNG NHÀ NỢ NGÀY ${dd}`);
+  total('TỔNG', lines.online_debt.s);
+  details.debts.forEach(item);
   ws.addRow([]);
-  section('TIỀN MẶT');
-  line('Đơn online giao xong', lines.online_cash.s);
-  line('Bán tại quầy', lines.retail_cash.s);
-  line('Thu nợ bằng tiền mặt', lines.debt_collected_cash.s, lines.debt_collected_cash.n);
-  line('Hoàn tiền mặt', -lines.refund_cash.s);
-  line('Tổng tiền mặt theo sổ sách', totals.cash, '', true);
-  const head = ws.addRow(['Kê loại tiền — mệnh giá', 'Số tờ', 'Thành tiền']);
-  head.font = { bold: true };
-  for (const value of DENOMINATIONS) line(`${value.toLocaleString('vi-VN')}đ`, value * (data.counts[value] || 0), data.counts[value] || 0);
-  line('Tổng tiền mặt đếm được', data.counted_cash, '', true);
-  line(`Chênh lệch so với sổ sách${data.difference === 0 ? ' (khớp)' : data.difference > 0 ? ' (thừa)' : ' (thiếu)'}`, data.difference, '', true);
+
+  head('TỔNG CHUYỂN KHOẢN');
+  total('TỔNG', totals.transfer);
+  details.transfers.forEach(item);
   ws.addRow([]);
-  section('CÔNG NỢ');
-  line('Công nợ phát sinh trong ngày', lines.online_debt.s, lines.online_debt.n);
-  line('Thu nợ trong ngày', lines.debt_collected_cash.s + lines.debt_collected_transfer.s);
-  line('Tổng công nợ đang mở (tất cả các ngày)', totals.debt_open, '', true);
+
+  head('TỔNG TIỀN MẶT — THU / CHI');
+  const hdr = ws.addRow(['Diễn giải', 'Mã', 'Thu', 'Chi']);
+  hdr.font = { bold: true };
+  const thuChi = (name, code, thu, chi) => {
+    const r = ws.addRow([name, code || '', thu || null, chi || null]);
+    r.getCell(3).numFmt = money;
+    r.getCell(4).numFmt = money;
+  };
+  for (const row of details.cash_in) thuChi(row.name + (row.address ? ` — ${row.address}` : ''), row.code, row.amount, 0);
+  for (const e of extras.filter((x) => x.type === 'in')) thuChi(e.label, '', e.amount, 0);
+  for (const row of details.cash_out) thuChi(row.name, row.code, 0, row.amount);
+  for (const e of extras.filter((x) => x.type === 'out')) thuChi(e.label, '', 0, e.amount);
+  const inSum = details.cash_in.reduce((s, r) => s + r.amount, 0) + extras.filter((x) => x.type === 'in').reduce((s, e) => s + e.amount, 0);
+  const outSum = details.cash_out.reduce((s, r) => s + r.amount, 0) + extras.filter((x) => x.type === 'out').reduce((s, e) => s + e.amount, 0);
+  const sumRow = ws.addRow(['TỔNG', '', inSum, outSum]);
+  sumRow.font = { bold: true, color: { argb: 'FFC00000' } };
+  sumRow.getCell(3).numFmt = money;
+  sumRow.getCell(4).numFmt = money;
+  total('CÒN LẠI', data.expected_cash ?? totals.cash, 3);
   ws.addRow([]);
+
+  head('TỔNG TIỀN MẶT — KÊ LOẠI TIỀN', 'FFFFFF00');
+  const h2 = ws.addRow(['Loại tiền', 'Số tờ', '', 'Tổng tiền']);
+  h2.font = { bold: true };
+  for (const value of DENOMINATIONS) {
+    const n = data.counts[value] || 0;
+    const r = ws.addRow([value, n, '', value * n]);
+    r.getCell(1).numFmt = money;
+    r.getCell(4).numFmt = money;
+  }
+  total('TỔNG', data.counted_cash);
+  const diff = data.difference;
+  total(`Chênh lệch so với còn lại${diff === 0 ? ' (khớp)' : diff > 0 ? ' (thừa)' : ' (thiếu)'}`, diff);
+  ws.addRow([]);
+  ws.addRow([`Tổng công nợ đang mở (tất cả các ngày): ${totals.debt_open.toLocaleString('vi-VN')}đ`]);
   if (data.note) ws.addRow([`Ghi chú: ${data.note}`]);
   ws.addRow([]);
-  ws.addRow(['Người lập (ký tên)', '', 'Chủ cửa hàng (ký tên)']);
+  ws.addRow(['Người lập (ký tên)', '', '', 'Chủ cửa hàng (ký tên)']);
   return wb.xlsx.writeBuffer();
 }
 
@@ -199,13 +297,15 @@ router.post('/', (req, res, next) => {
         { pending_debts: 'Còn đơn nợ chờ duyệt.' });
     }
     const note = cleanText(req.body.note, 1000);
-    const difference = counted - figures.totals.cash;
+    const extras = readExtras(req.body.extras);
+    const expected = cashExpected(figures, extras);
+    const difference = counted - expected;
     // Tiền đếm phải khớp sổ sách; lệch thì phải ghi giải trình.
     if (difference !== 0 && (!note || note.length < 10)) {
-      throw new HttpError(400, `Tiền mặt đếm được ${difference > 0 ? 'thừa' : 'thiếu'} ${Math.abs(difference).toLocaleString('vi-VN')}đ so với sổ sách. Đếm lại, hoặc ghi giải trình vào ô ghi chú.`,
+      throw new HttpError(400, `Tiền mặt đếm được ${difference > 0 ? 'thừa' : 'thiếu'} ${Math.abs(difference).toLocaleString('vi-VN')}đ so với tiền mặt còn lại. Đếm lại, hoặc ghi giải trình vào ô ghi chú.`,
         { note: 'Ghi lý do chênh lệch.' });
     }
-    const data = { figures, counts, counted_cash: counted, difference, note };
+    const data = { figures, counts, counted_cash: counted, extras, expected_cash: expected, difference, note };
     db.prepare(`
       INSERT INTO day_closings (day, data, closed_by, closer_name) VALUES (?, ?, ?, ?)
       ON CONFLICT(day) DO UPDATE SET data = excluded.data, closed_by = excluded.closed_by, closer_name = excluded.closer_name, updated_at = datetime('now')

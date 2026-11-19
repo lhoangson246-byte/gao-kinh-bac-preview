@@ -1,32 +1,62 @@
 import { ListSkeleton } from '../components/Skeleton.jsx';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, formatDateTime, formatVND, vietnamDate } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
+import { COMPANY_SHORT } from '../shopInfo.js';
 
 const formatDay = (day) => day.split('-').reverse().join('/');
-const Row = ({ label, line, minus = false, strong = false }) => (
-  <tr className={strong ? 'strong' : ''}>
-    <th scope="row">{label}{line?.n ? <small> ({line.n})</small> : null}</th>
-    <td className="num">{minus && line?.s ? '− ' : ''}{formatVND(line?.s ?? line ?? 0)}</td>
-  </tr>
-);
+const shortDay = (day) => formatDay(day).slice(0, 5);
+const money = (n) => (n ? Number(n).toLocaleString('vi-VN') : '');
+const digits = (v) => String(v ?? '').replace(/\D/g, '').slice(0, 11);
+
+/** Một dòng kê: tên khách (đậm), địa chỉ + mã đơn (nhỏ), số tiền. */
+function ItemRow({ row }) {
+  return (
+    <tr>
+      <th scope="row">
+        {row.name}
+        {(row.address || row.code) && <small>{[row.address, row.code].filter(Boolean).join(' · ')}</small>}
+      </th>
+      <td className="num">{money(row.amount) || '0'}</td>
+    </tr>
+  );
+}
+
+/** Bảng "TỔNG …" giống bảng tính của kế toán: tiêu đề xanh, dòng TỔNG đỏ ngay dưới, rồi từng dòng. */
+function Sheet({ title, total, rows, empty }) {
+  return (
+    <section className="closing-sheet">
+      <h2>{title}</h2>
+      <table className="closing-grid">
+        <tbody>
+          <tr className="total"><th scope="row">TỔNG</th><td className="num">{money(total) || '0'}</td></tr>
+          {rows.map((row, i) => <ItemRow key={`${row.code}-${i}`} row={row} />)}
+          {!rows.length && <tr><td colSpan={2} className="muted">{empty}</td></tr>}
+        </tbody>
+      </table>
+    </section>
+  );
+}
 
 /**
- * /quan-tri/dong-ngay — kế toán đóng ngày: doanh thu trong ngày, chuyển khoản, tiền mặt (kê từng loại
- * tờ tiền, so với sổ sách), công nợ. Lưu phiếu và in ra báo cáo cuối ngày.
+ * /quan-tri/dong-ngay — kế toán đóng ngày theo mẫu bảng tính cửa hàng đang dùng (19/11/2026):
+ *  - TỔNG NHÀ NỢ NGÀY, TỔNG CHUYỂN KHOẢN: máy tự tổng hợp từ đơn hàng, hoá đơn quầy, thu nợ.
+ *  - TỔNG TIỀN MẶT (thu / chi): phần thu máy tự tính, kế toán ghi thêm khoản thu / chi khác (đổ xăng…).
+ *  - TỔNG TIỀN MẶT (kê loại tiền): kế toán đếm số tờ; phải khớp "Còn lại", lệch thì ghi giải trình.
+ * Lưu phiếu, in một trang A4 và tải tệp Excel.
  */
 export default function DayClosing() {
   const { user } = useAuth();
   const [day, setDay] = useState(vietnamDate());
   const [data, setData] = useState(null);
   const [counts, setCounts] = useState({});
+  const [extras, setExtras] = useState([]);
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState([]);
-  const formRef = useRef(null);
   const loadHistory = () => api.closingHistory().then((d) => setHistory(d.closings)).catch(() => {});
   useEffect(() => { loadHistory(); }, []);
 
@@ -36,39 +66,51 @@ export default function DayClosing() {
     api.closing(day).then((d) => {
       setData(d);
       setCounts(d.saved?.counts || {});
+      setExtras((d.saved?.extras || []).map((e) => ({ ...e, amount: String(e.amount) })));
       setNote(d.saved?.note || '');
       setError('');
     }).catch((err) => setError(err.message));
   }, [day]);
 
-  // In: mở hết các mục để không thiếu số liệu trên giấy.
-  useEffect(() => {
-    const open = () => formRef.current?.querySelectorAll('details').forEach((d) => { d.open = true; });
-    window.addEventListener('beforeprint', open);
-    return () => window.removeEventListener('beforeprint', open);
-  }, []);
-
   if (error && !data) return <p className="alert error">{error}</p>;
   if (!data) return <ListSkeleton rows={5} label="Đang tính số liệu…" />;
 
   const { lines, totals } = data.figures;
+  const details = data.figures.details || { debts: [], transfers: [], cash_in: [], cash_out: [] };
   const counted = data.denominations.reduce((sum, value) => sum + value * (Number(counts[value]) || 0), 0);
-  const difference = counted - totals.cash;
+  const filledExtras = extras.filter((e) => e.label.trim() && Number(e.amount) > 0);
+  const extraIn = filledExtras.filter((e) => e.type === 'in').reduce((s, e) => s + Number(e.amount), 0);
+  const extraOut = filledExtras.filter((e) => e.type === 'out').reduce((s, e) => s + Number(e.amount), 0);
+  const cashIn = details.cash_in.reduce((s, r) => s + r.amount, 0) + extraIn;
+  const cashOut = details.cash_out.reduce((s, r) => s + r.amount, 0) + extraOut;
+  const expected = totals.cash + extraIn - extraOut;    // = cashIn − cashOut
+  const difference = counted - expected;
   const pending = data.pending_debts || [];
   const canClose = data.can_close;
-  // Đóng được khi: duyệt hết công nợ, và tiền đếm khớp sổ sách (lệch thì phải ghi giải trình).
+  const halfFilled = extras.some((e) => (e.label.trim() === '') !== !(Number(e.amount) > 0));
+  // Đóng được khi: duyệt hết công nợ, ghi đủ các khoản thu / chi thêm, và tiền đếm khớp "Còn lại" (lệch thì ghi giải trình).
   const needsNote = difference !== 0 && note.trim().length < 10;
-  const ready = canClose && pending.length === 0 && !needsNote;
+  const ready = canClose && pending.length === 0 && !needsNote && !halfFilled;
   // Đã đóng rồi mà sau đó phát sinh thêm (đơn giao muộn, đơn nợ mới…): phiếu đã lưu không còn khớp.
   const stale = !!data.saved && JSON.stringify(data.saved.figures?.totals) !== JSON.stringify(totals);
   const printable = !!data.saved && !stale;
+
+  const setExtra = (i, patch) => setExtras((cur) => cur.map((e, j) => (j === i ? { ...e, ...patch } : e)));
+  const addExtra = (type) => setExtras((cur) => [...cur, { type, label: '', amount: '' }]);
+  const removeExtra = (i) => setExtras((cur) => cur.filter((_, j) => j !== i));
 
   const save = async () => {
     setBusy(true);
     setError('');
     try {
-      const result = await api.saveClosing({ day, counts: Object.fromEntries(data.denominations.map((v) => [v, Number(counts[v]) || 0])), note: note.trim() || null });
+      const result = await api.saveClosing({
+        day,
+        counts: Object.fromEntries(data.denominations.map((v) => [v, Number(counts[v]) || 0])),
+        extras: filledExtras.map((e) => ({ type: e.type, label: e.label.trim(), amount: Number(e.amount) })),
+        note: note.trim() || null,
+      });
       setData(result);
+      setExtras((result.saved?.extras || []).map((e) => ({ ...e, amount: String(e.amount) })));
       setMessage('Đã đóng ngày. Có thể in báo cáo và tải tệp Excel lưu trữ.');
       loadHistory();
     } catch (err) {
@@ -77,6 +119,26 @@ export default function DayClosing() {
       setBusy(false);
     }
   };
+
+  const extraRow = (e, i) => (
+    <tr key={`x${i}`} className="extra">
+      <th scope="row">
+        <span className="extra-line">
+          <input className="input" value={e.label} maxLength={120} disabled={!canClose} onChange={(ev) => setExtra(i, { label: ev.target.value })}
+                 placeholder={e.type === 'in' ? 'VD: Thu tiền khác' : 'VD: Đổ xăng'} aria-label={`Diễn giải khoản ${e.type === 'in' ? 'thu' : 'chi'}`} />
+          {canClose && <button type="button" className="link-button danger no-print" onClick={() => removeExtra(i)} aria-label="Xoá khoản này">✕</button>}
+        </span>
+      </th>
+      {['in', 'out'].map((col) => (
+        <td key={col} className="num">
+          {e.type === col && (
+            <input className="input money" inputMode="numeric" value={money(e.amount)} disabled={!canClose}
+                   onChange={(ev) => setExtra(i, { amount: digits(ev.target.value) })} aria-label={`Số tiền ${col === 'in' ? 'thu' : 'chi'}`} />
+          )}
+        </td>
+      ))}
+    </tr>
+  );
 
   return (
     <div className="admin-app closing-app">
@@ -87,10 +149,10 @@ export default function DayClosing() {
         </div>
       </header>
 
-      <main className="closing-main" ref={formRef}>
+      <main className="closing-main">
         <div className="closing-head">
           <div>
-            <p className="eyebrow dark"><span></span>Báo cáo cuối ngày · Gạo Kinh Bắc</p>
+            <p className="closing-company">{COMPANY_SHORT}</p>
             <h1>Đóng ngày {formatDay(day)}</h1>
             {data.saved && <p className={`closing-saved${stale ? ' stale' : ''}`}>Đã đóng bởi {data.saved.closer_name} lúc {formatDateTime(data.saved.updated_at)}</p>}
           </div>
@@ -106,94 +168,99 @@ export default function DayClosing() {
           </p>
         )}
         <div className="closing-summary">
-          <div><span>Doanh thu hôm nay</span><strong>{formatVND(totals.revenue)}</strong></div>
+          <div><span>Doanh thu</span><strong>{formatVND(totals.revenue)}</strong></div>
+          <div><span>Nợ trong ngày</span><strong>{formatVND(lines.online_debt.s)}</strong></div>
           <div><span>Chuyển khoản</span><strong>{formatVND(totals.transfer)}</strong></div>
-          <div><span>Tiền mặt (sổ sách)</span><strong>{formatVND(totals.cash)}</strong></div>
-          <div><span>Công nợ phát sinh</span><strong>{formatVND(totals.debt_new)}</strong></div>
+          <div><span>Tiền mặt còn lại</span><strong>{formatVND(expected)}</strong></div>
         </div>
 
-        <details open className="closing-section">
-          <summary>Doanh thu hôm nay — {formatVND(totals.revenue)}</summary>
-          <table className="closing-table"><tbody>
-            <Row label="Đơn online giao xong — tiền mặt" line={lines.online_cash} />
-            <Row label="Đơn online giao xong — chuyển khoản" line={lines.online_transfer} />
-            <Row label="Đơn online giao xong — công nợ (chưa thu)" line={lines.online_debt} />
-            <Row label="Bán tại quầy — tiền mặt" line={lines.retail_cash} />
-            <Row label="Bán tại quầy — chuyển khoản" line={lines.retail_transfer} />
-            <Row label="Trả hàng hoàn tiền mặt" line={lines.refund_cash} minus />
-            <Row label="Trả hàng hoàn chuyển khoản" line={lines.refund_transfer} minus />
-            <Row label="Tổng doanh thu" line={totals.revenue} strong />
-          </tbody></table>
-        </details>
+        {pending.length > 0 && (
+          <div className="closing-pending" role="alert">
+            <strong>Phải duyệt hết công nợ mới đóng được ngày:</strong>
+            <ul>{pending.map((p) => <li key={p.id}>{p.code} · {p.contact_name}{p.company ? ` – ${p.company}` : ''} · {formatVND(p.amount)} · {p.status_label}</li>)}</ul>
+            <Link className="no-print" to="/quan-tri/cong-no">Mở trang công nợ để duyệt →</Link>
+          </div>
+        )}
 
-        <details open className="closing-section">
-          <summary>Chuyển khoản — {formatVND(totals.transfer)}</summary>
-          <table className="closing-table"><tbody>
-            <Row label="Đơn online" line={lines.online_transfer} />
-            <Row label="Bán tại quầy" line={lines.retail_transfer} />
-            <Row label="Thu nợ bằng chuyển khoản" line={lines.debt_collected_transfer} />
-            <Row label="Hoàn tiền chuyển khoản" line={lines.refund_transfer} minus />
-            <Row label="Tổng chuyển khoản" line={totals.transfer} strong />
-          </tbody></table>
-        </details>
+        <div className="closing-sheets">
+          <Sheet title={`TỔNG NHÀ NỢ NGÀY ${shortDay(day)}`} total={lines.online_debt.s} rows={details.debts} empty="Không có khách nợ trong ngày." />
+          <Sheet title="TỔNG CHUYỂN KHOẢN" total={totals.transfer} rows={details.transfers} empty="Chưa có khoản chuyển khoản nào." />
 
-        <details open className="closing-section">
-          <summary>Tiền mặt — sổ sách {formatVND(totals.cash)} · đếm được {formatVND(counted)}</summary>
-          <table className="closing-table"><tbody>
-            <Row label="Đơn online giao xong" line={lines.online_cash} />
-            <Row label="Bán tại quầy" line={lines.retail_cash} />
-            <Row label="Thu nợ bằng tiền mặt" line={lines.debt_collected_cash} />
-            <Row label="Hoàn tiền mặt" line={lines.refund_cash} minus />
-            <Row label="Tổng tiền mặt theo sổ sách" line={totals.cash} strong />
-          </tbody></table>
-          <h3>Kê loại tiền</h3>
-          <table className="closing-table cash-count">
-            <thead><tr><th>Mệnh giá</th><th className="num">Số tờ</th><th className="num">Thành tiền</th></tr></thead>
-            <tbody>
-              {data.denominations.map((value) => (
-                <tr key={value}>
-                  <th scope="row">{formatVND(value)}</th>
-                  <td className="num">
-                    <input className="input" type="number" min="0" inputMode="numeric" value={counts[value] ?? ''} disabled={!canClose}
-                           onChange={(e) => setCounts((cur) => ({ ...cur, [value]: e.target.value.replace(/\D/g, '') }))} aria-label={`Số tờ ${value}`} />
-                  </td>
-                  <td className="num">{formatVND(value * (Number(counts[value]) || 0))}</td>
+          <section className="closing-sheet">
+            <h2>TỔNG TIỀN MẶT</h2>
+            <table className="closing-grid cash-book">
+              <thead><tr><th>Diễn giải</th><th className="num">Thu</th><th className="num">Chi</th></tr></thead>
+              <tbody>
+                {details.cash_in.map((row, i) => (
+                  <tr key={`i${i}`}>
+                    <th scope="row">{row.name}{(row.address || row.code) && <small>{[row.address, row.code].filter(Boolean).join(' · ')}</small>}</th>
+                    <td className="num">{money(row.amount)}</td><td />
+                  </tr>
+                ))}
+                {details.cash_out.map((row, i) => (
+                  <tr key={`o${i}`}><th scope="row">{row.name}</th><td /><td className="num">{money(row.amount)}</td></tr>
+                ))}
+                {extras.map(extraRow)}
+                {!details.cash_in.length && !details.cash_out.length && !extras.length && <tr><td colSpan={3} className="muted">Chưa có khoản thu tiền mặt nào.</td></tr>}
+                {canClose && (
+                  <tr className="no-print add-extra">
+                    <td colSpan={3}>
+                      <button type="button" className="link-button" onClick={() => addExtra('out')}>+ Thêm khoản chi</button>
+                      <button type="button" className="link-button" onClick={() => addExtra('in')}>+ Thêm khoản thu khác</button>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              <tfoot>
+                <tr className="total"><th>TỔNG</th><td className="num">{money(cashIn) || '0'}</td><td className="num">{money(cashOut) || '0'}</td></tr>
+                <tr className="remain"><th>CÒN LẠI</th><td className="num" colSpan={2}>{formatVND(expected)}</td></tr>
+              </tfoot>
+            </table>
+            {halfFilled && <small className="err">Khoản thu / chi thêm cần ghi đủ diễn giải và số tiền.</small>}
+          </section>
+
+          <section className="closing-sheet">
+            <h2 className="cash-title">TỔNG TIỀN MẶT <small>kê loại tiền</small></h2>
+            <table className="closing-grid cash-count">
+              <thead><tr><th>Loại tiền</th><th className="num">Số tờ</th><th className="num">Tổng tiền</th></tr></thead>
+              <tbody>
+                {data.denominations.map((value) => (
+                  <tr key={value}>
+                    <th scope="row" className="num">{money(value)}</th>
+                    <td className="num">
+                      <input className="input" type="number" min="0" inputMode="numeric" value={counts[value] ?? ''} disabled={!canClose}
+                             onChange={(e) => setCounts((cur) => ({ ...cur, [value]: e.target.value.replace(/\D/g, '') }))} aria-label={`Số tờ ${value}`} />
+                    </td>
+                    <td className="num">{Number(counts[value]) ? money(value * Number(counts[value])) : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="grand"><th>TỔNG</th><td /><td className="num">{money(counted) || '0'}</td></tr>
+                <tr className={difference === 0 ? 'ok' : 'diff'}>
+                  <th colSpan={2}>So với còn lại</th>
+                  <td className="num">{difference === 0 ? 'Khớp ✓' : `${difference > 0 ? 'Thừa' : 'Thiếu'} ${money(Math.abs(difference))}`}</td>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr><th>Tổng tiền mặt đếm được</th><td></td><td className="num">{formatVND(counted)}</td></tr>
-              <tr className={difference === 0 ? 'ok' : 'diff'}>
-                <th>Chênh lệch so với sổ sách</th><td></td>
-                <td className="num">{difference > 0 ? '+' : ''}{formatVND(difference)}{difference === 0 ? ' ✓' : difference > 0 ? ' (thừa)' : ' (thiếu)'}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </details>
+              </tfoot>
+            </table>
+          </section>
+        </div>
 
-        <details open className="closing-section">
-          <summary>Tổng công nợ — {pending.length ? `còn ${pending.length} đơn chờ duyệt` : 'đã duyệt hết ✓'}</summary>
-          {pending.length > 0 && (
-            <div className="closing-pending" role="alert">
-              <strong>Phải duyệt hết công nợ mới đóng được ngày:</strong>
-              <ul>{pending.map((p) => <li key={p.id}>{p.code} · {p.contact_name}{p.company ? ` – ${p.company}` : ''} · {formatVND(p.amount)} · {p.status_label}</li>)}</ul>
-              <Link className="no-print" to="/quan-tri/cong-no">Mở trang công nợ để duyệt →</Link>
-            </div>
-          )}
-          <table className="closing-table"><tbody>
-            <Row label="Công nợ phát sinh trong ngày" line={lines.online_debt} />
-            <Row label="Thu nợ trong ngày" line={{ n: lines.debt_collected_cash.n + lines.debt_collected_transfer.n, s: lines.debt_collected_cash.s + lines.debt_collected_transfer.s }} />
-            <Row label="Tổng công nợ đang mở (tất cả các ngày)" line={totals.debt_open} strong />
-          </tbody></table>
-          <p className="no-print"><Link to="/quan-tri/cong-no">Mở trang theo dõi công nợ →</Link></p>
-        </details>
+        <p className="closing-debt-open">
+          Tổng công nợ đang mở (tất cả các ngày): <strong>{formatVND(totals.debt_open)}</strong>
+          {(lines.debt_collected_cash.n + lines.debt_collected_transfer.n) > 0 && <> · Thu nợ hôm nay: <strong>{formatVND(lines.debt_collected_cash.s + lines.debt_collected_transfer.s)}</strong></>}
+          <Link className="no-print" to="/quan-tri/cong-no"> · Mở trang công nợ →</Link>
+        </p>
 
-        <label className="closing-note">Ghi chú
-          <textarea className="input" rows={3} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} disabled={!canClose}
+        <label className={`closing-note${note.trim() ? '' : ' no-print'}`}>Ghi chú
+          <textarea className="input" rows={2} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} disabled={!canClose}
                     placeholder="VD: Đã nộp 5.000.000đ cho chị Linh lúc 18h" aria-invalid={needsNote} />
-          {needsNote && canClose && <small className="err">Tiền đếm {difference > 0 ? 'thừa' : 'thiếu'} {formatVND(Math.abs(difference))}: đếm lại, hoặc ghi giải trình (ít nhất 10 ký tự).</small>}
+          {needsNote && canClose && <small className="err">Tiền đếm {difference > 0 ? 'thừa' : 'thiếu'} {formatVND(Math.abs(difference))} so với còn lại: đếm lại, hoặc ghi giải trình (ít nhất 10 ký tự).</small>}
         </label>
-        <p className="closing-sign print-only">Người lập: {user?.full_name} &nbsp;&nbsp;&nbsp;&nbsp; Ký tên: ______________________</p>
+        <div className="closing-sign print-only">
+          <span>Người lập: {data.saved?.closer_name || user?.full_name}<br />Ký tên</span>
+          <span>Chủ cửa hàng<br />Ký tên</span>
+        </div>
 
         {error && <p className="alert error" role="alert">{error}</p>}
         {message && <p className="alert success" role="status">{message}</p>}
@@ -210,7 +277,7 @@ export default function DayClosing() {
         {!canClose && <p className="field-help no-print">Tài khoản của bạn chỉ xem báo cáo; kế toán là người đóng ngày.</p>}
         {canClose && !data.saved && !ready && (
           <p className="field-help no-print">
-            {pending.length ? 'Chưa đóng được: còn công nợ chờ duyệt. ' : ''}{needsNote ? 'Chưa đóng được: tiền đếm chưa khớp sổ sách. ' : ''}
+            {pending.length ? 'Chưa đóng được: còn công nợ chờ duyệt. ' : ''}{needsNote ? 'Chưa đóng được: tiền đếm chưa khớp còn lại. ' : ''}
             In và tải tệp sau khi đóng ngày.
           </p>
         )}
@@ -230,7 +297,8 @@ export default function DayClosing() {
           </details>
         )}
         <p className="field-help no-print">
-          Đơn online tính vào ngày giao xong; bán quầy và trả hàng theo ngày lập phiếu; thu nợ theo ngày kế toán ký đã thu.
+          Nợ, chuyển khoản và tiền mặt máy tự tổng hợp: đơn online tính vào ngày giao xong; bán quầy và trả hàng theo ngày lập phiếu;
+          thu nợ theo ngày kế toán ký đã thu. Khoản chi (đổ xăng…) và số tờ tiền do kế toán ghi.
         </p>
       </main>
     </div>
