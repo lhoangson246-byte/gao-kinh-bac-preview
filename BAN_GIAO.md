@@ -1741,6 +1741,33 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
 - Thử trên trình duyệt 23/23. Bản in PDF là một trang A4.
 - Cấu trúc cơ sở dữ liệu lên phiên bản `schema:2026-11-19-v1`. Vercel tự chạy cập nhật khi build.
 
+## Hoá đơn giao hàng A5 ngang; xem đơn cũ của khách; giao xong chọn tiền mặt / chuyển khoản (19/11/2026)
+
+**In hoá đơn giao hàng (nút "In đơn" / "In N đơn đã xác nhận"):**
+- Mỗi đơn in một tờ **A5 nằm ngang** (`@page invoice` trong `styles.css`). Chrome tự chọn khổ giấy theo lệnh này; nếu máy in chưa có khổ A5 thì chọn A5 trong hộp in.
+- Đơn nhiều món tự vừa một tờ: trước khi in, `OrderPrint.jsx` (`fitSheets`) đo từng tờ và hạ cỡ chữ từ 11pt, mỗi lần 0,5pt, thấp nhất 6,5pt. Vẫn dài thì thu nhỏ cả tờ. Đơn 18 món in thử vẫn gọn một tờ.
+- Ghi chú nằm bên trái phần tổng tiền cho đỡ tốn chiều cao.
+- Khổ A4 của báo cáo Đóng ngày đổi thành trang có tên (`@page closing`). Trước đó lệnh A4 áp nhầm cho cả hoá đơn in tại quầy.
+
+**Quản trị → Khách hàng → "Khách đã đặt hàng":**
+- Bấm vào tên khách ("▼ Xem N đơn") mở bảng các đơn khách đó đã đặt, mới nhất trước, tối đa 100 đơn.
+- Các cột: ngày đặt, mã đơn, hàng đã đặt (tên, quy cách, số lượng, đơn giá), tổng tiền, thanh toán (tiền mặt / chuyển khoản ✓ hoặc chờ xác nhận / công nợ), trạng thái, giao hàng (địa chỉ, khung giờ, người giao, giờ giao xong, kho xuất).
+- Đầu bảng có tổng đơn, số đơn đã giao và tổng tiền đã mua.
+- API `GET /api/admin/customer-profiles/orders?phone=`: cần quyền tạo đơn hoặc quản lý khách; không trả giá vốn.
+
+**Trang Giao hàng, lúc hoàn thành đơn:**
+- Nhân viên chọn **💵 Tiền mặt** hoặc **🏦 Chuyển khoản**, mặc định theo cách khách chọn lúc đặt.
+- **Tiền mặt:** chụp ảnh gạo đã giao (camera sau). Đơn tính là tiền mặt.
+- **Chuyển khoản:** chụp ảnh màn hình chuyển khoản của khách, hoặc chọn ảnh khách gửi. Ảnh lưu thành ảnh chuyển khoản, trang Đơn hàng hiện "Khách báo đã chuyển khoản · Xem ảnh" để cửa hàng kiểm tra tiền về rồi bấm xác nhận. Đơn tính là chuyển khoản.
+- Đổi cách trả thì ảnh vừa chụp bị bỏ để chụp lại cho đúng loại. Dòng tiền ở thẻ đơn cũng đổi theo ("Thu tiền mặt" / "Khách chuyển khoản").
+- Đơn cửa hàng đã xác nhận nhận tiền thì không hỏi, ghi "Cửa hàng đã nhận tiền chuyển khoản", ảnh chụp là ảnh gạo đã giao.
+- Đơn đổi cách trả lúc giao thì Đóng ngày tự tính theo cách trả thật (tiền mặt / chuyển khoản).
+- API: `PATCH /api/delivery/orders/:id/status` nhận thêm `paid_by: 'cash' | 'transfer'`. Không gửi thì theo cách khách chọn lúc đặt.
+
+**Kiểm tra:**
+- `test:debts` 78/78: chuyển khoản lưu ảnh chuyển khoản và đổi đơn sang chuyển khoản; tiền mặt lưu ảnh giao hàng; bảng đơn của khách không lộ giá vốn; nhân viên giao không xem được (403).
+- Thử trên trình duyệt 13/13: in A5 ngang đúng 1 tờ cho đơn 2 món và đơn 18 món; Đóng ngày vẫn A4; bảng đơn khách; luồng giao hàng chọn chuyển khoản và tải ảnh.
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

@@ -274,7 +274,7 @@ add('staff', 'POST', /^\/[^/]+\/reset-password\/?$/, obj({ password: newPassword
 // Nhân viên giao hàng: chỉ hai bước của chính mình.
 add('delivery', 'GET', /^\/orders\/?$/);
 add('delivery', 'GET', /^\/search\/?$/, empty, obj({ q: z.string().max(80) }));
-add('delivery', 'PATCH', /^\/orders\/[^/]+\/status\/?$/, obj({ status: z.enum(['shipping', 'completed']), photo: z.string().max(40).optional() }));
+add('delivery', 'PATCH', /^\/orders\/[^/]+\/status\/?$/, obj({ status: z.enum(['shipping', 'completed']), photo: z.string().max(40).optional(), paid_by: z.enum(['cash', 'transfer']).optional() }));
 add('delivery', 'POST', /^\/orders\/[^/]+\/debt\/?$/, obj({
   delivered_photo: z.string().max(40), invoice_photo: z.string().max(40), company: optionalText(160), comment: optionalText(1000),
 }));
@@ -327,6 +327,7 @@ add('attendance', 'PUT', /^\/mark\/?$/, obj({
   units: z.union([z.literal(1), z.literal(0.5), z.literal(0), z.null()]), note: optionalText(300), only_empty: flag.optional(),
 }));
 add('customer-profiles', 'GET', /^\/lookup\/?$/, empty, obj({ phone: z.string().max(20) }));
+add('customer-profiles', 'GET', /^\/orders\/?$/, empty, obj({ phone: z.string().max(20) }));
 add('customer-profiles', 'GET', /^\/?$/, empty, obj({ q: z.string().max(80).optional(), offset: integer(0, 100000).optional() }));
 add('closing', 'GET', /^\/history\/?$/);
 add('closing', 'GET', /^\/export\/?$/, empty, obj({ day: z.string().max(10), location: z.enum(['KH_BS', 'KH_NC', 'ALL']).optional() }));

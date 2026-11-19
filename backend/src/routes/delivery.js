@@ -20,7 +20,8 @@ router.use(requireAuth, requirePermission('delivery'));
 router.use(validateRoutes('delivery'));
 
 const ORDER_COLUMNS = `id, code, status, receiver_name, phone, address, note, delivery_slot, delivery_lat, delivery_lng, map_url, warehouse,
-  payment_method, payment_status, total, fulfillment, created_at, confirmed_at, shipping_at, completed_at, cancelled_at, delivery_photo`;
+  payment_method, payment_status, total, fulfillment, created_at, confirmed_at, shipping_at, completed_at, cancelled_at, delivery_photo,
+  transfer_confirmed_at`;
 
 /** Ảnh chứng từ phải do chính nhân viên này vừa chụp và tải lên. */
 function ownPhoto(id, user, field) {
@@ -57,28 +58,52 @@ router.get('/orders', (req, res) => {
   res.json({ orders });
 });
 
-/** PATCH /orders/:id/status — body: { status: 'shipping' | 'completed' } */
+/**
+ * PATCH /orders/:id/status — body: { status: 'shipping' | 'completed', photo?, paid_by?: 'cash' | 'transfer' }
+ *
+ * Giao xong (19/11/2026): nhân viên chọn khách trả bằng gì.
+ *  - Tiền mặt   → chụp ảnh gạo đã giao (ảnh giao hàng); đơn tính là tiền mặt.
+ *  - Chuyển khoản → chụp ảnh màn hình chuyển khoản của khách (ảnh chuyển khoản, chờ cửa hàng xác nhận
+ *    tiền về); đơn tính là chuyển khoản.
+ * Đơn mà cửa hàng đã xác nhận nhận tiền chuyển khoản thì luôn là chuyển khoản, ảnh chụp là ảnh giao hàng.
+ * Không gửi paid_by (ứng dụng cũ) thì theo cách khách chọn lúc đặt.
+ */
 router.patch('/orders/:id/status', (req, res, next) => {
   try {
     const orderId = toInteger(req.params.id, { min: 1 });
     if (!orderId) throw new HttpError(404, 'Không tìm thấy đơn hàng.');
     const { status } = req.body;
-    // Giao xong phải có ảnh gạo đã tới nơi (12/11/2026).
+    // Giao xong phải có ảnh (12/11/2026).
     const photo = status === 'completed' ? ownPhoto(req.body.photo, req.user, 'photo') : null;
+    let paidBy = null;
+    let chosenAtOrder = null;
     const { before, order } = changeOrderStatus(orderId, status, {
       guard: (current) => {
         // Đơn của người khác: báo như không có, để không dò được đơn ngoài phần mình.
         if (current.shipper_id !== req.user.id) throw new HttpError(404, 'Không tìm thấy đơn hàng.');
       },
       within: () => {
-        if (photo) db.prepare('UPDATE orders SET delivery_photo = ? WHERE id = ?').run(photo, orderId);
+        if (!photo) return;
+        const o = db.prepare('SELECT payment_method, transfer_proof, transfer_confirmed_at FROM orders WHERE id = ?').get(orderId);
+        chosenAtOrder = o.payment_method;
+        paidBy = o.transfer_confirmed_at ? 'transfer' : req.body.paid_by || (o.payment_method === 'bank' ? 'transfer' : 'cash');
+        if (paidBy === 'cash') {
+          db.prepare("UPDATE orders SET delivery_photo = ?, payment_method = 'cod' WHERE id = ?").run(photo, orderId);
+        } else if (o.transfer_confirmed_at || o.transfer_proof) {
+          // Đã có ảnh chuyển khoản của khách (hoặc cửa hàng đã nhận tiền): giữ ảnh đó, ảnh mới là ảnh giao hàng.
+          db.prepare("UPDATE orders SET delivery_photo = ?, payment_method = 'bank' WHERE id = ?").run(photo, orderId);
+        } else {
+          db.prepare(`UPDATE orders SET transfer_proof = ?, transfer_reported_at = datetime('now'), payment_method = 'bank'
+                      WHERE id = ?`).run(photo, orderId);
+        }
       },
     });
     writeAdminAudit(req, {
       action: 'delivery_status', entityType: 'order', entityId: orderId,
-      before: { status: before.status }, after: { status: order.status },
+      before: { status: before.status, ...(chosenAtOrder ? { payment_method: chosenAtOrder } : {}) },
+      after: { status: order.status, ...(paidBy ? { paid_by: paidBy, payment_method: order.payment_method } : {}) },
     });
-    res.json({ order: { id: order.id, status: order.status, shipping_at: order.shipping_at, completed_at: order.completed_at } });
+    res.json({ order: { id: order.id, status: order.status, shipping_at: order.shipping_at, completed_at: order.completed_at, payment_method: order.payment_method } });
   } catch (err) {
     next(err);
   }

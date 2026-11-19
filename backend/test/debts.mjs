@@ -66,6 +66,31 @@ try {
   check('Khách thường không xem được ảnh chứng từ (403)', (await fetch(`${app.base}${photo1.data.url}`, { headers: { Authorization: `Bearer ${customer}` } })).status === 403);
   check('Khách thường không tải ảnh chứng từ lên được (403)', (await upload(customer)).status === 403);
 
+  /* Giao xong chọn khách trả bằng gì (19/11/2026) */
+  const adminOrder = async (id) => (await call('/admin/orders?status=completed', { token: owner })).data.orders.find((o) => o.id === id);
+  const viaTransfer = await newOrder('Anh Chuyển', phone('06'), 1);
+  const shot = (await upload(shipper)).data;
+  const doneT = await call(`/delivery/orders/${viaTransfer.id}/status`, { method: 'PATCH', token: shipper, body: { status: 'completed', photo: shot.id, paid_by: 'transfer' } });
+  let rowT = await adminOrder(viaTransfer.id);
+  check('Khách trả chuyển khoản: đơn thành chuyển khoản, ảnh là ảnh chuyển khoản chờ cửa hàng xác nhận', doneT.status === 200
+    && rowT?.payment_method === 'bank' && rowT.transfer_proof === shot.url && !!rowT.transfer_reported_at && !rowT.transfer_confirmed_at && !rowT.delivery_photo, JSON.stringify(rowT && { m: rowT.payment_method, p: rowT.transfer_proof, d: rowT.delivery_photo }));
+  const viaCash = await newOrder('Chị Tiền Mặt', phone('05'), 1);
+  const shot2 = (await upload(shipper)).data;
+  const doneC = await call(`/delivery/orders/${viaCash.id}/status`, { method: 'PATCH', token: shipper, body: { status: 'completed', photo: shot2.id, paid_by: 'cash' } });
+  const rowC = await adminOrder(viaCash.id);
+  check('Khách trả tiền mặt: đơn là tiền mặt, ảnh là ảnh gạo đã giao', doneC.status === 200 && rowC?.payment_method === 'cod' && rowC.delivery_photo === shot2.url && !rowC.transfer_proof);
+  check('Cách trả lạ bị từ chối (400)', (await call(`/delivery/orders/${viaCash.id}/status`, { method: 'PATCH', token: shipper, body: { status: 'completed', photo: shot2.id, paid_by: 'the' } })).status === 400);
+
+  /* Bấm vào khách xem các đơn đã đặt (19/11/2026) */
+  const custHist = await call(`/admin/customer-profiles/orders?phone=${viaTransfer.phone}`, { token: owner });
+  const h0 = custHist.data.orders?.[0];
+  check('Xem đơn của một khách: đủ mã, trạng thái, hàng, tiền, cách trả, người giao', custHist.status === 200 && custHist.data.total === 1 && h0?.code === viaTransfer.code
+    && h0.status === 'completed' && h0.payment_method === 'bank' && h0.items?.[0]?.quantity === 1 && h0.total === viaTransfer.total && h0.shipper_name === 'Chú Giao Hàng',
+    JSON.stringify(custHist.data).slice(0, 300));
+  check('Danh sách đơn của khách không lộ giá vốn', !JSON.stringify(custHist.data).includes('cost_price'));
+  check('Nhân viên giao không xem danh sách đơn của khách (403)', (await call(`/admin/customer-profiles/orders?phone=${viaTransfer.phone}`, { token: shipper })).status === 403);
+  check('Số điện thoại sai: trả danh sách rỗng', (await call('/admin/customer-profiles/orders?phone=abc', { token: owner })).data.orders?.length === 0);
+
   /* Khách nợ */
   const companyPhone = phone('09');
   const d1 = await newOrder('Chị A', companyPhone, 2);

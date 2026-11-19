@@ -8,6 +8,34 @@ export { INVOICE_HEADER };
 // Đầu hoá đơn (tên công ty, địa chỉ, số tài khoản, số điện thoại) nằm ở ../shopInfo.js.
 const DEFAULT_QR = '/bank-qr.png';
 
+// Khổ A5 nằm ngang trừ lề (xem @page invoice trong styles.css): cao 148 − 2×5 = 138 mm.
+const PAGE_HEIGHT_MM = 138;
+const BASE_PT = 11;
+const MIN_PT = 6.5;
+
+/**
+ * Đơn nhiều món: hạ cỡ chữ từng tờ cho vừa một tờ A5 ngang; nhỏ tới MIN_PT mà vẫn dài thì thu nhỏ cả tờ.
+ * Đo khi tờ đang ở lớp .measure (ngoài màn hình, đúng bề rộng khổ in).
+ */
+function fitSheets(root) {
+  const probe = document.createElement('div');
+  probe.style.height = `${PAGE_HEIGHT_MM}mm`;
+  root.appendChild(probe);
+  const limit = probe.getBoundingClientRect().height;
+  probe.remove();
+  for (const sheet of root.querySelectorAll('.order-sheet')) {
+    sheet.style.zoom = '';
+    let size = BASE_PT;
+    sheet.style.fontSize = `${size}pt`;
+    while (sheet.scrollHeight > limit && size > MIN_PT) {
+      size = Math.max(MIN_PT, size - 0.5);
+      sheet.style.fontSize = `${size}pt`;
+    }
+    if (sheet.scrollHeight > limit) sheet.style.zoom = String(Math.floor((limit / sheet.scrollHeight) * 100) / 100);
+    sheet.dataset.fit = String(size);
+  }
+}
+
 const pad = (n) => String(n).padStart(2, '0');
 /** "11/11/2026 10:19:35" theo giờ Việt Nam. */
 function vnDateTime(value) {
@@ -45,7 +73,7 @@ function Sheet({ order, qr }) {
       </div>
 
       <table>
-        <thead><tr><th>STT</th><th>Tên sản phẩm</th><th>Số lượng</th><th>Giá tiền</th><th>Thành Tiền</th></tr></thead>
+        <thead><tr><th>STT</th><th>Tên sản phẩm</th><th>SL</th><th>Đơn giá</th><th>Thành tiền</th></tr></thead>
         <tbody>
           {order.items.map((item, index) => (
             <tr key={item.id}>
@@ -59,25 +87,29 @@ function Sheet({ order, qr }) {
         </tbody>
       </table>
 
-      <div className="order-sheet-totals">
-        {(discount > 0 || order.shipping_fee > 0) && <p><span>Tiền hàng</span><b>{formatVND(subtotal)}</b></p>}
-        {order.shipping_fee > 0 && <p><span>Phí giao hàng</span><b>{formatVND(order.shipping_fee)}</b></p>}
-        {discount > 0 && <p><span>Giảm giá</span><b>− {formatVND(discount)}</b></p>}
-        <p className="grand"><span>Tổng tiền</span><b>{formatVND(order.total)}</b></p>
-        <p className="pay">{paid ? 'Đã thanh toán chuyển khoản' : order.payment_method === 'bank' ? 'Khách chọn chuyển khoản' : `Thu khi giao hàng: ${formatVND(order.total)}`}</p>
+      <div className="order-sheet-bottom">
+        <div>{order.note && <p className="order-sheet-note"><b>Ghi chú:</b> {order.note}</p>}</div>
+        <div className="order-sheet-totals">
+          {(discount > 0 || order.shipping_fee > 0) && <p><span>Tiền hàng</span><b>{formatVND(subtotal)}</b></p>}
+          {order.shipping_fee > 0 && <p><span>Phí giao hàng</span><b>{formatVND(order.shipping_fee)}</b></p>}
+          {discount > 0 && <p><span>Giảm giá</span><b>− {formatVND(discount)}</b></p>}
+          <p className="grand"><span>Tổng tiền</span><b>{formatVND(order.total)}</b></p>
+          <p className="pay">{paid ? 'Đã thanh toán chuyển khoản' : order.payment_method === 'bank' ? 'Khách chọn chuyển khoản' : `Thu khi giao hàng: ${formatVND(order.total)}`}</p>
+        </div>
       </div>
-      {order.note && <p className="order-sheet-note"><b>Ghi chú:</b> {order.note}</p>}
       <footer className="order-sheet-sign"><span>Khách hàng</span><span>Người bán</span></footer>
     </article>
   );
 }
 
 /**
- * In một hoặc nhiều đơn (mỗi đơn một trang) theo mẫu hoá đơn bán hàng của cửa hàng, kèm mã QR chuyển
- * khoản. Gắn vào <body> và chỉ phần này được in; in xong (hoặc huỷ) thì gọi onDone.
+ * In một hoặc nhiều đơn theo mẫu hoá đơn bán hàng của cửa hàng, kèm mã QR chuyển khoản: mỗi đơn một tờ
+ * A5 nằm ngang, đơn nhiều món tự co cho vừa tờ. Gắn vào <body> và chỉ phần này được in; in xong (hoặc huỷ)
+ * thì gọi onDone.
  */
 export default function OrderPrint({ orders, onDone }) {
   const [qr, setQr] = useState(null);
+  const rootRef = useRef(null);
   const done = useRef(onDone);
   done.current = onDone;
 
@@ -102,7 +134,16 @@ export default function OrderPrint({ orders, onDone }) {
       new Promise((resolve) => setTimeout(resolve, 2000)),
     ]);
     let cancelled = false;
-    ready.then(() => { if (!cancelled) window.print(); });
+    ready.then(() => {
+      if (cancelled) return;
+      const root = rootRef.current;
+      if (root) {
+        root.classList.add('measure');
+        fitSheets(root);
+        root.classList.remove('measure');
+      }
+      window.print();
+    });
     return () => {
       cancelled = true;
       window.removeEventListener('afterprint', finish);
@@ -112,7 +153,7 @@ export default function OrderPrint({ orders, onDone }) {
 
   if (!qr) return null;
   return createPortal(
-    <div className="order-print-root" aria-hidden="true">
+    <div className="order-print-root" aria-hidden="true" ref={rootRef}>
       {orders.map((order) => <Sheet key={order.id} order={order} qr={qr} />)}
     </div>,
     document.body,

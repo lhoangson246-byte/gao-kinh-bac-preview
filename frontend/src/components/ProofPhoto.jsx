@@ -6,7 +6,8 @@ import { shrink } from './ImagePicker.jsx';
  * Nút chụp ảnh chứng từ trên điện thoại (mở thẳng camera sau). Ảnh được thu nhỏ trên máy rồi tải lên
  * kho ảnh riêng tư của cửa hàng; `value` = { id, url } sau khi tải xong.
  */
-export default function ProofPhoto({ label, value, onChange, error }) {
+// camera={false}: cho chọn cả ảnh có sẵn trong máy (ảnh chụp màn hình chuyển khoản khách gửi qua Zalo…).
+export default function ProofPhoto({ label, value, onChange, error, camera = true }) {
   const inputId = useId();
   const [busy, setBusy] = useState(false);
   const [uploadError, setUploadError] = useState('');
@@ -30,7 +31,7 @@ export default function ProofPhoto({ label, value, onChange, error }) {
 
   return (
     <div className={`proof-photo${value ? ' done' : ''}`}>
-      <input id={inputId} type="file" accept="image/*" capture="environment" onChange={pick} className="sr-only" />
+      <input id={inputId} type="file" accept="image/*" {...(camera ? { capture: 'environment' } : {})} onChange={pick} className="sr-only" />
       {value ? (
         <div className="proof-photo-preview">
           <a href={value.url} target="_blank" rel="noopener noreferrer"><img src={value.url} alt={label} /></a>

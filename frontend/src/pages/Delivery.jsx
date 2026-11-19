@@ -23,7 +23,16 @@ export default function Delivery() {
   const [orders, setOrders] = useState(null);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
-  const [photos, setPhotos] = useState({});   // { orderId: { id, url } } ảnh gạo đã giao
+  const [photos, setPhotos] = useState({});   // { orderId: { id, url } } ảnh gạo đã giao / ảnh chuyển khoản
+  const [payWays, setPayWays] = useState({});   // { orderId: 'cash' | 'transfer' } khách trả bằng gì (19/11/2026)
+  // Mặc định theo cách khách chọn lúc đặt; cửa hàng đã nhận chuyển khoản thì luôn là chuyển khoản.
+  const payWayOf = (order) => (order.transfer_confirmed_at ? 'transfer' : payWays[order.id] || (order.payment_method === 'bank' ? 'transfer' : 'cash'));
+  const pickPayWay = (order, way) => {
+    if (payWayOf(order) === way) return;
+    setPayWays((cur) => ({ ...cur, [order.id]: way }));
+    // Đổi cách trả thì ảnh cần chụp cũng khác: bỏ ảnh đã chụp để chụp lại cho đúng.
+    setPhotos((cur) => { const next = { ...cur }; delete next[order.id]; return next; });
+  };
   const [debtForms, setDebtForms] = useState({});   // { orderId: { delivered, invoice, company, comment, errors } }
   const setDebt = (orderId, patch) => setDebtForms((cur) => ({ ...cur, [orderId]: { ...cur[orderId], ...patch } }));
 
@@ -46,10 +55,12 @@ export default function Delivery() {
   }, [load]);
 
   const setStatus = async (order, status) => {
-    if (status === 'completed' && !window.confirm(`Xác nhận đã giao đơn ${order.code} cho ${order.receiver_name}${order.payment_method === 'cod' ? ` và đã thu ${formatVND(order.total)}` : ''}?`)) return;
+    const way = payWayOf(order);
+    if (status === 'completed' && !window.confirm(`Xác nhận đã giao đơn ${order.code} cho ${order.receiver_name}${way === 'cash'
+      ? ` và đã thu tiền mặt ${formatVND(order.total)}` : order.transfer_confirmed_at ? '' : `, khách đã chuyển khoản ${formatVND(order.total)}`}?`)) return;
     setBusyId(order.id);
     try {
-      await api.deliverySetStatus(order.id, status, status === 'completed' ? photos[order.id]?.id : undefined);
+      await api.deliverySetStatus(order.id, status, status === 'completed' ? photos[order.id]?.id : undefined, status === 'completed' ? way : undefined);
       await load();
     } catch (err) {
       setError(err.message);
@@ -138,10 +149,12 @@ export default function Delivery() {
                   <li key={i}><span>{item.product_name}{item.promo ? ' (quà khuyến mãi)' : item.is_reward ? ' (quà đổi điểm)' : ''}</span><b>{item.quantity} {item.unit}</b></li>
                 ))}
               </ul>
-              <p className={`delivery-money ${order.payment_method}`}>
-                {order.payment_method === 'cod'
-                  ? <>💵 Thu tiền mặt: <strong>{formatVND(order.total)}</strong></>
-                  : <>🏦 Khách chuyển khoản: <strong>{formatVND(order.total)}</strong> — kiểm tra với cửa hàng đã nhận tiền chưa</>}
+              <p className={`delivery-money ${payWayOf(order) === 'cash' ? 'cod' : 'bank'}`}>
+                {order.transfer_confirmed_at
+                  ? <>🏦 Đã chuyển khoản: <strong>{formatVND(order.total)}</strong> — cửa hàng đã nhận tiền</>
+                  : payWayOf(order) === 'cash'
+                    ? <>💵 Thu tiền mặt: <strong>{formatVND(order.total)}</strong></>
+                    : <>🏦 Khách chuyển khoản: <strong>{formatVND(order.total)}</strong> — chụp ảnh chuyển khoản khi giao</>}
               </p>
               {order.status === 'confirmed' ? (
                 <button type="button" className="btn btn-primary btn-block btn-large" disabled={busyId === order.id} onClick={() => setStatus(order, 'shipping')}>
@@ -170,8 +183,26 @@ export default function Delivery() {
                 </div>
               ) : (
                 <>
-                  <ProofPhoto label="Chụp ảnh gạo đã giao" value={photos[order.id]}
-                              onChange={(v) => setPhotos((cur) => ({ ...cur, [order.id]: v }))} />
+                  {order.transfer_confirmed_at ? (
+                    <p className="delivery-paid-ok">✓ Cửa hàng đã nhận tiền chuyển khoản, không thu thêm.</p>
+                  ) : (
+                    <div className="delivery-payway" role="radiogroup" aria-label="Khách trả bằng">
+                      <span>Khách trả bằng</span>
+                      {[['cash', '💵 Tiền mặt'], ['transfer', '🏦 Chuyển khoản']].map(([way, label]) => (
+                        <button key={way} type="button" role="radio" aria-checked={payWayOf(order) === way}
+                                className={payWayOf(order) === way ? 'active' : ''} onClick={() => pickPayWay(order, way)}>{label}</button>
+                      ))}
+                    </div>
+                  )}
+                  <ProofPhoto
+                    key={`${order.id}-${payWayOf(order)}`}
+                    camera={!(payWayOf(order) === 'transfer' && !order.transfer_confirmed_at)}
+                    label={payWayOf(order) === 'transfer' && !order.transfer_confirmed_at ? 'Chụp ảnh chuyển khoản của khách' : 'Chụp ảnh gạo đã giao'}
+                    value={photos[order.id]}
+                    onChange={(v) => setPhotos((cur) => ({ ...cur, [order.id]: v }))} />
+                  {payWayOf(order) === 'transfer' && !order.transfer_confirmed_at && (
+                    <small className="field-help">Chụp màn hình báo chuyển tiền thành công trên điện thoại khách, hoặc chọn ảnh khách gửi. Cửa hàng kiểm tra tiền về rồi xác nhận.</small>
+                  )}
                   <button type="button" className="btn btn-primary btn-block btn-large delivery-done" disabled={busyId === order.id || !photos[order.id]}
                           onClick={() => setStatus(order, 'completed')}>
                     {busyId === order.id ? 'Đang lưu…' : photos[order.id] ? '✅ Hoàn thành đơn' : '✅ Hoàn thành đơn (chụp ảnh trước)'}

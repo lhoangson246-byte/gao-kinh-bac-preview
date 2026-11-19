@@ -166,7 +166,8 @@ export const api = {
   /** Hồ sơ khách tự lưu theo số điện thoại. */
   customerProfileLookup: (phone, signal) => request(`/admin/customer-profiles/lookup?${new URLSearchParams({ phone })}`, { auth: true, signal }),
   customerProfiles: ({ q = '', offset = 0 } = {}) => request(`/admin/customer-profiles?${new URLSearchParams({ ...(q ? { q } : {}), ...(offset ? { offset } : {}) })}`, { auth: true }),
-  deliverySetStatus: (orderId, status, photo) => request(`/delivery/orders/${orderId}/status`, { method: 'PATCH', auth: true, body: { status, ...(photo ? { photo } : {}) } }),
+  deliverySetStatus: (orderId, status, photo, paidBy) => request(`/delivery/orders/${orderId}/status`, { method: 'PATCH', auth: true, body: { status, ...(photo ? { photo } : {}), ...(paidBy ? { paid_by: paidBy } : {}) } }),
+  customerOrders: (phone) => request(`/admin/customer-profiles/orders?${new URLSearchParams({ phone })}`, { auth: true }),
   deliveryDebt: (orderId, body) => request(`/delivery/orders/${orderId}/debt`, { method: 'POST', auth: true, body }),
   // Ảnh chứng từ (giao hàng, hoá đơn nợ): riêng tư, chỉ người trong cửa hàng xem được.
   uploadProof: (blob) => uploadImage(blob, '/proofs'),

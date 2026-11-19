@@ -222,7 +222,9 @@
   .closing-sheets { grid-template-columns: 1fr; }
 }
 @media print {
-  @page { size: A4; margin: 10mm; }
+  /* Trang có tên: chỉ báo cáo đóng ngày in khổ A4, không đụng khổ in hoá đơn quầy / hoá đơn giao hàng. */
+  @page closing { size: A4; margin: 10mm; }
+  .closing-main { page: closing; }
   .closing-sheets { grid-template-columns: 1fr 1fr; gap: 8px; }
   .closing-sheet { break-inside: avoid; }
   .closing-sheet h2 { font-size: 1rem; padding: 4px 6px; }
@@ -284,3 +286,27 @@
   .closing-sign span { min-height: 48px; }
   .closing-grid input.money, .closing-grid.cash-count input { width: 100%; font-size: inherit; }
 }
+
+/* Giao xong: khách trả tiền mặt hay chuyển khoản (19/11/2026) */
+.delivery-payway { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 8px; }
+.delivery-payway > span { grid-column: 1 / -1; color: var(--muted); font-size: .84rem; font-weight: 750; }
+.delivery-payway button { min-height: 52px; padding: 8px; border: 2px solid var(--border); border-radius: 12px; background: #fff; color: var(--ink); font-size: 1rem; font-weight: 800; cursor: pointer; }
+.delivery-payway button.active { border-color: var(--green-800); background: var(--green-100); box-shadow: inset 0 0 0 1px var(--green-800); }
+.delivery-payway button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.delivery-paid-ok { margin: 10px 0 8px; padding: 8px 12px; border-radius: 10px; background: var(--green-100); color: var(--green-900); font-weight: 750; }
+
+/* Khách đã đặt hàng: bấm vào khách xem bảng các đơn (19/11/2026) */
+.profiles-name { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.profiles-name:hover strong { text-decoration: underline; }
+.profiles-name:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; border-radius: 4px; }
+.profiles-toggle { color: var(--green-800); font-size: .8rem; font-weight: 750; }
+.profiles-list li.open { border-color: var(--green-800); box-shadow: 0 0 0 1px var(--green-800); }
+.profile-orders { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.profile-orders-sum { margin: 0 0 8px; font-size: .86rem; }
+.profile-orders-table { font-size: .84rem; }
+.profile-orders-table td { vertical-align: top; }
+.profile-orders-table small { display: block; }
+.profile-order-items { margin: 0; padding-left: 16px; }
+/* .profiles-list li (thẻ khách) không áp vào danh sách món bên trong bảng đơn. */
+.profiles-list .profile-order-items li { display: list-item; gap: 0; margin: 0 0 2px; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; line-height: 1.35; }
+.profile-order-items small { display: inline; color: var(--muted); }
