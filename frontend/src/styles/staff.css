@@ -345,3 +345,35 @@
 .order-return-row td { padding: 0 !important; background: #fffaf0; }
 .order-return-row .order-return { position: sticky; left: 8px; box-sizing: border-box; width: min(820px, calc(100vw - 48px)); margin: 8px; }
 .btn.btn-small { min-height: 34px; padding: 4px 10px; font-size: .82rem; white-space: nowrap; }
+
+/* Khách buôn: bấm vào khách xem đơn cũ, giá 1kg theo loại gạo (20/11/2026) */
+.ws-name { display: grid; gap: 2px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.ws-name small { color: var(--green-800); font-size: .78rem; font-weight: 750; }
+.ws-name:hover strong { text-decoration: underline; }
+.ws-name:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; border-radius: 4px; }
+tr.ws-open td { background: var(--green-100); }
+.ws-orders-row > td { padding: 0 !important; background: #fbfaf5; }
+.ws-orders { position: sticky; left: 0; box-sizing: border-box; width: auto; max-width: calc(100vw - 32px); padding: 12px 14px 16px; }
+.ws-orders h3 { margin: 14px 0 6px; font-size: 1rem; color: var(--green-950); }
+.ws-orders-sum { margin: 0; font-size: .9rem; }
+.ws-price-table td, .ws-price-table th { font-size: .86rem; }
+.ws-invoices { display: grid; gap: 12px; margin-bottom: 10px; }
+.ws-invoice { padding: 10px 12px; border: 1px solid #c9c4b5; border-radius: 10px; background: #fff; font-family: 'Times New Roman', Times, serif; }
+.ws-invoice.cancelled { opacity: .55; }
+.ws-invoice header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; margin-bottom: 6px; }
+.ws-invoice h4 { margin: 0 0 2px; font-size: 1.12rem; }
+.ws-invoice h4 small { margin-left: 6px; font-size: .85rem; font-weight: 400; }
+.ws-invoice header p { margin: 0; font-size: .86rem; }
+.ws-invoice-tags { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-family: var(--font-body, inherit); }
+.ws-invoice-tags small { color: var(--muted); }
+.ws-invoice-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.ws-invoice-table th, .ws-invoice-table td { padding: 4px 7px; border: 1px solid #333; text-align: center; }
+.ws-invoice-table th { background: #f3f1ea; }
+.ws-invoice-table td:nth-child(2) { text-align: left; }
+.ws-invoice-table td small { color: #555; }
+.ws-invoice-table .num { text-align: right; white-space: nowrap; }
+.ws-invoice-totals { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; margin-top: 6px; }
+.ws-invoice-note { margin: 0; font-size: .88rem; }
+.ws-invoice-totals dl { display: grid; grid-template-columns: auto auto; gap: 1px 18px; margin: 0 0 0 auto; font-size: .9rem; }
+.ws-invoice-totals dd { margin: 0; text-align: right; font-weight: 700; }
+.ws-invoice-totals .grand { padding-top: 2px; border-top: 1.5px solid #000; font-size: 1.02rem; font-weight: 800; }

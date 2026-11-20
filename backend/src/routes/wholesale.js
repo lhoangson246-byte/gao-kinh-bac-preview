@@ -5,7 +5,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { can, requirePermission, requireStaff } from '../permissions.js';
 import { validateRoutes } from '../schemas.js';
 import { HttpError, cleanText, normalizePhone, toInteger } from '../validate.js';
-import { LIMITS } from '../constants.js';
+import { LIMITS, parseWeightKg } from '../constants.js';
 import { writeAdminAudit } from '../audit.js';
 import { getWholesale, shapeWholesale, wholesaleCode, wholesalePrices } from '../wholesale.js';
 import { parseMapLink, splitAddressMap } from '../map-link.js';
@@ -48,6 +48,71 @@ router.get('/:id', canSee, (req, res, next) => {
     const row = id && getWholesale(id);
     if (!row) throw new HttpError(404, 'Không tìm thấy khách buôn.');
     res.json({ customer: shapeWholesale(row), prices: priceList(id) });
+  } catch (err) { next(err); }
+});
+
+/**
+ * GET /api/admin/wholesale/:id/orders — các đơn khách buôn đã đặt (20/11/2026), mới nhất trước, tối đa 200.
+ * Gồm đơn nhân viên tạo cho khách (wholesale_customer_id), đơn khách tự đặt bằng tài khoản khách buôn và đơn
+ * mang số điện thoại của khách. Mỗi dòng hàng có số kg và đơn giá 1kg = thành tiền ÷ số kg đã mua.
+ * `summary`: tổng hợp theo loại gạo (đơn chưa huỷ): tổng kg, tổng tiền, đơn giá 1kg bình quân.
+ */
+const ORDER_LIMIT = 200;
+router.get('/:id/orders', canSee, (req, res, next) => {
+  try {
+    const id = toInteger(req.params.id, { min: 1 });
+    const customer = id && getWholesale(id);
+    if (!customer) throw new HttpError(404, 'Không tìm thấy khách buôn.');
+    const orders = db.prepare(`
+      SELECT o.id, o.code, o.status, o.created_at, o.confirmed_at, o.completed_at, o.receiver_name, o.phone, o.address, o.fulfillment,
+             o.delivery_slot, o.payment_method, o.payment_status, o.transfer_confirmed_at, o.subtotal, o.discount, o.shipping_fee,
+             o.total, o.note, o.warehouse, s.full_name AS shipper_name, ? AS wholesale_company, ? AS wholesale_code
+      FROM orders o LEFT JOIN users s ON s.id = o.shipper_id
+      WHERE o.wholesale_customer_id = ? OR (? IS NOT NULL AND o.user_id = ?) OR o.phone = ?
+      ORDER BY o.id DESC LIMIT ?
+    `).all(customer.company, customer.code, id, customer.user_id ?? null, customer.user_id ?? null, customer.phone, ORDER_LIMIT);
+    const items = orders.length ? db.prepare(`
+      SELECT i.id, i.order_id, i.product_id, i.product_name, i.unit, i.price, i.quantity, i.is_reward, i.promo, p.weight_kg
+      FROM order_items i LEFT JOIN products p ON p.id = i.product_id
+      WHERE i.order_id IN (${orders.map(() => '?').join(',')}) ORDER BY i.order_id, i.id
+    `).all(...orders.map((o) => o.id)) : [];
+    const byOrder = new Map();
+    for (const item of items) {
+      const perUnit = Number(item.weight_kg) || parseWeightKg(item.unit);
+      const amount = item.price * item.quantity;
+      const kg = perUnit ? Math.round(perUnit * item.quantity * 1000) / 1000 : null;
+      const shaped = {
+        id: item.id, product_id: item.product_id, product_name: item.product_name, unit: item.unit, price: item.price,
+        quantity: item.quantity, is_reward: item.is_reward, promo: item.promo, amount, kg,
+        price_per_kg: kg && amount ? Math.round(amount / kg) : null,
+      };
+      if (!byOrder.has(item.order_id)) byOrder.set(item.order_id, []);
+      byOrder.get(item.order_id).push(shaped);
+    }
+    const shaped = orders.map((o) => ({ ...o, items: byOrder.get(o.id) || [] }));
+    // Tổng hợp theo loại gạo, chỉ đơn chưa huỷ và dòng có tiền (bỏ quà 0đ).
+    const groups = new Map();
+    for (const order of shaped) {
+      if (order.status === 'cancelled') continue;
+      for (const item of order.items) {
+        if (!item.amount) continue;
+        const key = `${item.product_id ?? item.product_name}|${item.unit}`;
+        const g = groups.get(key) || { product_name: item.product_name, unit: item.unit, quantity: 0, kg: 0, amount: 0, orders: 0, last_price: item.price, has_kg: true };
+        g.quantity += item.quantity;
+        g.amount += item.amount;
+        if (item.kg) g.kg += item.kg; else g.has_kg = false;
+        g.orders += 1;
+        groups.set(key, g);
+      }
+    }
+    const summary = [...groups.values()].map((g) => ({
+      product_name: g.product_name, unit: g.unit, quantity: g.quantity, amount: g.amount, orders: g.orders, last_price: g.last_price,
+      kg: g.has_kg ? Math.round(g.kg * 1000) / 1000 : null,
+      price_per_kg: g.has_kg && g.kg ? Math.round(g.amount / g.kg) : null,
+    })).sort((a, b) => b.amount - a.amount);
+    const total = db.prepare(`SELECT COUNT(*) AS n FROM orders WHERE wholesale_customer_id = ? OR (? IS NOT NULL AND user_id = ?) OR phone = ?`)
+      .get(id, customer.user_id ?? null, customer.user_id ?? null, customer.phone).n;
+    res.json({ customer: shapeWholesale(customer), orders: shaped, summary, total, limit: ORDER_LIMIT });
   } catch (err) { next(err); }
 });
 

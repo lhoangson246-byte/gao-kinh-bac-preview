@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, formatVND } from '../api';
 import WholesaleCustomerForm from './WholesaleCustomerForm.jsx';
+import WholesaleOrders from './WholesaleOrders.jsx';
 
 export const foldText = (value) => String(value || '').normalize('NFD').replace(/\p{M}/gu, '').replace(/[đĐ]/g, 'd').toLowerCase();
 
@@ -16,6 +17,7 @@ export default function WholesaleManager() {
   const [form, setForm] = useState(null);          // { id?, ...fields }
   const [notice, setNotice] = useState('');
   const [pricing, setPricing] = useState(null);    // khách đang sửa bảng giá
+  const [viewing, setViewing] = useState(null);    // id khách buôn đang xem đơn cũ (20/11/2026)
 
   const load = useCallback(async () => {
     try { setList((await api.adminWholesaleList({ all: showAll })).customers); } catch (err) { setNotice(err.message); }
@@ -55,9 +57,16 @@ export default function WholesaleManager() {
               <thead><tr><th>Mã</th><th>Công ty</th><th>Liên hệ</th><th>Địa chỉ</th><th>Giá riêng</th><th>Đăng nhập</th><th></th></tr></thead>
               <tbody>
                 {shown.map((c) => (
-                  <tr key={c.id} className={c.is_active ? '' : 'row-muted'}>
+                  <Fragment key={c.id}>
+                  <tr className={`${c.is_active ? '' : 'row-muted'}${viewing === c.id ? ' ws-open' : ''}`}>
                     <td><strong className="wholesale-code">{c.code}</strong>{!c.is_active && <small className="cell-note">đã ngừng</small>}</td>
-                    <td><strong>{c.company}</strong>{c.note && <small className="cell-note">{c.note}</small>}</td>
+                    <td>
+                      <button type="button" className="ws-name" aria-expanded={viewing === c.id} onClick={() => setViewing(viewing === c.id ? null : c.id)}>
+                        <strong>{c.company}</strong>
+                        <small>{viewing === c.id ? '▲ Ẩn đơn' : '▼ Xem đơn đã đặt'}</small>
+                      </button>
+                      {c.note && <small className="cell-note">{c.note}</small>}
+                    </td>
                     <td>{c.contact_name}<small className="cell-note"><a href={`tel:${c.phone}`}>{c.phone}</a></small></td>
                     <td className="wholesale-address">{c.address || '—'}{c.map_url && <a className="map-link" href={c.map_url} target="_blank" rel="noopener noreferrer">📍 Mở định vị</a>}</td>
                     <td>{c.price_count ? `${c.price_count} loại` : 'Chưa đặt'}</td>
@@ -67,6 +76,10 @@ export default function WholesaleManager() {
                       <button type="button" className="btn btn-secondary" onClick={() => { setForm(c); setPricing(null); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Sửa</button>
                     </td>
                   </tr>
+                  {viewing === c.id && (
+                    <tr className="ws-orders-row"><td colSpan={7}><WholesaleOrders customer={c} /></td></tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

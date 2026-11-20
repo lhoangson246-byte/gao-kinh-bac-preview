@@ -150,6 +150,7 @@ const wholesaleBody = {
   prices: z.array(obj({ product_id: id, price: z.union([integer(1, LIMITS.price), z.literal(''), z.null()]) })).max(1000).optional(),
 };
 add('wholesale', 'GET', /^\/?$/, empty, obj({ q: z.string().max(60).optional(), all: z.enum(['0', '1']).optional() }));
+add('wholesale', 'GET', /^\/[^/]+\/orders\/?$/);
 add('wholesale', 'GET', /^\/[^/]+\/?$/);
 add('wholesale', 'POST', /^\/?$/, obj(wholesaleBody));
 add('wholesale', 'PUT', /^\/[^/]+\/prices\/?$/, obj({

@@ -1805,6 +1805,21 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
 - Các bộ kiểm thử cũ vẫn đạt. Thử trên trình duyệt 9/9.
 - Cấu trúc cơ sở dữ liệu lên `schema:2026-11-19-v2`, Vercel tự cập nhật khi build.
 
+## Khách buôn: xem đơn cũ, bảng giá 1kg theo loại gạo (20/11/2026)
+
+- **Mở:** ở Quản trị → Khách buôn, bấm tên công ty ("▼ Xem đơn đã đặt") để mở phần đơn cũ ngay dưới dòng khách.
+- **Bảng giá đã mua theo loại gạo** (không tính đơn huỷ và quà 0đ): số lần mua, số lượng, tổng kg, thành tiền, **đơn giá 1kg = thành tiền ÷ số kg**.
+- **Hoá đơn đã đặt:** từng đơn theo mẫu hoá đơn bán hàng, gồm STT, Tên sản phẩm, SL, Đơn giá, Thành tiền, **Số kg**, **Giá 1kg**.
+  - Kèm tiền hàng, phí giao, giảm giá, tổng tiền, trạng thái, cách thanh toán, người giao.
+  - Có nút "🖨️ In hoá đơn" (in A5 ngang như các hoá đơn khác).
+  - Hiện 10 đơn, bấm "Xem thêm" để mở tiếp.
+- **Đơn được tính là của khách:** đơn nhân viên tạo cho khách buôn, đơn khách tự đặt bằng tài khoản khách buôn, và đơn mang số điện thoại của khách. Tối đa 200 đơn gần nhất.
+- **Số kg một túi / bao:** lấy theo khối lượng khai ở sản phẩm, không có thì đọc từ quy cách ("bao 25kg"). Hàng không có khối lượng thì ghi "—".
+- **API:** `GET /api/admin/wholesale/:id/orders`. Người tạo đơn hoặc quản lý khách buôn xem được; không trả giá vốn.
+- **Kiểm tra:**
+  - `test:wholesale` 38/38, gồm: 10 bao 25kg giá 4.000.000đ ra 16.000đ/kg; bình quân 2 đơn ST25 ra 15.933đ/kg; không lộ giá vốn.
+  - Thử trên trình duyệt 6/6.
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

@@ -66,6 +66,18 @@ try {
   check('Khách buôn không dùng mã giảm giá (400)', w3.status === 400 && /mã giảm giá/.test(w3.data.errors?.discount_code || ''), JSON.stringify(w3.data));
   check('Thiếu khách buôn bị từ chối (400)', (await order({ customer_type: 'wholesale', items: [{ product_id: st25.id, quantity: 1 }] })).status === 400);
 
+  /* Bấm vào khách buôn xem đơn cũ, giá 1kg = thành tiền ÷ số kg (20/11/2026) */
+  const hist = await call(`/admin/wholesale/${ws.id}/orders`, { token: sales });
+  const o1 = hist.data.orders?.find((o) => o.id === w1.data.order.id);
+  const st25Line = o1?.items.find((i) => i.product_id === st25.id);
+  check('Đơn cũ của khách buôn: đủ 2 đơn, mới nhất trước', hist.status === 200 && hist.data.orders.length === 2 && hist.data.orders[0].id === w2.data.order.id, JSON.stringify(hist.data).slice(0, 200));
+  check('Dòng hàng: 10 bao 25kg = 250 kg, giá 1kg = 4.000.000 ÷ 250 = 16.000', st25Line?.kg === 250 && st25Line.amount === 4000000 && st25Line.price_per_kg === 16000, JSON.stringify(st25Line));
+  const st25Sum = hist.data.summary.find((g) => g.amount === 4000000 + 1975000);
+  check('Bảng giá theo loại gạo: ST25 mua 15 bao = 375 kg, 5.975.000đ, bình quân 15.933đ/kg', st25Sum?.quantity === 15 && st25Sum.kg === 375 && st25Sum.price_per_kg === 15933 && st25Sum.orders === 2,
+    JSON.stringify(hist.data.summary));
+  check('Đơn cũ không lộ giá vốn', !JSON.stringify(hist.data).includes('cost_price'));
+  check('Khách buôn không tồn tại (404)', (await call('/admin/wholesale/999999/orders', { token: owner })).status === 404);
+
   /* Khách lẻ: không sửa giá */
   const r1 = await order({ phone: phone('08', 6), items: [{ product_id: st25.id, quantity: 1, price: 1000 }] });
   check('Khách lẻ gửi giá riêng bị từ chối (400)', r1.status === 400, JSON.stringify(r1.data));

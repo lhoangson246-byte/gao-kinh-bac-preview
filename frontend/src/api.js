@@ -143,6 +143,7 @@ export const api = {
   adminCreateOrder: (body) => request('/admin/orders', { method: 'POST', auth: true, body }),
   adminWholesaleList: ({ all = false } = {}) => request(`/admin/wholesale${all ? '?all=1' : ''}`, { auth: true }),
   adminWholesaleGet: (id) => request(`/admin/wholesale/${id}`, { auth: true }),
+  adminWholesaleOrders: (id) => request(`/admin/wholesale/${id}/orders`, { auth: true }),
   adminWholesaleCreate: (body) => request('/admin/wholesale', { method: 'POST', body, auth: true }),
   adminWholesaleUpdate: (id, body) => request(`/admin/wholesale/${id}`, { method: 'PUT', body, auth: true }),
   adminWholesalePrices: (id, prices) => request(`/admin/wholesale/${id}/prices`, { method: 'PUT', body: { prices }, auth: true }),
