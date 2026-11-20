@@ -377,3 +377,24 @@ tr.ws-open td { background: var(--green-100); }
 .ws-invoice-totals dl { display: grid; grid-template-columns: auto auto; gap: 1px 18px; margin: 0 0 0 auto; font-size: .9rem; }
 .ws-invoice-totals dd { margin: 0; text-align: right; font-weight: 700; }
 .ws-invoice-totals .grand { padding-top: 2px; border-top: 1.5px solid #000; font-size: 1.02rem; font-weight: 800; }
+
+/* Quản trị → CẬP NHẬT (20/11/2026) */
+.business-update { display: grid; gap: 14px; }
+.business-update .form-card h2 { margin-top: 0; }
+.business-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px 14px; margin: 10px 0; }
+.business-grid label, .business-notice-grid label { display: flex; flex-direction: column; gap: 4px; font-weight: 700; font-size: .86rem; }
+.business-notice-grid label small { color: var(--muted); font-weight: 500; }
+.business-qr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 14px; align-items: start; margin-bottom: 12px; }
+.business-preview { padding: 10px 12px; border: 1px dashed #999; border-radius: 10px; background: #fff; font-family: 'Times New Roman', Times, serif; }
+.business-preview small { display: block; margin-bottom: 4px; color: var(--muted); font-family: var(--font-body, inherit); }
+.business-preview strong { display: block; font-size: 1.1rem; }
+.business-preview p { margin: 0; font-size: .86rem; }
+.business-notices { display: grid; gap: 10px; margin: 10px 0; }
+.business-notice { margin: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: #fff; }
+.business-notice.holiday { border-left: 4px solid #c0392b; }
+.business-notice.maintenance { border-left: 4px solid var(--gold); }
+.business-notice legend { padding: 0 6px; font-weight: 800; }
+.business-notice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 12px; }
+.business-notice-grid .wide { grid-column: 1 / -1; }
+.business-notice-preview { margin: 8px 0 4px; padding: 6px 10px; border-radius: 8px; background: #fff8e6; font-size: .86rem; }
+@media (max-width: 760px) { .business-qr { grid-template-columns: 1fr; } }

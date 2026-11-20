@@ -6,6 +6,7 @@ import Mascot from './components/Mascot.jsx';
 const MASCOT_HIDDEN = ['/dat-hang', '/dat-nhanh', '/dang-nhap', '/dang-ky'];
 const MASCOT_SCENE = { '/gio-hang': 'cart', '/tra-cuu-don': 'track' };
 import Navbar from './components/Navbar.jsx';
+import ShopNotices from './components/ShopNotices.jsx';
 import Footer from './components/Footer.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import PageLoadBoundary from './components/PageLoadBoundary.jsx';
@@ -128,6 +129,7 @@ export default function App() {
     <>
       <a className="skip-link" href="#noi-dung">{t('nav.skip')}</a>
       <Navbar />
+      <ShopNotices />
       <main className="container" id="noi-dung">
         <PageLoadBoundary key={location.pathname}>
         <Suspense fallback={<div className="loading-state" role="status"><span></span>{t('common.loading')}</div>}>

@@ -187,6 +187,18 @@ add('admin', 'POST', /^\/products\/order\/?$/, obj({ ids: z.array(id).min(1).max
 add('admin', 'PUT', /^\/products\/[^/]+\/?$/, obj(product).partial());
 add('admin', 'DELETE', /^\/products\/[^/]+\/?$/);
 add('admin', 'DELETE', /^\/products\/[^/]+\/permanent\/?$/);
+add('admin', 'GET', /^\/settings\/business\/?$/);
+add('admin', 'PUT', /^\/settings\/business\/?$/, obj({
+  invoice: obj({
+    company: z.string().max(200), company_short: z.string().max(200).optional(), address1: z.string().max(300), address2: z.string().max(300).optional(),
+    phones: z.string().max(200), bank_name: z.string().max(100), bank_number: z.string().max(40), bank_holder: z.string().max(200),
+  }).optional(),
+  notices: z.array(obj({
+    kind: z.enum(['holiday', 'maintenance']), title: z.string().max(200).optional(), start: z.string().max(10), end: z.string().max(10),
+    reopen: z.string().max(10).nullable().optional(), show_from: z.string().max(10).nullable().optional(), note: z.string().max(400).optional(),
+  })).max(20).optional(),
+  bank_qr_url: z.string().max(LIMITS.imageUrl).nullable().optional(),
+}));
 add('admin', 'POST', /^\/orders\/[^/]+\/returns\/?$/, obj({
   return_type: z.enum(['return', 'exchange']), reason: text(LIMITS.note), note,
   refund_amount: z.union([integer(0, 10_000_000_000), z.literal('')]).nullable().optional(),

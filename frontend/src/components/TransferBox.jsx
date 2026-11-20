@@ -2,16 +2,14 @@ import { useEffect, useId, useState } from 'react';
 import { api, formatVND } from '../api';
 import { useI18n } from '../i18n/index.jsx';
 import { shrink } from './ImagePicker.jsx';
-import { BANK_ACCOUNT } from '../shopInfo.js';
+import { BANK_ACCOUNT, DEFAULT_QR, loadShopSettings } from '../shopInfo.js';
 import { CheckIcon, CopyIcon } from './Icons.jsx';
 
-const DEFAULT_QR = '/bank-qr.png';
-let qrPromise = null;
-/** Ảnh QR lấy từ cài đặt cửa hàng; tải một lần dù trang có nhiều đơn chuyển khoản. */
-const loadQr = () => {
-  qrPromise ||= api.storefront().then(({ settings }) => settings?.bank_qr_url || DEFAULT_QR).catch(() => DEFAULT_QR);
-  return qrPromise;
-};
+/** Ảnh QR và tài khoản ngân hàng lấy từ cài đặt cửa hàng (Quản trị → CẬP NHẬT); tải một lần mỗi lần mở trang. */
+const loadBank = () => loadShopSettings().then((s) => ({
+  qr: s.bank_qr_url || DEFAULT_QR,
+  bank: s.invoice ? { bank: s.invoice.bank_name, number: s.invoice.bank_number, holder: s.invoice.bank_holder } : BANK_ACCOUNT,
+}));
 
 /**
  * Khung chuyển khoản: mã QR tài khoản ngân hàng của cửa hàng và số tiền. Khi đã có đơn (`order`), hiện
@@ -22,6 +20,7 @@ export default function TransferBox({ amount, order = null, guestToken = null })
   const { t } = useI18n();
   const inputId = useId();
   const [qr, setQr] = useState(null);
+  const [account, setAccount] = useState(BANK_ACCOUNT);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState('');   // 'account' | 'content' vừa được chép
@@ -29,7 +28,7 @@ export default function TransferBox({ amount, order = null, guestToken = null })
 
   useEffect(() => {
     let alive = true;
-    loadQr().then((url) => { if (alive) setQr(url); });
+    loadBank().then(({ qr: url, bank }) => { if (alive) { setQr(url); setAccount(bank); } });
     return () => { alive = false; };
   }, []);
 
@@ -88,9 +87,9 @@ export default function TransferBox({ amount, order = null, guestToken = null })
         <strong>{t('transfer.title')}</strong>
         <p>{t('transfer.scan', { amount: formatVND(amount) })}</p>
         <div className="transfer-row">
-          <span>{t('transfer.account', { bank: BANK_ACCOUNT.bank })} <b>{BANK_ACCOUNT.number}</b></span>
-          <CopyButton what="account" text={BANK_ACCOUNT.number} label={t('transfer.copyAccount')} />
-          <span className="transfer-holder">{t('transfer.holder')} <b>{BANK_ACCOUNT.holder}</b></span>
+          <span>{t('transfer.account', { bank: account.bank })} <b>{account.number}</b></span>
+          <CopyButton what="account" text={account.number.replace(/\s/g, '')} label={t('transfer.copyAccount')} />
+          <span className="transfer-holder">{t('transfer.holder')} <b>{account.holder}</b></span>
         </div>
         {order ? (
           <div className="transfer-row">

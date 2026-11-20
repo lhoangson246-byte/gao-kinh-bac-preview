@@ -125,6 +125,8 @@ export const api = {
   product: (id) => request(`/products/${id}`),
   /** Ảnh banner trang chủ và các cài đặt công khai khác. */
   storefront: () => request('/settings/storefront'),
+  adminBusiness: () => request('/admin/settings/business', { auth: true }),
+  adminSaveBusiness: (body) => request('/admin/settings/business', { method: 'PUT', auth: true, body }),
   adminUpdateStorefront: (payload) =>
     request('/admin/settings/storefront', { method: 'PUT', body: payload, auth: true }),
 

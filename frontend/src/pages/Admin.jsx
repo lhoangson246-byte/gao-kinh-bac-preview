@@ -22,6 +22,7 @@ import ProductImage from '../components/ProductImage.jsx';
 import OrdersExportButton from '../components/OrdersExportButton.jsx';
 import OrdersTable from '../components/OrdersTable.jsx';
 import OrderReturnForm from '../components/OrderReturnForm.jsx';
+import BusinessUpdate from '../components/BusinessUpdate.jsx';
 import OrderPrint from '../components/OrderPrint.jsx';
 import { ListSkeleton } from '../components/Skeleton.jsx';
 import useScrollTabs from '../components/useScrollTabs.js';
@@ -65,7 +66,7 @@ const NEXT_STEP = {
 /** Các mục của trang quản trị và quyền cần có. null = chỉ chủ cửa hàng. */
 const TAB_ACCESS = {
   orders: 'orders.view', products: 'products.manage', customers: 'customers.manage', revenue: 'revenue.view',
-  wholesale: 'wholesale.manage', activity: null, codes: null, about: null, staff: null,
+  wholesale: 'wholesale.manage', activity: null, codes: null, about: null, staff: null, update: null,
 };
 
 export default function Admin() {
@@ -557,6 +558,9 @@ export default function Admin() {
           {allowed('staff') && <button className={tab === 'staff' ? 'active' : ''} onClick={() => setTab('staff')}>
             <span aria-hidden="true">☷</span><span>Nhân viên<small>Tài khoản và quyền</small></span>
           </button>}
+          {allowed('update') && <button className={tab === 'update' ? 'active' : ''} onClick={() => setTab('update')}>
+            <span aria-hidden="true">⟳</span><span>CẬP NHẬT<small>Hoá đơn, mã QR, thông báo nghỉ lễ</small></span>
+          </button>}
           {['inventory.view', 'inventory.receive', 'inventory.transfer', 'inventory.count'].some((p) => can(p)) && <Link to="/quan-tri/kho" className="admin-sidebar-link">
             <span aria-hidden="true">📦</span>
             <span>Kho hàng<small>Tồn Nguyễn Cao, Bồ Sơn, nhập và điều chuyển</small></span>
@@ -581,7 +585,7 @@ export default function Admin() {
             <PageLoadBoundary key={tab}>
             <Suspense fallback={<div className="loading-state" role="status"><span></span>Đang mở chức năng…</div>}>
             <>
-              {!['revenue', 'customers', 'activity', 'about', 'codes', 'staff', 'wholesale'].includes(tab) && (
+              {!['revenue', 'customers', 'activity', 'about', 'codes', 'staff', 'wholesale', 'update'].includes(tab) && (
               <div className="admin-page-heading">
                 <div>
                   <p className="eyebrow dark"><span></span>{tab === 'orders' ? 'Công việc hôm nay' : 'Quản lý gian hàng'}</p>
@@ -623,6 +627,15 @@ export default function Admin() {
                 </div>
               </div>
               )}
+              {tab === 'update' && (
+              <div className="admin-page-heading">
+                <div>
+                  <p className="eyebrow dark"><span></span>Thông tin cửa hàng</p>
+                  <h1>Cập nhật</h1>
+                  <p>Thông tin in trên hoá đơn (mã QR, địa chỉ, điện thoại, số tài khoản) và thông báo nghỉ lễ, Tết, cập nhật trang web.</p>
+                </div>
+              </div>
+              )}
               {tab === 'about' && (
               <div className="admin-page-heading">
                 <div>
@@ -632,7 +645,7 @@ export default function Admin() {
                 </div>
               </div>
               )}
-              {!['revenue', 'customers', 'activity', 'about', 'codes', 'staff', 'wholesale'].includes(tab) && stats && (
+              {!['revenue', 'customers', 'activity', 'about', 'codes', 'staff', 'wholesale', 'update'].includes(tab) && stats && (
                 <section className="stats" aria-label="Thống kê cửa hàng">
                   <div className="stat urgent"><span>Đơn cần xác nhận</span><strong>{pendingCount}</strong><small>Nên xử lý trước</small></div>
                   <div className="stat"><span>Tổng đơn hàng</span><strong>{stats.orders}</strong><small>Tất cả thời gian</small></div>
@@ -641,7 +654,7 @@ export default function Admin() {
                 </section>
               )}
 
-              {canProducts && !['revenue', 'customers', 'activity', 'about', 'codes', 'staff', 'wholesale'].includes(tab) && stats?.missingPrice > 0 && (
+              {canProducts && !['revenue', 'customers', 'activity', 'about', 'codes', 'staff', 'wholesale', 'update'].includes(tab) && stats?.missingPrice > 0 && (
                 <div className="alert warning" role="status">
                   <strong>{stats.missingPrice} loại gạo chưa có giá bán.</strong>{' '}
                   Khách nhìn thấy sản phẩm nhưng chưa đặt mua được.{' '}
@@ -661,6 +674,7 @@ export default function Admin() {
 
               {tab === 'activity' ? <ActivityLog />
                 : tab === 'about' ? <AboutManager />
+                : tab === 'update' ? <BusinessUpdate />
                 : tab === 'codes' ? <DiscountCodeManager />
                 : tab === 'staff' ? <StaffManager />
                 : tab === 'wholesale' ? <WholesaleManager />

@@ -125,3 +125,10 @@
   .slot-group .payment-options.slot-options { display: grid; }
   .slot-group .payment-options.slot-options label { margin-bottom: 0; }
 }
+
+/* Dải thông báo nghỉ lễ / cập nhật trang web (20/11/2026) */
+.shop-notices { display: grid; gap: 0; }
+.shop-notice { display: flex; align-items: flex-start; justify-content: center; gap: 8px; margin: 0; padding: 9px 16px; font-size: .92rem; font-weight: 650; line-height: 1.4; text-align: center; }
+.shop-notice.holiday { background: #8e1f16; color: #fff; }
+.shop-notice.maintenance { background: #fff3d6; color: #6b4a0c; border-bottom: 1px solid #ecd9a8; }
+@media (max-width: 560px) { .shop-notice { justify-content: flex-start; padding: 8px 12px; font-size: .84rem; text-align: left; } }

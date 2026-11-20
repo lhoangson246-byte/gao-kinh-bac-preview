@@ -23,6 +23,7 @@ import { getWholesale, wholesalePrices } from '../wholesale.js';
 import { MAP_ONLY_ADDRESS, parseMapLink, splitAddressMap } from '../map-link.js';
 import { ONLINE, ONLINE_STOCK_SQL, isWarehouse, moveStock, onlineWarehouseOf, stockColumn } from '../inventory.js';
 import { createOrderReturn } from '../order-returns.js';
+import { parseNotices, readInvoiceInput, readNoticesInput } from '../shop-info.js';
 
 const router = Router();
 
@@ -967,6 +968,47 @@ router.put('/settings/storefront', (req, res, next) => {
       action: 'update', entityType: 'storefront', entityId: null, before, after: settings,
     });
     res.json({ settings });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Quản trị → CẬP NHẬT (20/11/2026, chỉ chủ cửa hàng): thông tin trên hoá đơn (tên công ty, địa chỉ, điện
+ * thoại, tài khoản ngân hàng, mã QR) và thông báo trên banner (nghỉ lễ / Tết, cập nhật trang web).
+ *  GET /api/admin/settings/business  → { invoice, notices (tất cả), bank_qr_url, active (đang hiện hôm nay) }
+ *  PUT /api/admin/settings/business  ← { invoice?, notices?, bank_qr_url? } — chỉ phần được gửi mới đổi.
+ */
+function businessSettings() {
+  const raw = Object.fromEntries(db.prepare("SELECT key, value FROM app_settings WHERE key IN ('shop_notices')").all().map((r) => [r.key, r.value]));
+  const storefront = readStorefront();
+  return { invoice: storefront.invoice, bank_qr_url: storefront.bank_qr_url, notices: parseNotices(raw.shop_notices), active: storefront.notices };
+}
+router.get('/settings/business', (req, res) => res.json(businessSettings()));
+router.put('/settings/business', (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const updates = [];
+    if (body.invoice !== undefined) updates.push(['invoice_info', JSON.stringify(readInvoiceInput(body.invoice))]);
+    if (body.notices !== undefined) updates.push(['shop_notices', JSON.stringify(readNoticesInput(body.notices))]);
+    if (body.bank_qr_url !== undefined) {
+      const raw = cleanText(body.bank_qr_url || '', LIMITS.imageUrl) || '';
+      const url = raw ? cleanImageUrl(raw) : '';
+      if (raw && !url) throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', { bank_qr_url: 'Đường dẫn ảnh QR phải bắt đầu bằng https:// hoặc / (ảnh tải lên cửa hàng).' });
+      updates.push(['bank_qr_url', url]);
+    }
+    if (!updates.length) throw new HttpError(400, 'Không có thông tin nào để cập nhật.');
+    const before = businessSettings();
+    db.transaction(() => {
+      const upsert = db.prepare(`
+        INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+      `);
+      for (const [key, value] of updates) upsert.run(key, value);
+    })();
+    const after = businessSettings();
+    writeAdminAudit(req, { action: 'update', entityType: 'business_info', entityId: null, before, after });
+    res.json(after);
   } catch (err) {
     next(err);
   }

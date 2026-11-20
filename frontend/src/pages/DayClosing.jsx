@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, formatDateTime, formatVND, vietnamDate } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
-import { COMPANY_SHORT } from '../shopInfo.js';
+import { useShopInfo } from '../shopInfo.js';
 
 const formatDay = (day) => day.split('-').reverse().join('/');
 const shortDay = (day) => formatDay(day).slice(0, 5);
@@ -53,6 +53,7 @@ function Sheet({ title, total, rows, empty }) {
  */
 export default function DayClosing() {
   const { user } = useAuth();
+  const shopInfo = useShopInfo();
   const [day, setDay] = useState(vietnamDate());
   const [place, setPlaceState] = useState(savedPlace);
   const setPlace = (code) => { setPlaceState(code); try { localStorage.setItem(PLACE_KEY, code); } catch { /* bỏ qua */ } };
@@ -160,7 +161,7 @@ export default function DayClosing() {
       <main className="closing-main">
         <div className="closing-head">
           <div>
-            <p className="closing-company">{COMPANY_SHORT}</p>
+            <p className="closing-company">{shopInfo.invoice.company_short || shopInfo.invoice.company.toUpperCase()}</p>
             <h1>Đóng ngày {formatDay(day)} <span className="closing-place">{placeName}</span></h1>
             {data.saved && <p className={`closing-saved${stale ? ' stale' : ''}`}>Đã đóng bởi {data.saved.closer_name} lúc {formatDateTime(data.saved.updated_at)}</p>}
           </div>

@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { api, formatVND, DELIVERY_SLOT_LABEL, deliveryDateLabel, parseServerTime } from '../api';
-import { INVOICE_HEADER } from '../shopInfo.js';
+import { formatVND, DELIVERY_SLOT_LABEL, deliveryDateLabel, parseServerTime } from '../api';
+import { DEFAULT_QR, INVOICE_HEADER, invoiceHeader, loadShopSettings } from '../shopInfo.js';
 
 export { INVOICE_HEADER };
-
-// Đầu hoá đơn (tên công ty, địa chỉ, số tài khoản, số điện thoại) nằm ở ../shopInfo.js.
-const DEFAULT_QR = '/bank-qr.png';
+// Đầu hoá đơn (tên công ty, địa chỉ, số tài khoản, số điện thoại) lấy từ Quản trị → CẬP NHẬT (20/11/2026).
 
 // Khổ A5 nằm ngang trừ lề (xem @page invoice trong styles.css): cao 148 − 2×5 = 138 mm.
 const PAGE_HEIGHT_MM = 138;
@@ -45,7 +43,7 @@ function vnDateTime(value) {
   return `${pad(vn.getUTCDate())}/${pad(vn.getUTCMonth() + 1)}/${vn.getUTCFullYear()} ${pad(vn.getUTCHours())}:${pad(vn.getUTCMinutes())}:${pad(vn.getUTCSeconds())}`;
 }
 
-function Sheet({ order, qr }) {
+function Sheet({ order, qr, header }) {
   const paid = order.payment_method === 'bank' && !!order.transfer_confirmed_at;
   const discount = order.discount || 0;
   const subtotal = order.subtotal || order.total + discount - (order.shipping_fee || 0);
@@ -53,8 +51,8 @@ function Sheet({ order, qr }) {
     <article className="order-sheet">
       <header className="order-sheet-head">
         <div>
-          <h1>{INVOICE_HEADER.company}</h1>
-          {INVOICE_HEADER.lines.map((parts) => <p key={parts[0]}>{parts.map((part, i) => <span key={part}>{i > 0 && ' | '}{i > 0 ? <b>{part}</b> : part}</span>)}</p>)}
+          <h1>{header.company}</h1>
+          {header.lines.map((parts) => <p key={parts[0]}>{parts.map((part, i) => <span key={part}>{i > 0 && ' | '}{i > 0 ? <b>{part}</b> : part}</span>)}</p>)}
           <p>Ngày : {vnDateTime(order.confirmed_at || order.created_at)}</p>
         </div>
         <figure className="order-sheet-qr">
@@ -109,13 +107,19 @@ function Sheet({ order, qr }) {
  */
 export default function OrderPrint({ orders, onDone }) {
   const [qr, setQr] = useState(null);
+  const [header, setHeader] = useState(INVOICE_HEADER);
   const rootRef = useRef(null);
   const done = useRef(onDone);
   done.current = onDone;
 
   useEffect(() => {
     let alive = true;
-    api.storefront().then(({ settings }) => alive && setQr(settings?.bank_qr_url || DEFAULT_QR)).catch(() => alive && setQr(DEFAULT_QR));
+    // Lấy mới mỗi lần in: vừa sửa ở mục CẬP NHẬT thì hoá đơn in ra đúng ngay.
+    loadShopSettings({ fresh: true }).then((s) => {
+      if (!alive) return;
+      setHeader(invoiceHeader(s.invoice));
+      setQr(s.bank_qr_url || DEFAULT_QR);
+    });
     return () => { alive = false; };
   }, []);
 
@@ -154,7 +158,7 @@ export default function OrderPrint({ orders, onDone }) {
   if (!qr) return null;
   return createPortal(
     <div className="order-print-root" aria-hidden="true" ref={rootRef}>
-      {orders.map((order) => <Sheet key={order.id} order={order} qr={qr} />)}
+      {orders.map((order) => <Sheet key={order.id} order={order} qr={qr} header={header} />)}
     </div>,
     document.body,
   );

@@ -173,7 +173,11 @@ export function pendingDebts(day, location = MAIN) {
   `).all(location, day, day).map((r) => ({ ...r, status_label: DEBT_STATUS_LABEL[r.status] }));
 }
 
-const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || '') && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
+const isDay = (v) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v || '')) return false;
+  const d = new Date(`${v}T00:00:00Z`);   // "2026-13-01" là ngày không có thật: báo 400 chứ không lỗi máy chủ
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+};
 
 const savedSlip = (day, location) => db.prepare('SELECT data, closer_name, updated_at FROM location_closings WHERE day = ? AND location = ?').get(day, location);
 const LOCATION_LIST = LOCATIONS.map((code) => ({ code, name: warehouseName(code) }));

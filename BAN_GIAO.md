@@ -1820,6 +1820,26 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
   - `test:wholesale` 38/38, gồm: 10 bao 25kg giá 4.000.000đ ra 16.000đ/kg; bình quân 2 đơn ST25 ra 15.933đ/kg; không lộ giá vốn.
   - Thử trên trình duyệt 6/6.
 
+## Quản trị → CẬP NHẬT: thông tin hoá đơn, mã QR, thông báo nghỉ lễ / cập nhật web (20/11/2026)
+
+- **Điện thoại trên hoá đơn:** đổi `02223.813.566` thành **0986.407.975** (hoá đơn in: "Điện thoại: 0986.407.975 - 0979.848.405").
+- **Mục CẬP NHẬT** trong thanh menu quản trị, chỉ chủ cửa hàng thấy và sửa được (máy chủ kiểm tra).
+  - **Thông tin trên hoá đơn:** tên công ty, tên viết tắt, địa chỉ cơ sở 1 và 2, điện thoại, ngân hàng, số tài khoản, chủ tài khoản, ảnh mã QR chuyển khoản. Có khung xem trước đầu hoá đơn.
+    - Dùng cho hoá đơn in (lấy mới mỗi lần in), khung chuyển khoản của khách (số tài khoản, chủ tài khoản, mã QR) và đầu báo cáo Đóng ngày.
+    - Lưu ở `app_settings.invoice_info`. Chưa lưu thì dùng mặc định trong `backend/src/shop-info.js`.
+  - **Thông báo trên banner:** thêm nhiều thông báo cùng lúc.
+    - **Nghỉ lễ / Tết:** tên dịp, nghỉ từ ngày, đến hết ngày, mở cửa lại ngày.
+    - **Cập nhật trang web:** từ ngày, đến ngày.
+    - Có ghi chú thêm và ô "Hiện thông báo từ ngày" (trống thì hiện trước 7 ngày). Thông báo tự ẩn sau ngày nghỉ cuối (ngày trước ngày mở lại) hoặc ngày cập nhật cuối.
+    - Có dòng "Khách thấy: …" để xem trước câu khách sẽ đọc.
+    - Trang khách hiện dải thông báo dưới thanh trên cùng ở mọi trang (tiếng Việt / Anh / Trung): nghỉ lễ nền đỏ, cập nhật web nền vàng.
+    - Lưu ở `app_settings.shop_notices`. Máy chủ chỉ trả thông báo đang trong khoảng hiện. Trang khách cập nhật trong khoảng 30 giây (bộ nhớ đệm).
+- **API:** `GET` và `PUT /api/admin/settings/business`, trả thêm `invoice` và `notices` trong `/api/settings/storefront`.
+- **Sửa thêm:** ngày không có thật (ví dụ tháng 13) ở trang Đóng ngày trước đây làm máy chủ lỗi 500, giờ báo 400.
+- **Kiểm tra:**
+  - `test:business` (mới) 19/19: mặc định số mới; lưu và trang khách nhận ngay; thiếu hoặc sai số tài khoản; QR không an toàn; nhân viên bị chặn (403); khoảng hiện thông báo; ngày sai.
+  - Thử trên trình duyệt 9/9: menu CẬP NHẬT, lưu, hoá đơn in theo số mới, dải thông báo trên điện thoại.
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

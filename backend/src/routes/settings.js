@@ -2,6 +2,7 @@ import { Router } from 'express';
 import db from '../db.js';
 import { cleanImageUrl, normalizePhone } from '../validate.js';
 import { publicPromotion } from '../promotions.js';
+import { activeNotices, parseInvoice, parseNotices } from '../shop-info.js';
 
 /**
  * Cài đặt cửa hàng khách được xem: các ảnh banner trang chủ (chạy vòng) và số
@@ -15,7 +16,7 @@ export const MAX_BANNERS = 6;
 export const MAX_BRANCHES = 5;
 
 /** Các khoá đọc từ app_settings. Khoá không nằm ở đây thì không bao giờ trả ra ngoài. */
-const STORED_KEYS = ['banner_images', 'banner_image_url', 'contact_phone', 'zalo_phone', 'store_branches', 'bank_qr_url'];
+const STORED_KEYS = ['banner_images', 'banner_image_url', 'contact_phone', 'zalo_phone', 'store_branches', 'bank_qr_url', 'invoice_info', 'shop_notices'];
 /** Mã QR tài khoản ngân hàng cửa hàng gửi ngày 12/11/2026; đổi được trong Quản trị → Sản phẩm → Cài đặt trang chủ. */
 export const DEFAULT_BANK_QR = '/bank-qr.png';
 
@@ -71,6 +72,10 @@ export function readStorefront() {
     bank_qr_url: cleanImageUrl(stored.bank_qr_url || '') || DEFAULT_BANK_QR,
     // Đợt khuyến mãi đang hoặc sắp diễn ra, để trang chủ và giỏ hàng báo cho khách.
     promotion: publicPromotion(),
+    // Thông tin trên hoá đơn và khung chuyển khoản (Quản trị → CẬP NHẬT, 20/11/2026).
+    invoice: parseInvoice(stored.invoice_info),
+    // Thông báo nghỉ lễ / cập nhật trang web đang hiện hôm nay.
+    notices: activeNotices(parseNotices(stored.shop_notices)),
   };
 }
 
