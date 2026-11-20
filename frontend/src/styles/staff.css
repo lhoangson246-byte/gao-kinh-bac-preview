@@ -398,3 +398,46 @@ tr.ws-open td { background: var(--green-100); }
 .business-notice-grid .wide { grid-column: 1 / -1; }
 .business-notice-preview { margin: 8px 0 4px; padding: 6px 10px; border-radius: 8px; background: #fff8e6; font-size: .86rem; }
 @media (max-width: 760px) { .business-qr { grid-template-columns: 1fr; } }
+
+/* Gom đơn và lộ trình giao từ Kho Bồ Sơn (20/11/2026) */
+.route-panel { margin: 0 0 14px; border: 1px solid var(--border); border-radius: 14px; background: #fff; overflow: hidden; }
+.route-toggle { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 16px; border: 0; background: #f4f8f1; color: inherit; font: inherit; font-weight: 800; text-align: left; cursor: pointer; }
+.route-toggle > span:first-child { flex: 1; }
+.route-toggle small { margin-left: 6px; color: var(--muted); font-weight: 600; }
+.route-badge { padding: 2px 10px; border-radius: 999px; background: var(--primary, #2f6b3a); color: #fff; font-size: .8rem; }
+.route-body { padding: 12px 16px 16px; }
+.route-body h3 { margin: 16px 0 8px; font-size: 1rem; }
+.route-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 16px; }
+.route-controls label { display: flex; flex-direction: column; gap: 4px; font-size: .86rem; font-weight: 700; }
+.route-controls label.route-check { flex-direction: row; align-items: center; gap: 6px; padding-bottom: 10px; }
+.route-hint { margin: 8px 0; color: var(--muted); font-size: .85rem; }
+.route-trips { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 12px; }
+.route-trip { padding: 12px; border: 1px solid var(--border); border-left: 4px solid var(--primary, #2f6b3a); border-radius: 12px; }
+.route-trip.driver { border-left-color: var(--gold, #c99a2e); }
+.route-trip header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; }
+.route-trip header span { color: var(--muted); font-size: .85rem; }
+.route-stats { margin: 6px 0; font-size: .88rem; }
+.route-saved { color: var(--success, #2f7a43); }
+.route-stops { display: grid; gap: 4px; margin: 8px 0; padding: 0; list-style: none; }
+.route-stops li { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-radius: 8px; background: #f8f6f1; font-size: .86rem; }
+.route-stops li.route-depot { background: transparent; color: var(--muted); font-weight: 700; }
+.route-step { display: inline-grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--primary, #2f6b3a); color: #fff; font-weight: 800; font-size: .8rem; }
+.route-stop-main { flex: 1; min-width: 0; }
+.route-stop-main small { display: block; color: var(--muted); overflow-wrap: anywhere; }
+.route-leg { margin-left: auto; text-align: right; white-space: nowrap; font-weight: 700; }
+.route-leg small { display: block; color: var(--muted); font-weight: 500; }
+.route-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.route-actions select { width: auto; min-width: 190px; }
+.route-singles, .route-missing { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.route-singles li, .route-missing li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; font-size: .86rem; }
+.route-missing-form { display: flex; flex: 1 1 320px; gap: 6px; }
+.route-missing-form input { flex: 1; min-width: 0; }
+.distance-text { margin: 2px 0 4px; font-size: .86rem; color: #3f5a3c; }
+.delivery-route { margin: 0 0 12px; padding: 12px 14px; border: 2px solid var(--primary, #2f6b3a); border-radius: 14px; background: #f4f8f1; }
+.delivery-route h2 { margin: 0 0 4px; font-size: 1.05rem; }
+.delivery-route p { margin: 4px 0; font-size: .9rem; }
+.delivery-route-warn { color: #8a5a00; }
+.delivery-route-links { display: grid; gap: 6px; margin-top: 8px; }
+.delivery-step { display: inline-block; margin-right: 6px; padding: 1px 8px; border-radius: 999px; background: var(--primary, #2f6b3a); color: #fff; font-size: .8rem; }
+.delivery-distance { margin: 2px 0 6px; font-size: .88rem; color: #3f5a3c; font-weight: 600; }
+@media (max-width: 560px) { .route-actions select, .route-actions .btn { width: 100%; } .route-body { padding: 10px; } }

@@ -24,6 +24,7 @@ import { MAP_ONLY_ADDRESS, parseMapLink, splitAddressMap } from '../map-link.js'
 import { ONLINE, ONLINE_STOCK_SQL, isWarehouse, moveStock, onlineWarehouseOf, stockColumn } from '../inventory.js';
 import { createOrderReturn } from '../order-returns.js';
 import { parseNotices, readInvoiceInput, readNoticesInput } from '../shop-info.js';
+import { WAREHOUSE, clusterOrders, deliveryDay, distanceFromWarehouse, ensureOrderPoints, orderPoint, planRoute, resolveMapLink } from '../route-plan.js';
 
 const router = Router();
 
@@ -35,6 +36,8 @@ router.use(requireAuth, requireStaff, accessTable([
   ['POST', /^\/orders\/?$/, ['orders.create']],
   ['PATCH', /^\/orders\/[^/]+\/status\/?$/, ['orders.manage']],
   ['PATCH', /^\/orders\/[^/]+\/shipper\/?$/, ['orders.manage']],
+  ['PATCH', /^\/orders\/[^/]+\/location\/?$/, ['orders.manage']],
+  ['*', /^\/routes(\/assign)?\/?$/, ['orders.manage']],
   ['PATCH', /^\/orders\/[^/]+\/transfer\/?$/, ['orders.manage']],
   ['POST', /^\/orders\/[^/]+\/returns\/?$/, ['orders.manage']],
   ['GET', /^\/shippers\/?$/, ['orders.manage', 'orders.create']],
@@ -299,6 +302,136 @@ router.patch('/orders/:id/shipper', async (req, res, next) => {
     res.json({ order: db.prepare(`
       SELECT o.id, o.shipper_id, s.full_name AS shipper_name FROM orders o LEFT JOIN users s ON s.id = o.shipper_id WHERE o.id = ?
     `).get(orderId) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/* ---------- Gom đơn và lộ trình giao từ Kho Bồ Sơn (20/11/2026) ---------- */
+const ROUTE_COLUMNS = `o.id, o.code, o.status, o.receiver_name, o.phone, o.address, o.delivery_slot, o.created_at, o.total,
+  o.delivery_lat, o.delivery_lng, o.map_url, o.geo_lat, o.geo_lng, o.geo_source, o.geo_checked_at, o.fulfillment,
+  o.shipper_id, s.full_name AS shipper_name`;
+const routeBrief = (o) => ({
+  id: o.id, code: o.code, status: o.status, receiver_name: o.receiver_name, phone: o.phone, address: o.address,
+  delivery_slot: o.delivery_slot || null, delivery_day: deliveryDay(o.created_at, o.delivery_slot), total: o.total,
+  shipper_id: o.shipper_id || null, shipper_name: o.shipper_name || null, map_url: o.map_url || null,
+  distance_km: distanceFromWarehouse(o), located: !!orderPoint(o), geo_source: o.delivery_lat != null ? 'pin' : o.geo_source || (o.map_url && orderPoint(o) ? 'map' : null),
+});
+/** Lộ trình của một nhóm đơn: đơn theo thứ tự đi, kèm quãng từng chặng. */
+function routeOf(list, options) {
+  const plan = planRoute(list, options);
+  const byId = new Map(list.map((o) => [o.id, o]));
+  return { ...plan, stops: plan.stops.map((s) => ({ ...routeBrief(byId.get(s.id)), step: s.step, leg_km: s.leg_km })) };
+}
+
+/**
+ * GET /api/admin/routes?radius=1|2|3|5&split=0|1 — gợi ý gom đơn cho quản trị và kế toán:
+ *  - trips: nhóm đơn chưa giao cho ai, ở gần nhau (mọi cặp cách nhau ≤ radius km), cùng ngày + khung giờ
+ *    (split=0 thì không tách theo khung giờ), kèm thứ tự đi từ kho rồi về kho ngắn nhất;
+ *  - singles: đơn đi lẻ; missing: đơn chưa có định vị;
+ *  - drivers: lộ trình hiện tại của từng nhân viên giao đang có từ 1 đơn trở lên.
+ */
+router.get('/routes', async (req, res, next) => {
+  try {
+    const radius = Number(req.query.radius) || 2;
+    const split = req.query.split !== '0';
+    const orders = db.prepare(`
+      SELECT ${ROUTE_COLUMNS} FROM orders o LEFT JOIN users s ON s.id = o.shipper_id
+      WHERE o.status IN ('pending', 'confirmed', 'shipping') AND COALESCE(o.fulfillment, 'delivery') <> 'pickup'
+      ORDER BY o.id
+    `).all();
+    await ensureOrderPoints(orders);
+    const open = orders.filter((o) => !o.shipper_id && o.status !== 'shipping');
+    const buckets = new Map();
+    for (const o of open.filter(orderPoint)) {
+      const key = split ? `${deliveryDay(o.created_at, o.delivery_slot) || ''}|${o.delivery_slot || ''}` : 'all';
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(o);
+    }
+    const trips = [];
+    const singles = [];
+    for (const [key, list] of buckets) {
+      for (const group of clusterOrders(list, { radiusKm: radius })) {
+        if (group.length < 2) { singles.push(routeBrief(group[0])); continue; }
+        const [day, slot] = key === 'all' ? [null, null] : key.split('|');
+        trips.push({ day: day || null, slot: slot || null, ...routeOf(group) });
+      }
+    }
+    trips.sort((a, b) => String(a.day).localeCompare(String(b.day)) || b.saved_km - a.saved_km);
+    singles.sort((a, b) => a.distance_km - b.distance_km);
+    const drivers = new Map();
+    for (const o of orders.filter((x) => x.shipper_id && ['confirmed', 'shipping'].includes(x.status))) {
+      if (!drivers.has(o.shipper_id)) drivers.set(o.shipper_id, { shipper_id: o.shipper_id, shipper_name: o.shipper_name, orders: [] });
+      drivers.get(o.shipper_id).orders.push(o);
+    }
+    res.json({
+      warehouse: WAREHOUSE, radius, split, trips, singles,
+      missing: open.filter((o) => !orderPoint(o)).map(routeBrief),
+      drivers: [...drivers.values()].map((d) => ({
+        shipper_id: d.shipper_id, shipper_name: d.shipper_name, count: d.orders.length,
+        ...routeOf(d.orders), missing: d.orders.filter((o) => !orderPoint(o)).map(routeBrief),
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/admin/routes/assign { order_ids, shipper_id } — giao cả chuyến (nhiều đơn) cho một nhân viên giao.
+ * Mọi đơn đổi cùng một transaction; nhân viên nhận thông báo cho từng đơn mới được giao.
+ */
+router.post('/routes/assign', async (req, res, next) => {
+  try {
+    const ids = [...new Set(req.body.order_ids.map(Number))];
+    const shipperId = Number(req.body.shipper_id);
+    const changed = db.transaction(() => {
+      const shipper = db.prepare("SELECT id, full_name, permissions, is_locked FROM users WHERE id = ? AND role = 'staff'").get(shipperId);
+      if (!shipper || shipper.is_locked || !can({ role: 'staff', permissions: shipper.permissions }, 'delivery')) {
+        throw new HttpError(400, 'Người này không phải nhân viên giao hàng đang làm.', { shipper_id: 'Chọn nhân viên giao hàng khác.' });
+      }
+      const find = db.prepare('SELECT id, code, status, shipper_id FROM orders WHERE id = ?');
+      const update = db.prepare('UPDATE orders SET shipper_id = ? WHERE id = ?');
+      const list = ids.map((orderId) => {
+        const order = find.get(orderId);
+        if (!order) throw new HttpError(404, 'Không tìm thấy đơn hàng.');
+        if (['completed', 'cancelled'].includes(order.status)) throw new HttpError(400, `Đơn ${order.code} đã kết thúc, không đổi người giao được.`);
+        return order;
+      });
+      for (const order of list) update.run(shipperId, order.id);
+      return { shipper, list };
+    })();
+    for (const order of changed.list) {
+      writeAdminAudit(req, {
+        action: 'assign_shipper', entityType: 'order', entityId: order.id,
+        before: { shipper_id: order.shipper_id }, after: { shipper_id: shipperId, trip: changed.list.map((o) => o.code) },
+      });
+    }
+    for (const order of changed.list) if (order.shipper_id !== shipperId) await notifyShipperAssigned(order.id, shipperId);
+    res.json({ assigned: changed.list.map((o) => o.id), shipper_id: shipperId, shipper_name: changed.shipper.full_name });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PATCH /api/admin/orders/:id/location { map_url } — dán định vị (link Google Maps hoặc toạ độ) cho đơn
+ * chưa có, để tính khoảng cách và lộ trình.
+ */
+router.patch('/orders/:id/location', async (req, res, next) => {
+  try {
+    const orderId = toInteger(req.params.id, { min: 1 });
+    const order = orderId && db.prepare('SELECT id, code, status, map_url FROM orders WHERE id = ?').get(orderId);
+    if (!order) throw new HttpError(404, 'Không tìm thấy đơn hàng.');
+    if (['completed', 'cancelled'].includes(order.status)) throw new HttpError(400, 'Đơn đã kết thúc.');
+    const map = parseMapLink(req.body.map_url);
+    if (map.error || !map.url) throw new HttpError(400, map.error || 'Dán link Google Maps của khách.', { map_url: map.error || 'Dán link Google Maps.' });
+    const found = await resolveMapLink(map.url);
+    db.prepare("UPDATE orders SET map_url = ?, geo_lat = ?, geo_lng = ?, geo_source = ?, geo_checked_at = datetime('now') WHERE id = ?")
+      .run(map.url, found?.lat ?? null, found?.lng ?? null, found ? 'map' : null, orderId);
+    writeAdminAudit(req, { action: 'order_location', entityType: 'order', entityId: orderId, before: { map_url: order.map_url }, after: { map_url: map.url } });
+    const row = db.prepare('SELECT id, map_url, delivery_lat, delivery_lng, geo_lat, geo_lng FROM orders WHERE id = ?').get(orderId);
+    res.json({ order: { id: orderId, map_url: row.map_url, distance_km: distanceFromWarehouse(row), located: !!orderPoint(row) } });
   } catch (err) {
     next(err);
   }

@@ -23,6 +23,7 @@ import OrdersExportButton from '../components/OrdersExportButton.jsx';
 import OrdersTable from '../components/OrdersTable.jsx';
 import OrderReturnForm from '../components/OrderReturnForm.jsx';
 import BusinessUpdate from '../components/BusinessUpdate.jsx';
+import RouteSuggestions from '../components/RouteSuggestions.jsx';
 import OrderPrint from '../components/OrderPrint.jsx';
 import { ListSkeleton } from '../components/Skeleton.jsx';
 import useScrollTabs from '../components/useScrollTabs.js';
@@ -728,6 +729,9 @@ export default function Admin() {
                       </button>
                     </div>
                   )}
+                  {canManageOrders && !transferOnly && (
+                    <RouteSuggestions shippers={shippers} onChanged={(message) => { notify(message); reload({ refreshProducts: false }); }} />
+                  )}
                   <div className="filter-bar" aria-label="Lọc đơn theo trạng thái" ref={filterRef}>
                     {FILTERS.map(([value, label]) => {
                       const count = counts[value] || 0;
@@ -775,6 +779,11 @@ export default function Admin() {
                                 {order.warehouse === 'KH_BS' && <p className="warehouse-tag">📦 Xuất hàng từ Kho Bồ Sơn</p>}
                                 <a href={`tel:${order.phone}`} className="phone-link">{order.phone}</a>
                                 <p className="address-text">{order.address}</p>
+                                {order.fulfillment !== 'pickup' && !['completed', 'cancelled'].includes(order.status) && (
+                                  <p className="distance-text">{order.distance_km != null
+                                    ? <>📏 Cách Kho Bồ Sơn ≈ <strong>{String(order.distance_km).replace('.', ',')} km</strong> (đường chim bay)</>
+                                    : <>📏 Chưa có định vị để tính khoảng cách</>}</p>
+                                )}
                                 {order.map_url && order.fulfillment !== 'pickup' && (
                                   <a className="map-link" href={order.map_url} target="_blank" rel="noopener noreferrer">
                                     📍 Mở định vị khách gửi trên Google Maps

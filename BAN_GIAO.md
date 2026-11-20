@@ -1840,6 +1840,16 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
   - `test:business` (mới) 19/19: mặc định số mới; lưu và trang khách nhận ngay; thiếu hoặc sai số tài khoản; QR không an toàn; nhân viên bị chặn (403); khoảng hiện thông báo; ngày sai.
   - Thử trên trình duyệt 9/9: menu CẬP NHẬT, lưu, hoá đơn in theo số mới, dải thông báo trên điện thoại.
 
+## 20/11/2026 — Gom đơn và lộ trình giao từ Kho Bồ Sơn
+
+- Kho Bồ Sơn: 168 Đ. Triệu Việt Vương, Võ Cường (toạ độ 21.1639226, 106.0529077, lấy từ link https://maps.app.goo.gl/TdFAuS1vNaZfY88u5). Sửa ở `backend/src/route-plan.js` (WAREHOUSE).
+- Toạ độ của đơn lấy theo thứ tự: vị trí khách ghim lúc đặt → toạ độ có trong link Google Maps → link rút gọn maps.app.goo.gl (máy chủ đọc địa chỉ chuyển hướng của Google, không tải trang, chỉ đi tới tên miền Google; kết quả lưu ở `orders.geo_lat/geo_lng`) → định vị đã lưu của khách quen cùng số điện thoại và cùng địa chỉ. Đơn chỉ có địa chỉ chữ thì nhân viên dán link ở mục "Chưa có định vị".
+- Khoảng cách là đường chim bay (haversine), không dùng dịch vụ bản đồ trả phí. Đường đi thật xem bằng nút "Xem lộ trình trên Google Maps" (đã có sẵn các điểm dừng theo thứ tự).
+- Quản trị / kế toán (quyền orders.manage), trang Đơn hàng → "Gợi ý gom đơn và lộ trình giao": gom các đơn chưa giao cho ai và cách nhau tối đa 1/2/3/5 km (có thể chỉ gom cùng ngày + khung giờ giao), thứ tự đi từ kho qua mọi đơn rồi về kho ngắn nhất (chính xác tới 10 đơn), so với đi riêng từng đơn; chọn nhân viên giao rồi bấm "Giao cả chuyến". Có thêm lộ trình hiện tại của từng nhân viên giao.
+- Thẻ đơn ghi "Cách Kho Bồ Sơn ≈ x km".
+- Trang nhân viên giao: từ 2 đơn trở lên thì đơn xếp theo Điểm 1, 2, 3…, có tổng km khứ hồi, chặng cuối về kho, nút mở lộ trình trên Google Maps; vừa giao xong một đơn (trong 2 tiếng) thì phần còn lại tính từ chỗ đơn đó.
+- API: `GET /api/admin/routes`, `POST /api/admin/routes/assign`, `PATCH /api/admin/orders/:id/location`; `GET /api/delivery/orders` trả thêm `route`. Kiểm thử: `npm --prefix backend run test:routes` (24 mục, không gọi ra mạng nhờ GEO_RESOLVE=0).
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

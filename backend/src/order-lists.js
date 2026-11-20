@@ -1,6 +1,7 @@
 import db from './db.js';
 import { localDate } from './constants.js';
 import { ORDER_STATUSES } from './constants.js';
+import { distanceFromWarehouse } from './route-plan.js';
 
 export function attachItems(rows, items, foreignKey) {
   const groups = new Map();
@@ -44,6 +45,8 @@ export function listAdminOrders({ status, from = null, to = null, limit = 30, of
     // Ảnh chứng từ chỉ xem được khi đăng nhập (GET /api/proofs/:id).
     if (row.delivery_photo) row.delivery_photo = `/api/proofs/${row.delivery_photo}`;
     if (row.transfer_proof) row.transfer_proof = `/api/proofs/${row.transfer_proof}`;
+    // Khoảng cách đường chim bay từ Kho Bồ Sơn (20/11/2026), null khi chưa có định vị.
+    row.distance_km = row.fulfillment === 'pickup' ? null : distanceFromWarehouse(row);
   }
   const items = db.prepare(`SELECT * FROM order_items WHERE order_id IN (${page})
     ORDER BY order_id, id`).all(...args);

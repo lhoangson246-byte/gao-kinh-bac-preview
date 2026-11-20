@@ -1383,5 +1383,15 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(deleteTestOrd
     `);
   }
 
+  // 20/11/2026: toạ độ giao hàng tìm được cho đơn (mở link Google Maps rút gọn, hoặc định vị đã lưu của khách quen)
+  // để tính khoảng cách từ Kho Bồ Sơn, gom đơn gần nhau và sắp lộ trình cho nhân viên giao.
+  {
+    const ocols = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
+    if (!ocols.includes('geo_lat')) db.exec('ALTER TABLE orders ADD COLUMN geo_lat REAL');
+    if (!ocols.includes('geo_lng')) db.exec('ALTER TABLE orders ADD COLUMN geo_lng REAL');
+    if (!ocols.includes('geo_source')) db.exec('ALTER TABLE orders ADD COLUMN geo_source TEXT');
+    if (!ocols.includes('geo_checked_at')) db.exec('ALTER TABLE orders ADD COLUMN geo_checked_at TEXT');
+  }
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

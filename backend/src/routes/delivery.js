@@ -10,6 +10,7 @@ import { changeOrderStatus } from '../order-status.js';
 import { debtAccountFor, logDebtEvent, todayVN } from '../debts.js';
 import { notifyDebtStage } from '../push.js';
 import { searchCustomers } from '../customer-search.js';
+import { WAREHOUSE, distanceFromWarehouse, ensureOrderPoints, orderPoint, planRoute } from '../route-plan.js';
 
 /**
  * /api/delivery — nhân viên giao hàng (quyền "delivery"). Chỉ thấy và chỉ cập nhật đơn được phân
@@ -21,7 +22,9 @@ router.use(validateRoutes('delivery'));
 
 const ORDER_COLUMNS = `id, code, status, receiver_name, phone, address, note, delivery_slot, delivery_lat, delivery_lng, map_url, warehouse,
   payment_method, payment_status, total, fulfillment, created_at, confirmed_at, shipping_at, completed_at, cancelled_at, delivery_photo,
-  transfer_confirmed_at`;
+  transfer_confirmed_at, geo_lat, geo_lng, geo_source, geo_checked_at`;
+// Đơn vừa giao xong trong khoảng này thì lộ trình còn lại tính từ chỗ đơn đó (nhân viên đang ở ngoài đường).
+const LAST_STOP_MINUTES = 120;
 
 /** Ảnh chứng từ phải do chính nhân viên này vừa chụp và tải lên. */
 function ownPhoto(id, user, field) {
@@ -39,8 +42,12 @@ router.get('/search', (req, res) => {
   res.json({ results: searchCustomers(String(req.query.q || '')) });
 });
 
-/** GET /orders — đơn cần giao của tôi + đơn đã xong / bị huỷ hôm nay. */
-router.get('/orders', (req, res) => {
+/**
+ * GET /orders — đơn cần giao của tôi + đơn đã xong / bị huỷ hôm nay, kèm lộ trình (20/11/2026): thứ tự đi
+ * qua các đơn còn lại rồi quay về Kho Bồ Sơn cho quãng đường ngắn nhất.
+ */
+router.get('/orders', async (req, res, next) => {
+  try {
   const orders = db.prepare(`
     SELECT ${ORDER_COLUMNS} FROM orders
     WHERE shipper_id = ? AND (
@@ -55,7 +62,29 @@ router.get('/orders', (req, res) => {
     WHERE order_id IN (${orders.map(() => '?').join(',')}) ORDER BY order_id, id
   `).all(...orders.map((o) => o.id)) : [];
   for (const order of orders) order.items = items.filter((i) => i.order_id === order.id);
-  res.json({ orders });
+  const active = orders.filter((o) => ['confirmed', 'shipping'].includes(o.status) && o.fulfillment !== 'pickup');
+  await ensureOrderPoints(active, { max: 6, budgetMs: 4000 });
+  // Vừa giao xong một đơn (trong 2 tiếng) thì tính tiếp từ chỗ đó; không thì từ kho.
+  const lastDone = orders.filter((o) => o.status === 'completed' && o.completed_at && orderPoint(o)
+    && Date.parse(`${String(o.completed_at).replace(' ', 'T')}Z`) > Date.now() - LAST_STOP_MINUTES * 60_000)
+    .sort((a, b) => String(b.completed_at).localeCompare(String(a.completed_at)))[0];
+  const plan = planRoute(active, lastDone ? { start: orderPoint(lastDone) } : {});
+  for (const order of orders) {
+    order.distance_km = order.fulfillment === 'pickup' ? null : distanceFromWarehouse(order);
+    delete order.geo_checked_at;
+  }
+  res.json({
+    orders,
+    route: {
+      warehouse: { name: WAREHOUSE.name, address: WAREHOUSE.address, lat: WAREHOUSE.lat, lng: WAREHOUSE.lng, map_url: WAREHOUSE.map_url },
+      ...plan,
+      from_code: lastDone?.code || null,
+      missing: active.filter((o) => !orderPoint(o)).map((o) => o.id),
+    },
+  });
+  } catch (err) {
+    next(err);
+  }
 });
 
 /**

@@ -25,6 +25,8 @@ export async function fixture(overrides = {}) {
     DATA_DIR: directory, NODE_ENV: 'production', PORT: '0', TRUST_PROXY: '0',
     // Bắt lỗi chỉ xảy ra trên Turso: câu lệnh chuẩn bị ngoài transaction.
     DB_STRICT_TRANSACTIONS: '1',
+    // Kiểm thử không gọi ra mạng để mở link Google Maps rút gọn.
+    GEO_RESOLVE: '0',
     TURSO_DATABASE_URL: '', LIBSQL_URL: '', TURSO_AUTH_TOKEN: '', LIBSQL_AUTH_TOKEN: '',
     VERCEL: '', VERCEL_ENV: '', PREVIEW_TURSO_DATABASE_URL: '', PREVIEW_TURSO_AUTH_TOKEN: '',
     CLIENT_ORIGIN: 'https://shop.example', COOKIE_SAME_SITE: 'lax', SERVE_FRONTEND: 'false',

@@ -10,6 +10,7 @@ import { ListSkeleton } from '../components/Skeleton.jsx';
 
 const REFRESH_MS = 30_000;
 const formatPhone = (phone) => String(phone || '').replace(/^(\d{4})(\d{3})(\d{3})$/, '$1 $2 $3');
+const km = (v) => `${String(v).replace('.', ',')} km`;
 const directions = (order) => order.map_url || mapLink(order.delivery_lat, order.delivery_lng)
   || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.address)}`;
 
@@ -21,6 +22,7 @@ export default function Delivery() {
   const { user, logout, can } = useAuth();
   const navigate = useNavigate();
   const [orders, setOrders] = useState(null);
+  const [route, setRoute] = useState(null);   // lộ trình: thứ tự đi rồi về Kho Bồ Sơn ngắn nhất (20/11/2026)
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
   const [photos, setPhotos] = useState({});   // { orderId: { id, url } } ảnh gạo đã giao / ảnh chuyển khoản
@@ -38,8 +40,9 @@ export default function Delivery() {
 
   const load = useCallback(async () => {
     try {
-      const { orders } = await api.deliveryOrders();
+      const { orders, route } = await api.deliveryOrders();
       setOrders(orders);
+      setRoute(route || null);
       setError('');
     } catch (err) {
       setError(err.message);
@@ -92,7 +95,10 @@ export default function Delivery() {
     }
   };
 
-  const active = (orders || []).filter((o) => ['confirmed', 'shipping'].includes(o.status));
+  // Đơn cần giao xếp theo lộ trình; đơn chưa có định vị và khách lấy tại cửa hàng để cuối.
+  const stepOf = new Map((route?.stops || []).map((s) => [s.id, s]));
+  const active = (orders || []).filter((o) => ['confirmed', 'shipping'].includes(o.status))
+    .sort((a, b) => (stepOf.get(a.id)?.step ?? 999) - (stepOf.get(b.id)?.step ?? 999));
   const finished = (orders || []).filter((o) => !['confirmed', 'shipping'].includes(o.status));
   const toCollect = active.filter((o) => o.payment_method === 'cod').reduce((sum, o) => sum + o.total, 0);
   const collected = finished.filter((o) => o.status === 'completed' && o.payment_status !== 'debt' && o.payment_method === 'cod')
@@ -118,6 +124,24 @@ export default function Delivery() {
           <div><strong>{finished.filter((o) => o.status === 'completed').length}</strong><span>đã giao hôm nay · thu {formatVND(collected)}</span></div>
         </div>
         {error && <p className="alert error" role="alert">{error} <button type="button" className="link-button" onClick={load}>Thử lại</button></p>}
+        {route && route.stops.length >= 2 && (
+          <section className="delivery-route" aria-label="Lộ trình giao">
+            <h2>🧭 Lộ trình {route.stops.length} điểm · ≈ {km(route.total_km)}</h2>
+            <p>
+              {route.from_code ? <>Tính từ chỗ đơn vừa giao {route.from_code}</> : <>Xuất phát từ {route.warehouse.name}</>}, đi theo thứ tự{' '}
+              {route.stops.map((s) => active.find((o) => o.id === s.id)?.code).filter(Boolean).join(' → ')}, rồi về {route.warehouse.name} (chặng cuối ≈ {km(route.return_km)}).
+              Đây là thứ tự có tổng quãng đường ngắn nhất (đường chim bay).
+            </p>
+            {route.missing.length > 0 && <p className="delivery-route-warn">⚠️ {route.missing.length} đơn chưa có định vị nên chưa xếp vào lộ trình, gọi khách hỏi đường.</p>}
+            <div className="delivery-route-links">
+              {route.directions_urls.map((url, i) => (
+                <a key={url} className="btn btn-primary" href={url} target="_blank" rel="noopener noreferrer">
+                  🗺️ Mở lộ trình trên Google Maps{route.directions_urls.length > 1 ? ` (phần ${i + 1})` : ''}
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
         {!orders && !error && <ListSkeleton rows={2} label="Đang tải đơn…" />}
         {orders && active.length === 0 && (
           <div className="admin-empty"><span>✓</span><h2>Chưa có đơn nào cần giao</h2><p>Khi cửa hàng giao đơn cho bạn, điện thoại sẽ báo và đơn hiện ở đây.</p></div>
@@ -127,11 +151,16 @@ export default function Delivery() {
           {active.map((order) => (
             <article key={order.id} className={`delivery-card ${order.status}`}>
               <header>
-                <strong>{order.code}</strong>
+                <strong>{stepOf.get(order.id) && route.stops.length >= 2 && <span className="delivery-step">Điểm {stepOf.get(order.id).step}</span>}{order.code}</strong>
                 <span className={`status ${order.status}`}>{order.status === 'shipping' ? 'Đang giao' : 'Chờ giao'}</span>
               </header>
               <h2>{order.receiver_name}</h2>
               <p className="delivery-address">{order.fulfillment === 'pickup' ? '🏬 Khách lấy tại cửa hàng' : `🏠 ${order.address}`}</p>
+              {order.fulfillment !== 'pickup' && (
+                <p className="delivery-distance">{order.distance_km != null
+                  ? <>📏 Cách kho {km(order.distance_km)}{stepOf.get(order.id) && route.stops.length >= 2 && stepOf.get(order.id).step > 1 ? ` · cách điểm trước ${km(stepOf.get(order.id).leg_km)}` : ''}</>
+                  : 'Chưa có định vị, gọi khách hỏi đường'}</p>
+              )}
               {/* Hai nút to cạnh nhau, bấm được bằng một ngón khi đang cầm lái. */}
               <div className={`delivery-quick${order.fulfillment === 'pickup' ? ' one' : ''}`}>
                 <a className="btn btn-primary delivery-call" href={`tel:${order.phone}`}>📞 Gọi<small>{formatPhone(order.phone)}</small></a>
