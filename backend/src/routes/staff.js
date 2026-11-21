@@ -17,8 +17,8 @@ const router = Router();
 router.use(requireAuth, requireAdmin);
 router.use(validateRoutes('staff'));
 
-const COLUMNS = 'id, full_name, phone, email, staff_title, permissions, is_locked, created_at';
-const shape = (row) => ({ ...row, permissions: permissionsOf({ role: 'staff', permissions: row.permissions }) });
+const COLUMNS = 'id, full_name, phone, email, staff_title, permissions, is_locked, attendance_tracked, created_at';
+const shape = (row) => ({ ...row, permissions: permissionsOf({ role: 'staff', permissions: row.permissions }), attendance_tracked: row.attendance_tracked !== 0 });
 const list = () => db.prepare(`
   SELECT ${COLUMNS}, (SELECT MAX(created_at) FROM login_history h WHERE h.user_id = users.id) AS last_login
   FROM users WHERE role = 'staff' ORDER BY is_locked, full_name
@@ -55,7 +55,7 @@ router.get('/', (req, res) => {
   res.json({ staff: list(), permissions: PERMISSIONS, presets: PRESETS });
 });
 
-/** POST / — body: { full_name, phone?, email?, password, staff_title?, permissions[] } */
+/** POST / — body: { full_name, phone?, email?, password, staff_title?, permissions[], attendance_tracked? (mặc định có chấm công) } */
 router.post('/', async (req, res, next) => {
   try {
     const body = req.body;
@@ -69,16 +69,17 @@ router.post('/', async (req, res, next) => {
     if (!phone && !email && !errors.phone && !errors.email) errors.phone = 'Cần số điện thoại hoặc email để đăng nhập.';
     const permissions = readPermissions(body.permissions, errors);
     const title = cleanText(body.staff_title, 60);
+    const tracked = body.attendance_tracked === undefined ? 1 : (body.attendance_tracked ? 1 : 0);
     if (Object.keys(errors).length) throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', errors);
     assertFreeLogin({ phone, email });
     const hash = await bcrypt.hash(body.password, 12);
     const id = db.prepare(`
-      INSERT INTO users (full_name, phone, email, password_hash, role, permissions, staff_title)
-      VALUES (?, ?, ?, ?, 'staff', ?, ?)
-    `).run(fullName, phone, email, hash, JSON.stringify(permissions), title).lastInsertRowid;
+      INSERT INTO users (full_name, phone, email, password_hash, role, permissions, staff_title, attendance_tracked)
+      VALUES (?, ?, ?, ?, 'staff', ?, ?, ?)
+    `).run(fullName, phone, email, hash, JSON.stringify(permissions), title, tracked).lastInsertRowid;
     writeAdminAudit(req, {
       action: 'staff.create', entityType: 'user', entityId: id,
-      after: { full_name: fullName, phone, email, staff_title: title, permissions },
+      after: { full_name: fullName, phone, email, staff_title: title, permissions, attendance_tracked: !!tracked },
     });
     res.status(201).json({ staff: list() });
   } catch (err) { next(err); }
@@ -106,14 +107,15 @@ router.put('/:id', (req, res, next) => {
     }
     if (!next_.phone && !next_.email) errors.phone = 'Cần số điện thoại hoặc email để đăng nhập.';
     if (body.permissions !== undefined) next_.permissions = readPermissions(body.permissions, errors);
+    if (body.attendance_tracked !== undefined) next_.attendance_tracked = body.attendance_tracked ? 1 : 0;
     if (Object.keys(errors).length) throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', errors);
     assertFreeLogin(next_, current.id);
     db.prepare(`
-      UPDATE users SET full_name = ?, staff_title = ?, phone = ?, email = ?, permissions = ? WHERE id = ? AND role = 'staff'
-    `).run(next_.full_name, next_.staff_title, next_.phone, next_.email, JSON.stringify(next_.permissions), current.id);
+      UPDATE users SET full_name = ?, staff_title = ?, phone = ?, email = ?, permissions = ?, attendance_tracked = ? WHERE id = ? AND role = 'staff'
+    `).run(next_.full_name, next_.staff_title, next_.phone, next_.email, JSON.stringify(next_.permissions), next_.attendance_tracked ? 1 : 0, current.id);
     writeAdminAudit(req, {
       action: 'staff.update', entityType: 'user', entityId: current.id,
-      before: shape(current), after: { ...next_, is_locked: undefined, created_at: undefined },
+      before: shape(current), after: { ...next_, attendance_tracked: next_.attendance_tracked !== 0, is_locked: undefined, created_at: undefined },
     });
     res.json({ staff: list() });
   } catch (err) { next(err); }

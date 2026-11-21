@@ -1393,5 +1393,12 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(deleteTestOrd
     if (!ocols.includes('geo_checked_at')) db.exec('ALTER TABLE orders ADD COLUMN geo_checked_at TEXT');
   }
 
+  // 21/11/2026: users.attendance_tracked — nhân viên có cần kế toán / quản lý chấm công không (mặc định có).
+  // Người không cần chấm công (ví dụ mẹ duyệt cuối, tài khoản thử) không hiện trong bảng công.
+  {
+    const ucols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+    if (!ucols.includes('attendance_tracked')) db.exec('ALTER TABLE users ADD COLUMN attendance_tracked INTEGER NOT NULL DEFAULT 1');
+  }
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

@@ -441,3 +441,9 @@ tr.ws-open td { background: var(--green-100); }
 .delivery-step { display: inline-block; margin-right: 6px; padding: 1px 8px; border-radius: 999px; background: var(--primary, #2f6b3a); color: #fff; font-size: .8rem; }
 .delivery-distance { margin: 2px 0 6px; font-size: .88rem; color: #3f5a3c; font-weight: 600; }
 @media (max-width: 560px) { .route-actions select, .route-actions .btn { width: 100%; } .route-body { padding: 10px; } }
+
+/* Chấm công: quy định cuối ngày 17h00 – 24h00 (21/11/2026) */
+.att-policy { display: block; margin-top: 6px; }
+.att-window { margin: 0 0 10px; padding: 8px 12px; border-radius: 10px; font-size: .9rem; }
+.att-window.open { background: #e7f4ea; color: #1f5f36; border: 1px solid #b9dcc6; }
+.att-window.closed { background: #f4f1ea; color: #5a4a2a; border: 1px solid #e3d9c2; }

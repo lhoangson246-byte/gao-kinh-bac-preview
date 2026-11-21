@@ -286,11 +286,11 @@ const permissionList = z.array(z.string().max(40)).max(20);
 add('staff', 'GET', /^\/?$/);
 add('staff', 'POST', /^\/?$/, obj({
   full_name: name, phone: optionalText(LIMITS.phone), email: optionalText(LIMITS.email), password: newPassword,
-  staff_title: optionalText(60), permissions: permissionList,
+  staff_title: optionalText(60), permissions: permissionList, attendance_tracked: flag.optional(),
 }));
 add('staff', 'PUT', /^\/[^/]+\/?$/, obj({
   full_name: name.optional(), phone: optionalText(LIMITS.phone), email: optionalText(LIMITS.email),
-  staff_title: optionalText(60), permissions: permissionList.optional(),
+  staff_title: optionalText(60), permissions: permissionList.optional(), attendance_tracked: flag.optional(),
 }));
 add('staff', 'PATCH', /^\/[^/]+\/lock\/?$/, obj({ is_locked: flag }));
 add('staff', 'POST', /^\/[^/]+\/reset-password\/?$/, obj({ password: newPassword }));

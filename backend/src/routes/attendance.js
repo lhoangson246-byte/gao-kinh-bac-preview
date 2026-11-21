@@ -27,6 +27,27 @@ export const congFor = (minutes) => {
 };
 export const MARK_UNITS = [1, 0.5, 0];
 
+/**
+ * Quy định chấm công (21/11/2026): chấm vào CUỐI NGÀY. Bảng chấm công chỉ mở từ 17h00 tới hết 24h00 cùng
+ * ngày (giờ Việt Nam) cho kế toán / quản lý chấm và sửa công của chính ngày hôm đó; qua 24h là hết hạn,
+ * không sửa được nữa. Chủ cửa hàng vẫn sửa được ngày cũ khi cần đính chính (có ghi nhật ký).
+ */
+export const MARK_OPEN_MINUTES = 17 * 60;
+export const MARK_POLICY = 'Chấm công vào cuối ngày: mở lúc 17h00, đóng lúc 24h00 cùng ngày. Chỉ chấm và sửa được công của ngày hôm đó trước 24h00; quá hạn không sửa được.';
+/** Giờ hiện tại theo giờ Việt Nam: { day, minutes }. ATTENDANCE_TEST_NOW=HH:MM chỉ dùng khi chạy kiểm thử. */
+function nowVN() {
+  const now = new Date(Date.now() + 7 * 3600_000);
+  const test = /^(\d{2}):(\d{2})$/.exec(process.env.ATTENDANCE_TEST_NOW || '');
+  return { day: now.toISOString().slice(0, 10), minutes: test ? Number(test[1]) * 60 + Number(test[2]) : now.getUTCHours() * 60 + now.getUTCMinutes() };
+}
+/** Trạng thái cửa sổ chấm công cho người đang xem. */
+export function markWindow(user) {
+  const { day, minutes } = nowVN();
+  const owner = user?.role === 'admin';
+  const open = minutes >= MARK_OPEN_MINUTES;
+  return { day, open, opens_at: '17:00', closes_at: '24:00', owner_override: owner, editable_day: open ? day : null, policy: MARK_POLICY };
+}
+
 const router = Router();
 router.use(requireAuth, requireStaff, validateRoutes('attendance'));
 
@@ -110,9 +131,10 @@ router.get('/month', requirePermission('attendance.manage'), (req, res, next) =>
     const rows = daysOf('?.work_date LIKE ?', [`${month}-%`]);
     const people = db.prepare(`
       SELECT id, full_name, staff_title, role FROM users
-      WHERE (role = 'staff' AND is_locked = 0)
+      WHERE attendance_tracked <> 0 AND (
+            (role = 'staff' AND is_locked = 0)
          OR id IN (SELECT user_id FROM attendance WHERE work_date LIKE ?)
-         OR id IN (SELECT user_id FROM attendance_marks WHERE work_date LIKE ?)
+         OR id IN (SELECT user_id FROM attendance_marks WHERE work_date LIKE ?))
       ORDER BY CASE role WHEN 'admin' THEN 0 ELSE 1 END, full_name
     `).all(`${month}-%`, `${month}-%`);
     const staff = people.map((p) => {
@@ -123,7 +145,7 @@ router.get('/month', requirePermission('attendance.manage'), (req, res, next) =>
         totals: totalsOf(own),
       };
     });
-    res.json({ month, days_in_month: daysInMonth(month), today: todayVN(), staff, units: MARK_UNITS });
+    res.json({ month, days_in_month: daysInMonth(month), today: todayVN(), staff, units: MARK_UNITS, window: markWindow(req.user) });
   } catch (err) { next(err); }
 });
 
@@ -146,9 +168,19 @@ router.put('/mark', requirePermission('attendance.manage'), (req, res, next) => 
     else if (workDate > todayVN()) errors.work_date = 'Không chấm công trước cho ngày chưa tới.';
     if (units !== null && !MARK_UNITS.includes(units)) errors.units = 'Chỉ tích 1 công, 0,5 công hoặc Nghỉ.';
     if (Object.keys(errors).length) throw new HttpError(400, 'Dữ liệu chấm công chưa hợp lệ.', errors);
+    // Cửa sổ chấm công 17h00 – 24h00 của chính ngày hôm đó (chủ cửa hàng được đính chính ngày cũ).
+    const win = markWindow(req.user);
+    if (!win.owner_override) {
+      if (workDate !== win.day) {
+        throw new HttpError(403, `Đã hết hạn chấm công ngày ${workDate.split('-').reverse().join('/')} (đóng lúc 24h00 cùng ngày). Cần sửa thì báo chủ cửa hàng.`, { work_date: 'Đã hết hạn chấm công.' });
+      }
+      if (!win.open) throw new HttpError(403, 'Chấm công mở lúc 17h00 (cuối ca) và đóng lúc 24h00. Vui lòng quay lại sau 17h00.', { work_date: 'Chưa tới giờ chấm công.' });
+    }
 
-    const people = db.prepare(`SELECT id, full_name FROM users WHERE id IN (${ids.map(() => '?').join(',')}) AND role IN ('staff', 'admin')`).all(...ids);
+    const people = db.prepare(`SELECT id, full_name, attendance_tracked FROM users WHERE id IN (${ids.map(() => '?').join(',')}) AND role IN ('staff', 'admin')`).all(...ids);
     if (people.length !== ids.length) throw new HttpError(400, 'Có người không phải nhân viên.', { user_id: 'Không tìm thấy nhân viên.' });
+    const untracked = people.filter((p) => p.attendance_tracked === 0);
+    if (untracked.length) throw new HttpError(400, `${untracked.map((p) => p.full_name).join(', ')} không cần chấm công (bỏ tích ở Quản trị → Nhân viên).`, { user_id: 'Người này không cần chấm công.' });
     if (req.user.role !== 'admin' && ids.includes(req.user.id)) {
       throw new HttpError(403, 'Bạn không tự chấm công cho chính mình được. Vui lòng nhờ chủ cửa hàng.');
     }

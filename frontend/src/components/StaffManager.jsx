@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api, formatDateTime } from '../api';
 import { generatePassword, passwordError } from '../password';
 
-const EMPTY = { full_name: '', phone: '', email: '', password: '', staff_title: '', permissions: [] };
+const EMPTY = { full_name: '', phone: '', email: '', password: '', staff_title: '', permissions: [], attendance_tracked: true };
 
 /**
  * Chủ cửa hàng tạo tài khoản nhân viên và cấp quyền. Nhân viên đăng nhập ở trang đăng nhập chung
@@ -49,7 +49,7 @@ export default function StaffManager() {
     }
     const body = {
       full_name: form.full_name.trim(), phone: form.phone.trim() || null, email: form.email.trim() || null,
-      staff_title: form.staff_title.trim() || null, permissions: form.permissions,
+      staff_title: form.staff_title.trim() || null, permissions: form.permissions, attendance_tracked: form.attendance_tracked,
       ...(editing ? {} : { password: form.password }),
     };
     const ok = await run(() => (editing ? api.adminUpdateStaff(editing, body) : api.adminCreateStaff(body)),
@@ -59,7 +59,8 @@ export default function StaffManager() {
 
   const startEdit = (s) => {
     setEditing(s.id);
-    setForm({ full_name: s.full_name, phone: s.phone || '', email: s.email || '', password: '', staff_title: s.staff_title || '', permissions: s.permissions });
+    setForm({ full_name: s.full_name, phone: s.phone || '', email: s.email || '', password: '', staff_title: s.staff_title || '', permissions: s.permissions,
+      attendance_tracked: s.attendance_tracked !== false });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -128,6 +129,14 @@ export default function StaffManager() {
               Chỉ chủ cửa hàng có: cài đặt cửa hàng, mã giảm giá, trang Về chúng tôi, nhật ký và quản lý nhân viên.
             </small>
           </fieldset>
+          <fieldset className="staff-permissions staff-attendance">
+            <legend>Chấm công</legend>
+            <label className="checkbox-label">
+              <input type="checkbox" checked={form.attendance_tracked} onChange={(e) => setForm({ ...form, attendance_tracked: e.target.checked })} />
+              Cần kế toán chấm công cho nhân viên này
+            </label>
+            <small className="field-help">Bỏ tích với người không tính công (ví dụ mẹ duyệt cuối, tài khoản thử): người đó không hiện trong bảng chấm công.</small>
+          </fieldset>
           {errors.form && <p className="alert error">{errors.form}</p>}
           <div className="form-actions">
             <button className="btn btn-primary" disabled={busy}>{editing ? 'Lưu' : 'Tạo tài khoản'}</button>
@@ -145,7 +154,7 @@ export default function StaffManager() {
               <tbody>
                 {data.staff.map((s) => (
                   <tr key={s.id} className={s.is_locked ? 'row-muted' : ''}>
-                    <td><strong>{s.full_name}</strong><small className="cell-note">{s.staff_title || 'Nhân viên'}{s.is_locked ? ' · đã khoá' : ''}</small></td>
+                    <td><strong>{s.full_name}</strong><small className="cell-note">{s.staff_title || 'Nhân viên'}{s.is_locked ? ' · đã khoá' : ''}{s.attendance_tracked === false ? ' · không chấm công' : ''}</small></td>
                     <td>{s.phone || ''}{s.email && <small className="cell-note">{s.email}</small>}</td>
                     <td><ul className="staff-perm-list">{s.permissions.map((p) => <li key={p}>{data.permissions[p]}</li>)}</ul></td>
                     <td>{s.last_login ? formatDateTime(s.last_login) : 'Chưa đăng nhập'}</td>

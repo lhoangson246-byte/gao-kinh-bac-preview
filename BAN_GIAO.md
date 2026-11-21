@@ -1850,6 +1850,12 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
 - Trang nhân viên giao: từ 2 đơn trở lên thì đơn xếp theo Điểm 1, 2, 3…, có tổng km khứ hồi, chặng cuối về kho, nút mở lộ trình trên Google Maps; vừa giao xong một đơn (trong 2 tiếng) thì phần còn lại tính từ chỗ đơn đó.
 - API: `GET /api/admin/routes`, `POST /api/admin/routes/assign`, `PATCH /api/admin/orders/:id/location`; `GET /api/delivery/orders` trả thêm `route`. Kiểm thử: `npm --prefix backend run test:routes` (24 mục, không gọi ra mạng nhờ GEO_RESOLVE=0).
 
+## 21/11/2026 — Chấm công: người cần chấm công, giờ chấm cuối ngày
+
+- Tạo / sửa tài khoản nhân viên có ô "Cần kế toán chấm công" (mặc định tích, cột `users.attendance_tracked`). Bỏ tích thì người đó không hiện trong bảng chấm công (kể cả khi tháng đó đã có công) và không tích công được. Các tài khoản đang có vẫn để "cần chấm công"; chủ cửa hàng tự bỏ tích cho mẹ, tài khoản Testing ở Quản trị → Nhân viên → Sửa quyền.
+- Quy định: chấm công vào cuối ngày. Bảng mở lúc 17h00 và đóng lúc 24h00 cùng ngày (giờ Việt Nam); kế toán / quản lý chỉ chấm và sửa được công của chính ngày hôm đó trong khung này, quá hạn máy chủ từ chối (403). Chủ cửa hàng vẫn sửa được ngày cũ để đính chính (có nhật ký).
+- Kiểm thử đặt giờ giả bằng biến `ATTENDANCE_TEST_NOW=HH:MM` (chỉ dùng trong `backend/test/attendance.mjs`, 37 mục).
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

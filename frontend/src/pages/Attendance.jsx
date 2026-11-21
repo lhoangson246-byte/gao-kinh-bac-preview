@@ -63,6 +63,7 @@ export default function Attendance() {
           {manager
             ? <>Quản lý tích công cho từng người mỗi ngày: <b>1 công</b>, <b>0,5 công</b> hoặc <b>Nghỉ</b>. Bấm vào ô để tích; bấm số ngày ở đầu cột để tích nhanh cho những người chưa có công hôm đó.</>
             : <>Chấm công do <b>quản lý</b> thực hiện (1 công hoặc 0,5 công mỗi ngày). Nếu thấy thiếu công, vui lòng báo quản lý.</>}
+          <span className="att-policy"><b>Quy định:</b> chấm công vào cuối ngày. Bảng chấm công mở lúc <b>17h00</b> (cuối ca) và đóng lúc <b>24h00</b> cùng ngày; chỉ chấm và sửa được công của ngày hôm đó trước 24h00, quá hạn không sửa được.</span>
         </p>
 
         {manager && <MonthBoard month={month} monthPicker={monthPicker} selfId={user?.id} isAdmin={isAdmin} onSaved={loadMine} />}
@@ -118,6 +119,9 @@ function MonthBoard({ month, monthPicker, selfId, isAdmin, onSaved }) {
   const days = useMemo(() => Array.from({ length: data?.days_in_month || 0 }, (_, i) => i + 1), [data]);
   const dateOf = (day) => `${data.month}-${String(day).padStart(2, '0')}`;
   const markable = (person) => isAdmin || person.id !== selfId;
+  // Cửa sổ chấm công 17h00 – 24h00 của chính ngày hôm đó (chủ cửa hàng được đính chính ngày cũ).
+  const win = data?.window;
+  const dayOpen = (day) => dateOf(day) <= data.today && (win?.owner_override || dateOf(day) === win?.editable_day);
   const openCell = (person, day) => { setNote(''); setPick({ people: [person], day, bulk: false }); };
   const openColumn = (day) => {
     const people = data.staff.filter((p) => markable(p) && !p.days[day]);
@@ -150,6 +154,14 @@ function MonthBoard({ month, monthPicker, selfId, isAdmin, onSaved }) {
         {monthPicker}
       </div>
       {error && <p className="alert error" role="alert">{error}</p>}
+      {win && (
+        <p className={`att-window ${win.open ? 'open' : 'closed'}`} role="status">
+          {win.open
+            ? <>🟢 Đang mở chấm công ngày <b>{data.today.slice(8)}/{data.today.slice(5, 7)}</b>, đóng lúc 24h00 hôm nay.</>
+            : <>🔒 Chưa tới giờ chấm công. Bảng mở lúc <b>17h00</b> hôm nay và đóng lúc 24h00.</>}
+          {win.owner_override && <> Chủ cửa hàng vẫn sửa được ngày cũ để đính chính.</>}
+        </p>
+      )}
       {!data ? <ListSkeleton rows={4} label="Đang tải bảng công…" /> : (
         <div className="table-scroll att-board-wrap">
           <table className="att-board">
@@ -157,10 +169,9 @@ function MonthBoard({ month, monthPicker, selfId, isAdmin, onSaved }) {
               <tr>
                 <th className="att-person">Nhân viên</th>
                 {days.map((d) => {
-                  const future = dateOf(d) > data.today;
                   return (
                     <th key={d} className={dateOf(d) === data.today ? 'today' : ''}>
-                      {future ? d : <button type="button" onClick={() => openColumn(d)} title={`Tích nhanh ngày ${d} cho người chưa có công`} aria-label={`Tích nhanh ngày ${d}`}>{d}</button>}
+                      {!dayOpen(d) ? d : <button type="button" onClick={() => openColumn(d)} title={`Tích nhanh ngày ${d} cho người chưa có công`} aria-label={`Tích nhanh ngày ${d}`}>{d}</button>}
                     </th>
                   );
                 })}
@@ -174,7 +185,7 @@ function MonthBoard({ month, monthPicker, selfId, isAdmin, onSaved }) {
                   <th className="att-person" scope="row">{p.full_name}{p.staff_title && <small>{p.staff_title}</small>}</th>
                   {days.map((d) => {
                     const r = p.days[d];
-                    const locked = dateOf(d) > data.today || !markable(p);
+                    const locked = !dayOpen(d) || !markable(p);
                     const active = pick && !pick.bulk && pick.day === d && pick.people[0].id === p.id;
                     return (
                       <td key={d} className={`${cellClass(r)}${dateOf(d) === data.today ? ' today' : ''}${active ? ' picking' : ''}`}>
