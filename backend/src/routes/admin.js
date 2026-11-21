@@ -38,6 +38,7 @@ router.use(requireAuth, requireStaff, accessTable([
   ['PATCH', /^\/orders\/[^/]+\/shipper\/?$/, ['orders.manage']],
   ['PATCH', /^\/orders\/[^/]+\/location\/?$/, ['orders.manage']],
   ['*', /^\/routes(\/assign)?\/?$/, ['orders.manage']],
+  ['GET', /^\/dispatch\/?$/, ['orders.manage']],
   ['PATCH', /^\/orders\/[^/]+\/transfer\/?$/, ['orders.manage']],
   ['POST', /^\/orders\/[^/]+\/returns\/?$/, ['orders.manage']],
   ['GET', /^\/shippers\/?$/, ['orders.manage', 'orders.create']],
@@ -371,6 +372,71 @@ router.get('/routes', async (req, res, next) => {
         shipper_id: d.shipper_id, shipper_name: d.shipper_name, count: d.orders.length,
         ...routeOf(d.orders), missing: d.orders.filter((o) => !orderPoint(o)).map(routeBrief),
       })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/admin/dispatch — dữ liệu cho "Bản đồ điều phối & giám sát giao hàng" (21/11/2026), cho kế toán
+ * và quản lý (quyền orders.manage):
+ *  - orders: mọi đơn giao tận nơi ĐÃ XÁC NHẬN hoặc ĐANG GIAO (không tính đơn chờ xác nhận, đã hoàn thành,
+ *    đã huỷ), kèm toạ độ, tên hiện trên bản đồ (tên công ty nếu là khách buôn), hàng hoá, người giao;
+ *  - shippers: mọi nhân viên giao đang làm, trạng thái delivering (có đơn đang giao) / done (hôm nay đã giao
+ *    xong hết) / idle (chưa bắt đầu), lộ trình hiện tại; `location` là vị trí thật gửi từ điện thoại nhân viên
+ *    giao — CHƯA có nguồn dữ liệu này nên luôn null, giao diện tự mô phỏng chuyển động theo lộ trình.
+ */
+router.get('/dispatch', async (req, res, next) => {
+  try {
+    const orders = db.prepare(`
+      SELECT ${ROUTE_COLUMNS}, o.payment_method, o.wholesale_customer_id, o.shipping_at, o.confirmed_at,
+             w.company AS wholesale_company, w.code AS wholesale_code
+      FROM orders o LEFT JOIN users s ON s.id = o.shipper_id LEFT JOIN wholesale_customers w ON w.id = o.wholesale_customer_id
+      WHERE o.status IN ('confirmed', 'shipping') AND COALESCE(o.fulfillment, 'delivery') <> 'pickup'
+      ORDER BY o.id
+    `).all();
+    await ensureOrderPoints(orders);
+    const items = orders.length ? db.prepare(`
+      SELECT order_id, product_name, quantity, unit FROM order_items
+      WHERE order_id IN (${orders.map(() => '?').join(',')}) ORDER BY order_id, id
+    `).all(...orders.map((o) => o.id)) : [];
+    const shippers = db.prepare("SELECT id, full_name, phone, permissions FROM users WHERE role = 'staff' AND is_locked = 0 ORDER BY full_name")
+      .all().filter((u) => can({ role: 'staff', permissions: u.permissions }, 'delivery'));
+    const doneToday = new Map(db.prepare(`
+      SELECT shipper_id, COUNT(*) AS n FROM orders
+      WHERE status = 'completed' AND shipper_id IS NOT NULL AND ${localDate('completed_at')} = ${localDate("'now'")}
+      GROUP BY shipper_id
+    `).all().map((r) => [r.shipper_id, r.n]));
+    const point = (o) => orderPoint(o);
+    res.json({
+      warehouse: WAREHOUSE,
+      generated_at: new Date().toISOString(),
+      orders: orders.map((o) => {
+        const p = point(o);
+        return {
+          id: o.id, code: o.code, status: o.status, receiver_name: o.receiver_name, phone: o.phone, address: o.address,
+          // Tên hiện trên ghim: khách buôn hiện tên công ty, khách lẻ hiện tên người nhận.
+          customer_label: o.wholesale_company || o.receiver_name, wholesale: !!o.wholesale_customer_id, wholesale_code: o.wholesale_code || null,
+          delivery_slot: o.delivery_slot || null, delivery_day: deliveryDay(o.created_at, o.delivery_slot), total: o.total,
+          payment_method: o.payment_method, shipper_id: o.shipper_id || null, shipper_name: o.shipper_name || null,
+          lat: p?.lat ?? null, lng: p?.lng ?? null, located: !!p, distance_km: distanceFromWarehouse(o), map_url: o.map_url || null,
+          items: items.filter((i) => i.order_id === o.id).map(({ product_name, quantity, unit }) => ({ product_name, quantity, unit })),
+        };
+      }),
+      shippers: shippers.map((u) => {
+        const mine = orders.filter((o) => o.shipper_id === u.id);
+        const plan = planRoute(mine);
+        const shipping = mine.some((o) => o.status === 'shipping');
+        const done = doneToday.get(u.id) || 0;
+        return {
+          id: u.id, full_name: u.full_name, phone: u.phone, avatar_url: null,
+          status: shipping ? 'delivering' : !mine.length && done ? 'done' : 'idle',
+          active_count: mine.length, done_today: done,
+          location: null,
+          route: { stops: plan.stops.map(({ id, step, lat, lng }) => ({ id, step, lat, lng })), total_km: plan.total_km },
+        };
+      }),
     });
   } catch (err) {
     next(err);

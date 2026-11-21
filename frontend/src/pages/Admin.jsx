@@ -23,7 +23,7 @@ import OrdersExportButton from '../components/OrdersExportButton.jsx';
 import OrdersTable from '../components/OrdersTable.jsx';
 import OrderReturnForm from '../components/OrderReturnForm.jsx';
 import BusinessUpdate from '../components/BusinessUpdate.jsx';
-import RouteSuggestions from '../components/RouteSuggestions.jsx';
+import DispatchPanel from '../components/DispatchPanel.jsx';
 import OrderPrint from '../components/OrderPrint.jsx';
 import { ListSkeleton } from '../components/Skeleton.jsx';
 import useScrollTabs from '../components/useScrollTabs.js';
@@ -730,7 +730,7 @@ export default function Admin() {
                     </div>
                   )}
                   {canManageOrders && !transferOnly && (
-                    <RouteSuggestions shippers={shippers} onChanged={(message) => { notify(message); reload({ refreshProducts: false }); }} />
+                    <DispatchPanel shippers={shippers} onChanged={(message) => { notify(message); reload({ refreshProducts: false }); }} />
                   )}
                   <div className="filter-bar" aria-label="Lọc đơn theo trạng thái" ref={filterRef}>
                     {FILTERS.map(([value, label]) => {

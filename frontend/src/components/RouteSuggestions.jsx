@@ -3,7 +3,6 @@ import { api, DELIVERY_SLOT_LABEL, formatVND } from '../api';
 
 const km = (v) => (v == null ? '—' : `${String(v).replace('.', ',')} km`);
 const dayLabel = (day) => (day ? day.slice(5).split('-').reverse().join('/') : '');
-const OPEN_KEY = 'gao_routes_open';
 // Trang quản trị tải lại cả danh sách sau khi giao chuyến, nên nhớ lựa chọn để mở lại đúng như cũ.
 const readPref = (key, fallback) => { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } };
 const savePref = (key, value) => { try { localStorage.setItem(key, value); } catch { /* bỏ qua */ } };
@@ -41,7 +40,6 @@ function MapsLinks({ urls }) {
  * nhau thành chuyến, thứ tự đi rồi quay về kho ngắn nhất, giao cả chuyến cho một nhân viên giao bằng một nút.
  */
 export default function RouteSuggestions({ shippers, onChanged }) {
-  const [open, setOpen] = useState(() => readPref(OPEN_KEY, '0') === '1');
   const [radius, setRadiusState] = useState(() => (['1', '2', '3', '5'].includes(readPref('gao_routes_radius', '2')) ? readPref('gao_routes_radius', '2') : '2'));
   const [split, setSplitState] = useState(() => readPref('gao_routes_split', '1') !== '0');
   const setRadius = (v) => { setRadiusState(v); savePref('gao_routes_radius', v); };
@@ -66,9 +64,8 @@ export default function RouteSuggestions({ shippers, onChanged }) {
     }
   }, [radius, split]);
 
-  useEffect(() => { if (open) load(); }, [open, load]);
+  useEffect(() => { load(); }, [load]);
 
-  const toggle = () => { setOpen((v) => { savePref(OPEN_KEY, v ? '0' : '1'); return !v; }); };
 
   const assignTrip = async (trip, key) => {
     const shipperId = pick[key];
@@ -107,15 +104,10 @@ export default function RouteSuggestions({ shippers, onChanged }) {
   };
 
   const tripCount = data?.trips.length || 0;
+  // Nằm trong thẻ "Gợi ý gom chuyến" của Bản đồ điều phối (DispatchPanel), không còn khung riêng.
   return (
-    <section className={`route-panel${open ? ' open' : ''}`}>
-      <button type="button" className="route-toggle" aria-expanded={open} onClick={toggle}>
-        <span>🧭 Gợi ý gom đơn và lộ trình giao <small>tính từ Kho Bồ Sơn</small></span>
-        {open && data && <span className="route-badge">{tripCount} chuyến gợi ý</span>}
-        <span aria-hidden="true">{open ? '▴' : '▾'}</span>
-      </button>
-      {open && (
         <div className="route-body">
+          {data && <p className="route-hint"><b>{tripCount} chuyến gợi ý</b> cho các đơn chưa giao cho ai.</p>}
           <div className="route-controls">
             <label>Gom các đơn cách nhau tối đa
               <select className="input" value={radius} onChange={(e) => setRadius(e.target.value)}>
@@ -219,7 +211,5 @@ export default function RouteSuggestions({ shippers, onChanged }) {
             </>
           )}
         </div>
-      )}
-    </section>
   );
 }

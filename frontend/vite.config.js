@@ -1,6 +1,36 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// CSP máy dev (giống vercel.json, nới thêm script nội tuyến và WebSocket cho tải lại nóng).
+const DEV_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' https: data:",
+  "connect-src 'self' https: ws: wss:",
+  "font-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join('; ');
+// Trang quản trị được nạp Google Maps cho Bản đồ điều phối (21/11/2026) — giống luật "/quan-tri(.*)" trong vercel.json.
+const DEV_ADMIN_CSP = DEV_CSP
+  .replace("script-src 'self'", "script-src 'self' https://maps.googleapis.com https://maps.gstatic.com")
+  .replace("style-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com")
+  .replace("img-src 'self' https: data:", "img-src 'self' https: data: blob:")
+  .replace("font-src 'self'", "font-src 'self' https://fonts.gstatic.com")
+  + "; worker-src 'self' blob:; frame-src https://*.google.com";
+const adminCsp = (req, res, next) => {
+  if (/^\/quan-tri(\/|\?|$)/.test(req.url || '')) {
+    const writeHead = res.writeHead;
+    res.writeHead = function patched(...args) {
+      res.setHeader('Content-Security-Policy', DEV_ADMIN_CSP);
+      return writeHead.apply(this, args);
+    };
+  }
+  next();
+};
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const siteUrl = (env.VITE_SITE_URL || '').replace(/\/$/, '');
@@ -15,6 +45,11 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       react(),
+      {
+        name: 'gao-admin-maps-csp',
+        configureServer(server) { server.middlewares.use(adminCsp); },
+        configurePreviewServer(server) { server.middlewares.use(adminCsp); },
+      },
       {
         name: 'gao-kinh-bac-social-preview',
         transformIndexHtml(html) {
@@ -42,19 +77,7 @@ export default defineConfig(({ mode }) => {
       // không có CSP nên ô chọn ảnh dùng "blob:" chạy tốt ở đây mà hỏng khi lên
       // Vercel. Chỉ nới đúng những thứ máy chủ dev cần: script nội tuyến và
       // WebSocket cho tải lại nóng.
-      headers: {
-        'Content-Security-Policy': [
-          "default-src 'self'",
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-          "style-src 'self' 'unsafe-inline'",
-          "img-src 'self' https: data:",
-          "connect-src 'self' https: ws: wss:",
-          "font-src 'self'",
-          "object-src 'none'",
-          "base-uri 'self'",
-          "form-action 'self'",
-        ].join('; '),
-      },
+      headers: { 'Content-Security-Policy': DEV_CSP },
       proxy: {
         // Gọi /api/... từ frontend sẽ được chuyển sang backend cổng 4000
         '/api': 'http://localhost:4000',

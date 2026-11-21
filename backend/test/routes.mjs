@@ -95,10 +95,25 @@ try {
   check('Đơn của nhân viên có khoảng cách từ kho', mine.orders.every((o) => typeof o.distance_km === 'number'));
   check('Không lộ cột nội bộ geo_checked_at', !JSON.stringify(mine.orders).includes('geo_checked_at'));
   check('Lộ trình xuất phát từ kho khi chưa giao đơn nào', mine.route.started_from === 'warehouse' && !mine.route.from_code);
+  // Bản đồ điều phối (21/11/2026)
+  const disp = await call('/admin/dispatch', { token: accountant });
+  const dOrder = disp.data.orders?.find((o) => o.id === orders.A.id);
+  const dShip = disp.data.shippers?.find((s) => s.id === shipperId);
+  check('Bản đồ điều phối: kế toán xem được đơn đã xác nhận kèm toạ độ, tên, hàng hoá, khoảng cách', disp.status === 200 && dOrder?.located
+    && dOrder.lat === 21.18 && dOrder.customer_label === dOrder.receiver_name && dOrder.items.length === 1 && typeof dOrder.distance_km === 'number', short(dOrder));
+  check('Bản đồ điều phối: shipper có trạng thái, lộ trình và chỗ chờ vị trí thật (location)', dShip && ['delivering', 'idle', 'done'].includes(dShip.status)
+    && dShip.route.stops.length === ids.length && 'location' in dShip && dShip.location === null, short(dShip));
+  check('Bản đồ điều phối không lộ giá vốn', !/cost_price/.test(JSON.stringify(disp.data)));
+  check('Nhân viên giao không mở được bản đồ điều phối (403); chưa đăng nhập (401)', (await call('/admin/dispatch', { token: shipper })).status === 403
+    && (await call('/admin/dispatch')).status === 401);
   const firstId = mine.route.stops[0].id;
   const go = await call(`/delivery/orders/${firstId}/status`, { method: 'PATCH', token: shipper, body: { status: 'shipping' } });
   const still = (await call('/delivery/orders', { token: shipper })).data;
   check('Bắt đầu giao một đơn: lộ trình vẫn đủ điểm', go.status === 200 && still.route.stops.length === ids.length, short(go.data));
+  const disp2 = (await call('/admin/dispatch', { token: owner })).data;
+  check('Shipper bấm "Bắt đầu giao" → bản đồ điều phối báo đang giao', disp2.shippers.find((s) => s.id === shipperId)?.status === 'delivering'
+    && disp2.orders.find((o) => o.id === firstId)?.status === 'shipping');
+  check('Đơn chờ xác nhận / đã huỷ không hiện trên bản đồ điều phối', disp2.orders.every((o) => ['confirmed', 'shipping'].includes(o.status)));
 } finally {
   await app.close();
 }

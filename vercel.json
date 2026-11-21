@@ -34,6 +34,15 @@
       ]
     },
     {
+      "source": "/quan-tri(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' https://maps.googleapis.com https://maps.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' https: data: blob:; connect-src 'self' https: data: blob:; font-src 'self' https://fonts.gstatic.com; worker-src 'self' blob:; frame-src https://*.google.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+        }
+      ]
+    },
+    {
       "source": "/sw.js",
       "headers": [
         {

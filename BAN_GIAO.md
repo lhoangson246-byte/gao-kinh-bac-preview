@@ -1856,6 +1856,16 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
 - Quy định: chấm công vào cuối ngày. Bảng mở lúc 17h00 và đóng lúc 24h00 cùng ngày (giờ Việt Nam); kế toán / quản lý chỉ chấm và sửa được công của chính ngày hôm đó trong khung này, quá hạn máy chủ từ chối (403). Chủ cửa hàng vẫn sửa được ngày cũ để đính chính (có nhật ký).
 - Kiểm thử đặt giờ giả bằng biến `ATTENDANCE_TEST_NOW=HH:MM` (chỉ dùng trong `backend/test/attendance.mjs`, 37 mục).
 
+## 21/11/2026 — Bản đồ điều phối & giám sát giao hàng
+
+- Trang Đơn hàng → khung "Bản đồ điều phối & giám sát giao hàng" (quyền orders.manage: chủ cửa hàng, kế toán, quản lý) có hai thẻ: "Bản đồ trực tiếp" và "Gợi ý gom chuyến" (phần gom đơn cũ).
+- Bản đồ nhúng trong trang (`<div id="map">`), dùng Google Maps JavaScript API. Khoá điền ở MỘT chỗ: `frontend/src/mapConfig.js` (`YOUR_GOOGLE_MAPS_API_KEY`), hoặc biến môi trường Vercel `VITE_GOOGLE_MAPS_API_KEY` rồi Redeploy. Nên giới hạn khoá theo tên miền gaokinhbac.com. Google Maps tính phí theo lượt mở bản đồ khi vượt hạn mức miễn phí của Google.
+- Chưa có khoá / khoá sai / bị chặn → tự chuyển "Chế độ mô phỏng": bản đồ sơ đồ vẽ trong trang (lưới, vòng 1–2–5–10 km quanh kho, kéo / phóng to), đủ mọi chức năng.
+- Ghim mọi đơn giao tận nơi Đã xác nhận / Đang giao (không tính chờ xác nhận, hoàn thành, huỷ): nhãn tên khách (khách buôn hiện tên công ty), di chuột xem địa chỉ, bấm xem chi tiết (mã đơn, khách, địa chỉ, hàng, trạng thái, khoảng cách, 3 shipper gần nhất) và giao đơn cho shipper ngay tại đó.
+- Shipper: ảnh đại diện (chữ viết tắt khi chưa có ảnh) + tên; huy hiệu ✕ đỏ = đang giao (có đơn đã bấm "Bắt đầu giao"), ✓ xanh = hôm nay đã giao xong hết. Vị trí đang MÔ PHỎNG theo lộ trình (kho → các đơn → về kho), có Chạy / Dừng, tốc độ tua, nút thử đổi trạng thái. Chưa có GPS thật: máy chủ trả `location: null` cho mỗi shipper; khi có nguồn vị trí thì điền trường này hoặc gọi `applyShipperUpdate` (`frontend/src/dispatch/fleet.js`).
+- API: `GET /api/admin/dispatch`. Kiểm thử trong `test:routes` (30 mục).
+- CSP: chỉ đường dẫn `/quan-tri(.*)` (vercel.json, và vite.config.js cho máy dev) được nạp script từ maps.googleapis.com / maps.gstatic.com; trang khách giữ `script-src 'self'`. Vào quản trị bằng cách bấm từ trang đăng nhập (chuyển trang trong ứng dụng) thì trang vẫn mang CSP cũ → bản đồ báo không tải được và có nút "Tải lại trang".
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

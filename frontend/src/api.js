@@ -162,6 +162,8 @@ export const api = {
   deliveryOrders: () => request('/delivery/orders', { auth: true }),
   /** Gom đơn và lộ trình giao từ Kho Bồ Sơn (20/11/2026). */
   adminRoutes: ({ radius = '2', split = true } = {}) => request(`/admin/routes?${new URLSearchParams({ radius: String(radius), split: split ? '1' : '0' })}`, { auth: true }),
+  /** Bản đồ điều phối: đơn đã xác nhận / đang giao + shipper (21/11/2026). */
+  adminDispatch: () => request('/admin/dispatch', { auth: true }),
   adminAssignTrip: (orderIds, shipperId) => request('/admin/routes/assign', { method: 'POST', auth: true, body: { order_ids: orderIds, shipper_id: shipperId } }),
   adminSetOrderLocation: (orderId, mapUrl) => request(`/admin/orders/${orderId}/location`, { method: 'PATCH', auth: true, body: { map_url: mapUrl } }),
   /** Tìm khách / địa chỉ để chỉ đường, kể cả khách không có đơn giao cho mình. */
