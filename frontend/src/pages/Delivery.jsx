@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, DELIVERY_SLOT_LABEL, formatDateTime, formatVND, mapLink } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -11,6 +11,18 @@ import { ListSkeleton } from '../components/Skeleton.jsx';
 const REFRESH_MS = 30_000;
 const formatPhone = (phone) => String(phone || '').replace(/^(\d{4})(\d{3})(\d{3})$/, '$1 $2 $3');
 const km = (v) => `${String(v).replace('.', ',')} km`;
+// Chia sẻ vị trí thật (21/11/2026): gửi khi đã đi ≥ 40 m hoặc sau 20 giây, để bản đồ điều phối thấy mà không tốn pin / mạng.
+const GPS_PREF = 'gao_gps_share';
+const GPS_MIN_MS = 20_000;
+const GPS_MIN_M = 40;
+const readPref = (key, fallback) => { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } };
+const savePref = (key, value) => { try { localStorage.setItem(key, value); } catch { /* bỏ qua */ } };
+const metersBetween = (a, b) => {
+  const r = (d) => (d * Math.PI) / 180;
+  const h = Math.sin(r(b.lat - a.lat) / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(r(b.lng - a.lng) / 2) ** 2;
+  return 2 * 6371008.8 * Math.asin(Math.min(1, Math.sqrt(h)));
+};
+const clock = (t) => new Date(t).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 const directions = (order) => order.map_url || mapLink(order.delivery_lat, order.delivery_lng)
   || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.address)}`;
 
@@ -35,6 +47,11 @@ export default function Delivery() {
     // Đổi cách trả thì ảnh cần chụp cũng khác: bỏ ảnh đã chụp để chụp lại cho đúng.
     setPhotos((cur) => { const next = { ...cur }; delete next[order.id]; return next; });
   };
+  // Chia sẻ vị trí GPS cho bản đồ điều phối của kế toán / quản lý (mặc định bật; nhân viên tắt được).
+  const [gpsOn, setGpsOn] = useState(() => readPref(GPS_PREF, '1') === '1');
+  const [gps, setGps] = useState({ state: 'idle', at: null, error: '' });   // idle | asking | on | error
+  const [gpsTry, setGpsTry] = useState(0);
+  const lastSent = useRef(null);
   const [debtForms, setDebtForms] = useState({});   // { orderId: { delivered, invoice, company, comment, errors } }
   const setDebt = (orderId, patch) => setDebtForms((cur) => ({ ...cur, [orderId]: { ...cur[orderId], ...patch } }));
 
@@ -100,6 +117,36 @@ export default function Delivery() {
   const active = (orders || []).filter((o) => ['confirmed', 'shipping'].includes(o.status))
     .sort((a, b) => (stepOf.get(a.id)?.step ?? 999) - (stepOf.get(b.id)?.step ?? 999));
   const finished = (orders || []).filter((o) => !['confirmed', 'shipping'].includes(o.status));
+  // Có đơn cần giao và đang bật chia sẻ thì theo dõi vị trí (trình duyệt hỏi quyền "Vị trí" lần đầu).
+  const needGps = active.some((o) => o.fulfillment !== 'pickup');
+  useEffect(() => {
+    if (!gpsOn || !needGps) return undefined;
+    if (!('geolocation' in navigator)) { setGps({ state: 'error', at: null, error: 'Điện thoại / trình duyệt này không hỗ trợ định vị.' }); return undefined; }
+    setGps((g) => (g.state === 'on' ? g : { ...g, state: 'asking', error: '' }));
+    const watchId = navigator.geolocation.watchPosition((pos) => {
+      const here = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      const last = lastSent.current;
+      const now = Date.now();
+      if (last && now - last.t < GPS_MIN_MS && metersBetween(last, here) < GPS_MIN_M) { setGps((g) => ({ ...g, state: 'on' })); return; }
+      lastSent.current = { ...here, t: now };
+      api.deliveryLocation(here.lat, here.lng, Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null)
+        .then(() => setGps({ state: 'on', at: now, error: '' }))
+        .catch((err) => { lastSent.current = null; setGps({ state: 'error', at: null, error: err.message }); });
+    }, (err) => {
+      setGps({ state: 'error', at: null, error: err.code === 1
+        ? 'Bạn chưa cho phép định vị. Vào cài đặt trình duyệt → Quyền "Vị trí" → Cho phép trang này, rồi bấm "Thử lại".'
+        : 'Chưa lấy được vị trí. Bật GPS (Vị trí) trên điện thoại hoặc ra chỗ thoáng rồi bấm "Thử lại".' });
+    }, { enableHighAccuracy: true, maximumAge: 10_000, timeout: 30_000 });
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [gpsOn, needGps, gpsTry]);
+  const toggleGps = () => {
+    const next = !gpsOn;
+    setGpsOn(next);
+    savePref(GPS_PREF, next ? '1' : '0');
+    lastSent.current = null;
+    if (!next) { setGps({ state: 'idle', at: null, error: '' }); api.deliveryStopLocation().catch(() => {}); }
+  };
+
   const toCollect = active.filter((o) => o.payment_method === 'cod').reduce((sum, o) => sum + o.total, 0);
   const collected = finished.filter((o) => o.status === 'completed' && o.payment_status !== 'debt' && o.payment_method === 'cod')
     .reduce((sum, o) => sum + o.total, 0);
@@ -118,6 +165,18 @@ export default function Delivery() {
 
       <main className="delivery-main">
         <CustomerFinder />
+        {needGps && (
+          <div className={`delivery-gps${gpsOn ? (gps.state === 'error' ? ' error' : ' on') : ''}`} role="status">
+            <p>
+              {!gpsOn ? <>📍 Đang <b>tắt</b> chia sẻ vị trí. Bật để kế toán thấy bạn đang ở đâu trên bản đồ và giao đơn gần bạn nhất.</>
+                : gps.state === 'on' ? <>📡 Đang chia sẻ vị trí với cửa hàng{gps.at ? ` · gửi lúc ${clock(gps.at)}` : ''}. Chỉ gửi khi đang có đơn giao.</>
+                  : gps.state === 'error' ? <>⚠️ {gps.error}</>
+                    : <>📡 Đang bật định vị… Điện thoại hỏi quyền <b>Vị trí</b> thì bấm <b>Cho phép</b>.</>}
+            </p>
+            {gpsOn && gps.state === 'error' && <button type="button" className="btn btn-primary" onClick={() => { lastSent.current = null; setGpsTry((n) => n + 1); }}>Thử lại</button>}
+            <button type="button" className={`btn ${gpsOn ? 'btn-secondary' : 'btn-primary'}`} onClick={toggleGps}>{gpsOn ? 'Tắt chia sẻ' : '📡 Bật chia sẻ vị trí'}</button>
+          </div>
+        )}
         <div className="delivery-summary">
           <div><strong>{active.length}</strong><span>đơn cần giao</span></div>
           <div><strong>{formatVND(toCollect)}</strong><span>tiền mặt cần thu</span></div>

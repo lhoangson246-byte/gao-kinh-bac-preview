@@ -88,6 +88,30 @@ router.get('/orders', async (req, res, next) => {
 });
 
 /**
+ * Vị trí thật từ điện thoại (21/11/2026). Trang Giao hàng gửi vị trí GPS (navigator.geolocation.watchPosition)
+ * khi nhân viên BẬT "Chia sẻ vị trí" và đang có đơn giao; bản đồ điều phối của kế toán / quản lý hiện đúng chỗ
+ * nhân viên đang đứng. Chỉ lưu vị trí mới nhất (ghi đè), không lưu lịch sử đường đi.
+ *  POST   /location { latitude, longitude, accuracy? } — cập nhật vị trí;
+ *  DELETE /location — nhân viên tắt chia sẻ: xoá vị trí, bản đồ quay về mô phỏng.
+ */
+router.post('/location', (req, res) => {
+  const { latitude, longitude } = req.body;
+  const accuracy = Number.isFinite(req.body.accuracy) ? Math.round(req.body.accuracy) : null;
+  // Toạ độ lấy 6 chữ số thập phân (≈ 10 cm) là đủ.
+  const lat = Math.round(latitude * 1e6) / 1e6;
+  const lng = Math.round(longitude * 1e6) / 1e6;
+  db.prepare(`
+    INSERT INTO shipper_locations (user_id, lat, lng, accuracy, updated_at) VALUES (?, ?, ?, ?, datetime('now'))
+    ON CONFLICT (user_id) DO UPDATE SET lat = excluded.lat, lng = excluded.lng, accuracy = excluded.accuracy, updated_at = excluded.updated_at
+  `).run(req.user.id, lat, lng, accuracy);
+  res.json({ ok: true, lat, lng });
+});
+router.delete('/location', (req, res) => {
+  db.prepare('DELETE FROM shipper_locations WHERE user_id = ?').run(req.user.id);
+  res.json({ ok: true });
+});
+
+/**
  * PATCH /orders/:id/status — body: { status: 'shipping' | 'completed', photo?, paid_by?: 'cash' | 'transfer' }
  *
  * Giao xong (19/11/2026): nhân viên chọn khách trả bằng gì.

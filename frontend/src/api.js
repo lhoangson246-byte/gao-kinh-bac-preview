@@ -162,6 +162,9 @@ export const api = {
   inventoryCount: (body) => request('/admin/inventory/count', { method: 'POST', body, auth: true }),
   adminAssignShipper: (orderId, shipperId) => request(`/admin/orders/${orderId}/shipper`, { method: 'PATCH', auth: true, body: { shipper_id: shipperId } }),
   deliveryOrders: () => request('/delivery/orders', { auth: true }),
+  /** Vị trí thật từ điện thoại nhân viên giao (21/11/2026). */
+  deliveryLocation: (latitude, longitude, accuracy) => request('/delivery/location', { method: 'POST', auth: true, body: { latitude, longitude, accuracy } }),
+  deliveryStopLocation: () => request('/delivery/location', { method: 'DELETE', auth: true }),
   /** Gom đơn và lộ trình giao từ Kho Bồ Sơn (20/11/2026). */
   adminRoutes: ({ radius = '2', split = true } = {}) => request(`/admin/routes?${new URLSearchParams({ radius: String(radius), split: split ? '1' : '0' })}`, { auth: true }),
   /** Bản đồ điều phối: đơn đã xác nhận / đang giao + shipper (21/11/2026). */

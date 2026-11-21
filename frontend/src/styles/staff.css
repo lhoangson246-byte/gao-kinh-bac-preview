@@ -542,3 +542,14 @@ tr.ws-open td { background: var(--green-100); }
   .dispatch-stats { margin-left: 0; }
 }
 @media (max-width: 560px) { .dispatch { padding: 10px; } .dispatch-tabs { padding: 8px 10px 0; } .dispatch-tabs button { padding: 7px 10px; font-size: .85rem; } }
+
+/* Ghim đơn chưa có người giao: lửa cháy; chia sẻ vị trí của nhân viên giao (21/11/2026) */
+.dpin-fire { margin-top: 1px; font-size: 1.35rem; line-height: 1; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .35)); animation: dpin-flicker 1.2s ease-in-out infinite; }
+@keyframes dpin-flicker { 50% { transform: scale(1.15) translateY(-1px); } }
+@media (prefers-reduced-motion: reduce) { .dpin-fire { animation: none; } }
+.delivery-gps { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: #fff; }
+.delivery-gps.on { border-color: #2e9d4f; background: #eef8f0; }
+.delivery-gps.error { border-color: #d9a13a; background: #fff8e6; }
+.delivery-gps p { flex: 1 1 200px; margin: 0; font-size: .88rem; }
+.delivery-gps .btn { flex: none; }
+.business-maps-key { display: flex; flex-direction: column; gap: 4px; max-width: 520px; margin: 8px 0; font-weight: 700; font-size: .86rem; }

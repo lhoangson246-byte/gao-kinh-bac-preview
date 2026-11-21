@@ -55,6 +55,17 @@ try {
   check('Ngày sai dạng (400)', await bad({ kind: 'holiday', title: 'Lễ', start: '2026-13-01', end: day(3) }) === 400);
   const cleared = await call('/admin/settings/business', { method: 'PUT', token: owner, body: { notices: [] } });
   check('Xoá hết thông báo: trang khách hết dải thông báo', cleared.status === 200 && (await call('/settings/storefront')).data.settings.notices.length === 0);
+  // Khoá Google Maps cho bản đồ điều phối (21/11/2026)
+  const KEY = 'AIzaSyA1234567890abcdefghijklmnopqrstuv';
+  check('Khoá Google Maps sai dạng bị từ chối (400)', (await call('/admin/settings/business', { method: 'PUT', token: owner, body: { maps_api_key: 'abc' } })).status === 400);
+  const mk = await call('/admin/settings/business', { method: 'PUT', token: owner, body: { maps_api_key: KEY } });
+  check('Chủ cửa hàng lưu khoá Google Maps', mk.status === 200 && mk.data.maps_api_key === KEY, short(mk.data));
+  check('Bản đồ điều phối nhận khoá Google Maps', (await call('/admin/dispatch', { token: owner })).data.maps_key === KEY);
+  check('Trang khách không lộ khoá Google Maps', !JSON.stringify((await call('/settings/storefront')).data).includes(KEY));
+  check('Nhân viên không sửa được khoá Google Maps (403)', (await call('/admin/settings/business', { method: 'PUT', token: staff, body: { maps_api_key: '' } })).status === 403);
+  const actLog = JSON.stringify((await call('/admin/activity?limit=5', { token: owner })).data);
+  check('Nhật ký chỉ ghi 4 ký tự cuối của khoá', !actLog.includes(KEY) && actLog.includes(KEY.slice(-4)));
+  check('Xoá khoá Google Maps', (await call('/admin/settings/business', { method: 'PUT', token: owner, body: { maps_api_key: '' } })).data.maps_api_key === '');
   const log = (await call('/admin/activity?limit=5', { token: owner })).data;
   check('Nhật ký ghi lại thay đổi', JSON.stringify(log).includes('business_info'), short(log).slice(0, 200));
 } finally {

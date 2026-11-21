@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api, DELIVERY_SLOT_LABEL, formatVND } from '../api';
-import { hasGoogleMapsKey } from '../mapConfig.js';
-import { createHtmlMarkerClass, loadGoogleMaps, onMapsAuthFailure } from '../dispatch/googleMaps.js';
+import { createHtmlMarkerClass, effectiveMapsKey, loadGoogleMaps, onMapsAuthFailure } from '../dispatch/googleMaps.js';
 import { applyShipperUpdate, createFleet, haversineKm, mergeFleet, nearestShippers, setShipperStatus, tickFleet } from '../dispatch/fleet.js';
 
 /*
@@ -17,7 +16,7 @@ import { applyShipperUpdate, createFleet, haversineKm, mergeFleet, nearestShippe
 
 const TICK_MS = 250;              // nhịp cập nhật vị trí (mượt)
 const BASE_KMH = 25;              // vận tốc xe máy trung bình trong phố
-const REFRESH_MS = 30_000;        // tự tải lại đơn / shipper từ máy chủ
+const REFRESH_MS = 15_000;        // tự tải lại đơn / shipper (kèm vị trí thật từ điện thoại) từ máy chủ
 const SPEEDS = [1, 10, 30, 60];
 const STATUS_LABEL = { confirmed: 'Chờ giao', shipping: 'Đang giao' };
 const SHIPPER_STATUS = { delivering: 'Đang giao hàng', done: 'Đã giao xong', idle: 'Chưa bắt đầu' };
@@ -37,7 +36,8 @@ function OrderPin({ order, active, onSelect }) {
             onClick={(e) => { e.stopPropagation(); onSelect({ kind: 'order', id: order.id }); }}
             aria-label={`Đơn ${order.code} · ${order.customer_label} · ${order.address}`}>
       <span className="dpin-label">{order.wholesale ? '🏢 ' : ''}{order.customer_label}</span>
-      <span className="dpin-dot" aria-hidden="true" />
+      {/* Chưa có người giao: icon lửa cháy cho kế toán thấy ngay đơn cần phân công */}
+      {order.shipper_id ? <span className="dpin-dot" aria-hidden="true" /> : <span className="dpin-fire" aria-hidden="true">🔥</span>}
       {/* Di chuột vào ghim thì hiện địa chỉ chi tiết */}
       <span className="dpin-tip" role="tooltip"><b>{order.code}</b> · {order.address}</span>
     </button>
@@ -55,7 +55,7 @@ function ShipperPin({ shipper, active, onSelect }) {
         {shipper.status === 'delivering' && <span className="dship-badge delivering" title="Đang giao hàng">✕</span>}
         {shipper.status === 'done' && <span className="dship-badge done" title="Đã giao xong">✓</span>}
       </span>
-      <span className="dship-name">🛵 {shipper.full_name}</span>
+      <span className="dship-name">{shipper.source === 'live' ? '📡' : '🛵'} {shipper.full_name}</span>
     </button>
   );
 }
@@ -269,7 +269,7 @@ export default function DispatchMap({ shippers: shipperOptions = [] }) {
   const [playing, setPlaying] = useState(true);
   const [speed, setSpeedState] = useState(() => Number(readPref('gao_dispatch_speed', '30')) || 30);
   const setSpeed = (v) => { setSpeedState(v); savePref('gao_dispatch_speed', String(v)); };
-  const [mode, setMode] = useState(hasGoogleMapsKey() ? 'loading' : 'sim');   // 'loading' | 'google' | 'sim'
+  const [mode, setMode] = useState('sim');   // 'loading' | 'google' | 'sim' — biết khoá sau khi tải dữ liệu
   const [maps, setMaps] = useState(null);
   const [mapNote, setMapNote] = useState('');
   const [selected, setSelected] = useState(null);   // { kind: 'order' | 'shipper', id }
@@ -294,15 +294,17 @@ export default function DispatchMap({ shippers: shipperOptions = [] }) {
     return () => window.clearInterval(timer);
   }, [load]);
 
-  // Nạp Google Maps khi đã có khoá; lỗi thì dùng bản đồ mô phỏng.
+  // Nạp Google Maps khi đã có khoá (chủ cửa hàng dán ở CẬP NHẬT, hoặc khoá lúc build); lỗi thì dùng bản đồ mô phỏng.
+  const mapsKey = data ? effectiveMapsKey(data.maps_key) : '';
   useEffect(() => {
-    if (!hasGoogleMapsKey()) return undefined;
+    if (!mapsKey) return undefined;
     let alive = true;
-    loadGoogleMaps().then((m) => { if (alive) { setMaps(m); setMode('google'); } })
+    setMode('loading');
+    loadGoogleMaps({ key: mapsKey }).then((m) => { if (alive) { setMaps(m); setMode('google'); setMapNote(''); } })
       .catch((err) => { if (alive) { setMapNote(err.message); setMode('sim'); } });
     const off = onMapsAuthFailure((message) => { if (alive) { setMapNote(message); setMode('sim'); } });
     return () => { alive = false; off(); };
-  }, []);
+  }, [mapsKey]);
 
   // Nhịp mô phỏng shipper di chuyển.
   useEffect(() => {
@@ -368,14 +370,14 @@ export default function DispatchMap({ shippers: shipperOptions = [] }) {
       {mode === 'sim' && (
         <p className="dispatch-note">
           {mapNote ? <>⚠️ {mapNote} </> : <>Chưa điền khoá Google Maps nên đang dùng <b>bản đồ mô phỏng</b> (vẫn đúng vị trí và khoảng cách). </>}
-          Điền khoá ở biến môi trường <code>VITE_GOOGLE_MAPS_API_KEY</code> trên Vercel hoặc thay <code>YOUR_GOOGLE_MAPS_API_KEY</code> trong <code>frontend/src/mapConfig.js</code>.
+          Chủ cửa hàng dán khoá ở <b>Quản trị → CẬP NHẬT → Khoá Google Maps</b> (hoặc biến môi trường <code>VITE_GOOGLE_MAPS_API_KEY</code> / <code>YOUR_GOOGLE_MAPS_API_KEY</code> trong <code>frontend/src/mapConfig.js</code>).
           {mapNote && <> <button type="button" className="link-button" onClick={() => window.location.reload()}>Tải lại trang</button></>}
         </p>
       )}
       <p className="dispatch-legend">
         <span><i className="lg-pin confirmed" /> Chờ giao</span><span><i className="lg-pin shipping" /> Đang giao</span>
-        <span><i className="lg-pin open" /> Chưa có người giao</span><span><b className="lg-x">✕</b> Shipper đang giao</span><span><b className="lg-ok">✓</b> Shipper đã giao xong</span>
-        <span className="muted">Vị trí shipper đang mô phỏng theo lộ trình (chưa nối GPS điện thoại).</span>
+        <span>🔥 Chưa có người giao</span><span><b className="lg-x">✕</b> Shipper đang giao</span><span><b className="lg-ok">✓</b> Shipper đã giao xong</span>
+        <span>📡 Vị trí thật từ điện thoại</span><span>🛵 Vị trí mô phỏng (shipper chưa bật chia sẻ vị trí)</span>
       </p>
 
       <div className="dispatch-layout">
@@ -431,7 +433,7 @@ export default function DispatchMap({ shippers: shipperOptions = [] }) {
                   <h3>🛵 {shipper.full_name}</h3>
                   <p>Trạng thái: <b className={`dship-status ${shipper.status}`}>{shipper.status === 'delivering' ? '✕ ' : shipper.status === 'done' ? '✓ ' : ''}{SHIPPER_STATUS[shipper.status]}</b></p>
                   <p>Đang giữ {shipper.active_count} đơn · đã giao xong hôm nay {shipper.done_today} đơn</p>
-                  <p className="muted">{shipper.source === 'live' ? 'Vị trí thật từ điện thoại.' : shipper.demo ? 'Shipper mô phỏng để thử giao diện (chưa có tài khoản giao hàng).' : 'Vị trí đang mô phỏng theo lộ trình.'}</p>
+                  <p className="muted">{shipper.source === 'live' ? `📡 Vị trí thật từ điện thoại${shipper.live_at ? ` · cập nhật ${shipper.live_at}` : ''}${shipper.accuracy ? ` · sai số ~${shipper.accuracy} m` : ''}.` : shipper.demo ? 'Shipper mô phỏng để thử giao diện (chưa có tài khoản giao hàng).' : 'Vị trí đang mô phỏng theo lộ trình.'}</p>
                   {shipper.orderIds.length > 0 && (
                     <ol className="dispatch-items">{shipper.orderIds.map((id) => { const o = orders.find((x) => x.id === id); return o ? <li key={id}>{o.code} · {o.customer_label}</li> : null; })}</ol>
                   )}
@@ -458,7 +460,7 @@ export default function DispatchMap({ shippers: shipperOptions = [] }) {
                     {s.status === 'delivering' && <span className="dship-badge delivering">✕</span>}
                     {s.status === 'done' && <span className="dship-badge done">✓</span>}
                   </span>
-                  <span><b>{s.full_name}</b><small>{SHIPPER_STATUS[s.status]} · {s.active_count} đơn</small></span>
+                  <span><b>{s.source === 'live' ? '📡 ' : ''}{s.full_name}</b><small>{SHIPPER_STATUS[s.status]} · {s.active_count} đơn{s.source === 'live' ? ' · vị trí thật' : ''}</small></span>
                 </button>
               </li>
             ))}

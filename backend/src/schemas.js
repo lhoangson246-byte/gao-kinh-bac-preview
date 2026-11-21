@@ -203,6 +203,7 @@ add('admin', 'PUT', /^\/settings\/business\/?$/, obj({
     reopen: z.string().max(10).nullable().optional(), show_from: z.string().max(10).nullable().optional(), note: z.string().max(400).optional(),
   })).max(20).optional(),
   bank_qr_url: z.string().max(LIMITS.imageUrl).nullable().optional(),
+  maps_api_key: z.string().max(100).nullable().optional(),
 }));
 add('admin', 'POST', /^\/orders\/[^/]+\/returns\/?$/, obj({
   return_type: z.enum(['return', 'exchange']), reason: text(LIMITS.note), note,
@@ -297,6 +298,12 @@ add('staff', 'PATCH', /^\/[^/]+\/lock\/?$/, obj({ is_locked: flag }));
 add('staff', 'POST', /^\/[^/]+\/reset-password\/?$/, obj({ password: newPassword }));
 // Nhân viên giao hàng: chỉ hai bước của chính mình.
 add('delivery', 'GET', /^\/orders\/?$/);
+// Vị trí thật từ điện thoại nhân viên giao (21/11/2026).
+add('delivery', 'POST', /^\/location\/?$/, obj({
+  latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180),
+  accuracy: z.number().min(0).max(100000).nullable().optional(),
+}));
+add('delivery', 'DELETE', /^\/location\/?$/);
 add('delivery', 'GET', /^\/search\/?$/, empty, obj({ q: z.string().max(80) }));
 add('delivery', 'PATCH', /^\/orders\/[^/]+\/status\/?$/, obj({ status: z.enum(['shipping', 'completed']), photo: z.string().max(40).optional(), paid_by: z.enum(['cash', 'transfer']).optional() }));
 add('delivery', 'POST', /^\/orders\/[^/]+\/debt\/?$/, obj({

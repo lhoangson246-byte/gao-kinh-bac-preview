@@ -110,6 +110,17 @@ try {
   const go = await call(`/delivery/orders/${firstId}/status`, { method: 'PATCH', token: shipper, body: { status: 'shipping' } });
   const still = (await call('/delivery/orders', { token: shipper })).data;
   check('Bắt đầu giao một đơn: lộ trình vẫn đủ điểm', go.status === 200 && still.route.stops.length === ids.length, short(go.data));
+  // Vị trí thật từ điện thoại nhân viên giao (21/11/2026)
+  const sent = await call('/delivery/location', { method: 'POST', token: shipper, body: { latitude: 21.1712345, longitude: 106.0654321, accuracy: 12.4 } });
+  const withLive = (await call('/admin/dispatch', { token: accountant })).data.shippers.find((s) => s.id === shipperId);
+  check('Nhân viên giao gửi vị trí GPS → bản đồ điều phối có vị trí thật', sent.status === 200 && withLive?.location?.lat === 21.171235
+    && withLive.location.lng === 106.065432 && withLive.location.accuracy === 12 && !!withLive.location.at, JSON.stringify(withLive?.location));
+  check('Toạ độ sai bị từ chối (400)', (await call('/delivery/location', { method: 'POST', token: shipper, body: { latitude: 200, longitude: 106 } })).status === 400
+    && (await call('/delivery/location', { method: 'POST', token: shipper, body: { latitude: '21.1', longitude: 106 } })).status === 400);
+  check('Kế toán / khách không gửi vị trí giao hàng được (403)', (await call('/delivery/location', { method: 'POST', token: accountant, body: { latitude: 21.1, longitude: 106 } })).status === 403);
+  const stopped = await call('/delivery/location', { method: 'DELETE', token: shipper });
+  check('Tắt chia sẻ vị trí → bản đồ quay về mô phỏng (location null)', stopped.status === 200
+    && (await call('/admin/dispatch', { token: accountant })).data.shippers.find((s) => s.id === shipperId)?.location === null);
   const disp2 = (await call('/admin/dispatch', { token: owner })).data;
   check('Shipper bấm "Bắt đầu giao" → bản đồ điều phối báo đang giao', disp2.shippers.find((s) => s.id === shipperId)?.status === 'delivering'
     && disp2.orders.find((o) => o.id === firstId)?.status === 'shipping');

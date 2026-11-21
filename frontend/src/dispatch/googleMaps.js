@@ -13,8 +13,12 @@ export function onMapsAuthFailure(callback) {
   return () => authListeners.delete(callback);
 }
 
-export function loadGoogleMaps({ timeoutMs = 12000 } = {}) {
-  if (!hasGoogleMapsKey()) return Promise.reject(new Error('Chưa điền khoá Google Maps (YOUR_GOOGLE_MAPS_API_KEY).'));
+/** Khoá dùng: khoá chủ cửa hàng dán ở Quản trị → CẬP NHẬT (máy chủ gửi kèm), không có thì khoá lúc build. */
+export const effectiveMapsKey = (runtimeKey) => (runtimeKey || (hasGoogleMapsKey() ? GOOGLE_MAPS_API_KEY : ''));
+
+export function loadGoogleMaps({ key: runtimeKey, timeoutMs = 12000 } = {}) {
+  const key = effectiveMapsKey(runtimeKey);
+  if (!key) return Promise.reject(new Error('Chưa điền khoá Google Maps (YOUR_GOOGLE_MAPS_API_KEY).'));
   if (window.google?.maps?.OverlayView) return Promise.resolve(window.google.maps);
   if (loading) return loading;
   loading = new Promise((resolve, reject) => {
@@ -34,7 +38,7 @@ export function loadGoogleMaps({ timeoutMs = 12000 } = {}) {
       resolve(window.google.maps);
     };
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}&v=weekly&language=vi&region=VN&loading=async&callback=${callback}`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&language=vi&region=VN&loading=async&callback=${callback}`;
     script.async = true;
     script.onerror = () => { window.clearTimeout(timer); script.remove(); fail('Không tải được Google Maps (mất mạng hoặc trang chặn — thử tải lại trang).'); };
     document.head.appendChild(script);

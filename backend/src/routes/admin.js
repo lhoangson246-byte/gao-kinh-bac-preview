@@ -409,9 +409,15 @@ router.get('/dispatch', async (req, res, next) => {
       GROUP BY shipper_id
     `).all().map((r) => [r.shipper_id, r.n]));
     const point = (o) => orderPoint(o);
+    // Vị trí thật gửi từ điện thoại nhân viên giao trong 10 phút gần nhất (cũ hơn thì coi như chưa có).
+    const live = new Map(db.prepare(`
+      SELECT user_id, lat, lng, accuracy, updated_at FROM shipper_locations WHERE updated_at > datetime('now', '-10 minutes')
+    `).all().map((r) => [r.user_id, { lat: r.lat, lng: r.lng, accuracy: r.accuracy, at: r.updated_at }]));
     res.json({
       warehouse: WAREHOUSE,
       generated_at: new Date().toISOString(),
+      // Khoá Google Maps chủ cửa hàng dán ở Quản trị → CẬP NHẬT (khoá trình duyệt, giới hạn theo tên miền).
+      maps_key: mapsApiKey(),
       orders: orders.map((o) => {
         const p = point(o);
         return {
@@ -433,7 +439,7 @@ router.get('/dispatch', async (req, res, next) => {
           id: u.id, full_name: u.full_name, phone: u.phone, avatar_url: null,
           status: shipping ? 'delivering' : !mine.length && done ? 'done' : 'idle',
           active_count: mine.length, done_today: done,
-          location: null,
+          location: live.get(u.id) || null,
           route: { stops: plan.stops.map(({ id, step, lat, lng }) => ({ id, step, lat, lng })), total_km: plan.total_km },
         };
       }),
@@ -1179,10 +1185,17 @@ router.put('/settings/storefront', (req, res, next) => {
  *  PUT /api/admin/settings/business  ← { invoice?, notices?, bank_qr_url? } — chỉ phần được gửi mới đổi.
  */
 function businessSettings() {
-  const raw = Object.fromEntries(db.prepare("SELECT key, value FROM app_settings WHERE key IN ('shop_notices')").all().map((r) => [r.key, r.value]));
+  const raw = Object.fromEntries(db.prepare("SELECT key, value FROM app_settings WHERE key IN ('shop_notices', 'maps_api_key')").all().map((r) => [r.key, r.value]));
   const storefront = readStorefront();
-  return { invoice: storefront.invoice, bank_qr_url: storefront.bank_qr_url, notices: parseNotices(raw.shop_notices), active: storefront.notices };
+  return {
+    invoice: storefront.invoice, bank_qr_url: storefront.bank_qr_url, notices: parseNotices(raw.shop_notices), active: storefront.notices,
+    maps_api_key: raw.maps_api_key || '',
+  };
 }
+/** Khoá Google Maps cho Bản đồ điều phối (21/11/2026). Khoá trình duyệt dạng "AIza…" (39 ký tự). */
+const MAPS_KEY_RE = /^AIza[0-9A-Za-z_-]{35}$/;
+const maskKey = (s) => ({ ...s, maps_api_key: s.maps_api_key ? `…${s.maps_api_key.slice(-4)}` : '' });
+const mapsApiKey = () => db.prepare("SELECT value FROM app_settings WHERE key = 'maps_api_key'").get()?.value || '';
 router.get('/settings/business', (req, res) => res.json(businessSettings()));
 router.put('/settings/business', (req, res, next) => {
   try {
@@ -1196,6 +1209,13 @@ router.put('/settings/business', (req, res, next) => {
       if (raw && !url) throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', { bank_qr_url: 'Đường dẫn ảnh QR phải bắt đầu bằng https:// hoặc / (ảnh tải lên cửa hàng).' });
       updates.push(['bank_qr_url', url]);
     }
+    if (body.maps_api_key !== undefined) {
+      const key = String(body.maps_api_key || '').trim();
+      if (key && !MAPS_KEY_RE.test(key)) {
+        throw new HttpError(400, 'Khoá Google Maps chưa đúng.', { maps_api_key: 'Khoá Google Maps bắt đầu bằng "AIza" và dài 39 ký tự (chép ở Google Cloud → Credentials).' });
+      }
+      updates.push(['maps_api_key', key]);
+    }
     if (!updates.length) throw new HttpError(400, 'Không có thông tin nào để cập nhật.');
     const before = businessSettings();
     db.transaction(() => {
@@ -1206,7 +1226,7 @@ router.put('/settings/business', (req, res, next) => {
       for (const [key, value] of updates) upsert.run(key, value);
     })();
     const after = businessSettings();
-    writeAdminAudit(req, { action: 'update', entityType: 'business_info', entityId: null, before, after });
+    writeAdminAudit(req, { action: 'update', entityType: 'business_info', entityId: null, before: maskKey(before), after: maskKey(after) });
     res.json(after);
   } catch (err) {
     next(err);

@@ -1877,6 +1877,13 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
 - Mọi ngưỡng chỉnh bằng biến môi trường (REGISTER_LIMIT_PER_HOUR, TRACK_LIMIT_PER_15M, TRANSFER_PROOF_LIMIT_PER_15M, REGISTRATION_BREAKER_PER_5M, GUEST_PENDING_BREAKER_PER_10M, GUEST_SAME_CONTACT_PENDING, BCRYPT_CONCURRENCY, BCRYPT_QUEUE). Máy dev (NODE_ENV=development) dùng ngưỡng rộng; bộ kiểm thử đặt ngưỡng rộng trong fixture.mjs, security.mjs có bài đặt ngưỡng chặt để chứng minh bị chặn.
 - Bài kiểm thử: số điện thoại thử luôn có chữ số thứ ba là 6 (hợp lệ với mọi đầu số); `call()` trong fixture tự gửi X-CSRF-Protection (truyền `''` để bỏ).
 
+## 21/11/2026 — Khoá Google Maps trong CẬP NHẬT, vị trí GPS thật của nhân viên giao, ghim 🔥
+
+- Quản trị → CẬP NHẬT → "Khoá Google Maps": chủ cửa hàng dán khoá trình duyệt (AIza…, 39 ký tự) — lưu ở app_settings `maps_api_key`, gửi kèm `GET /api/admin/dispatch` (`maps_key`, chỉ người có orders.manage). Không cần Redeploy. Khoá build `VITE_GOOGLE_MAPS_API_KEY` vẫn là dự phòng. Nhật ký chỉ ghi 4 ký tự cuối.
+- Trang Giao hàng: khi có đơn cần giao, mặc định bật "Chia sẻ vị trí" — `navigator.geolocation.watchPosition`, gửi `POST /api/delivery/location` khi đi ≥ 40 m hoặc sau 20 giây; nhân viên bấm "Tắt chia sẻ" thì `DELETE /api/delivery/location` (xoá vị trí). Bảng `shipper_locations` chỉ giữ vị trí mới nhất (không lưu lịch sử). Bản đồ điều phối dùng vị trí trong 10 phút gần nhất (📡), cũ hơn thì quay về mô phỏng (🛵); tự tải lại 15 giây / lần.
+- Ghim đơn chưa có người giao trên bản đồ: icon lửa 🔥.
+- Kiểm thử: test:routes (34), test:business (26).
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

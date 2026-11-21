@@ -1408,5 +1408,17 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(deleteTestOrd
     CREATE INDEX IF NOT EXISTS idx_orders_phone_status ON orders(phone, status);
   `);
 
+  // 21/11/2026 (3): vị trí mới nhất do điện thoại nhân viên giao gửi lên (chỉ khi nhân viên bật chia sẻ vị trí
+  // và đang có đơn giao). Một dòng mỗi nhân viên, ghi đè; bản đồ điều phối chỉ dùng vị trí trong 10 phút gần nhất.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS shipper_locations (
+      user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      lat        REAL NOT NULL,
+      lng        REAL NOT NULL,
+      accuracy   REAL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

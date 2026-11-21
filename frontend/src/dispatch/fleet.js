@@ -51,6 +51,9 @@ export function createFleet(data) {
       path, leg: 0, progress: 0,
       lat: live ? s.location.lat : path[0].lat, lng: live ? s.location.lng : path[0].lng,
       source: live ? 'live' : 'simulated',
+      // Giờ (Việt Nam) và sai số của vị trí thật gần nhất.
+      live_at: live && s.location.at ? new Date(`${String(s.location.at).replace(' ', 'T')}Z`).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }) : null,
+      accuracy: live && Number.isFinite(s.location.accuracy) ? Math.round(s.location.accuracy) : null,
     };
   });
 }

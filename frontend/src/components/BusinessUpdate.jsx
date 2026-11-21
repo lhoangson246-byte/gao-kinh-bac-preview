@@ -36,6 +36,7 @@ export default function BusinessUpdate() {
   const [invoice, setInvoice] = useState(null);
   const [qr, setQr] = useState('');
   const [notices, setNotices] = useState([]);
+  const [mapsKey, setMapsKey] = useState('');   // khoá Google Maps cho Bản đồ điều phối (21/11/2026)
   const [errors, setErrors] = useState({});
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState('');
@@ -44,6 +45,7 @@ export default function BusinessUpdate() {
     setData(d);
     setInvoice(d.invoice);
     setQr(d.bank_qr_url || '');
+    setMapsKey(d.maps_api_key || '');
     setNotices(d.notices.map((n) => ({ ...blank(n.kind), ...n, reopen: n.reopen || '', show_from: n.show_from || '' })));
   };
   useEffect(() => { api.adminBusiness().then(apply).catch((err) => setErrors({ form: err.message })); }, []);
@@ -55,11 +57,14 @@ export default function BusinessUpdate() {
     try {
       const body = part === 'invoice'
         ? { invoice, bank_qr_url: qr || null }
-        : { notices: notices.map((n) => ({ ...n, reopen: n.kind === 'holiday' && n.reopen ? n.reopen : null, show_from: n.show_from || null })) };
+        : part === 'maps' ? { maps_api_key: mapsKey.trim() }
+          : { notices: notices.map((n) => ({ ...n, reopen: n.kind === 'holiday' && n.reopen ? n.reopen : null, show_from: n.show_from || null })) };
       const result = await api.adminSaveBusiness(body);
       apply(result);
       loadShopSettings({ fresh: true });
-      setMessage(part === 'invoice' ? 'Đã lưu thông tin hoá đơn. Hoá đơn in và khung chuyển khoản dùng thông tin mới ngay.' : 'Đã lưu thông báo. Trang khách cập nhật trong khoảng 30 giây.');
+      setMessage(part === 'invoice' ? 'Đã lưu thông tin hoá đơn. Hoá đơn in và khung chuyển khoản dùng thông tin mới ngay.'
+        : part === 'maps' ? (mapsKey.trim() ? 'Đã lưu khoá Google Maps. Mở lại trang Đơn hàng (tải lại trang) để thấy bản đồ đường phố thật.' : 'Đã bỏ khoá Google Maps: bản đồ điều phối dùng bản đồ mô phỏng.')
+          : 'Đã lưu thông báo. Trang khách cập nhật trong khoảng 30 giây.');
     } catch (err) {
       setErrors({ [part]: err.message, ...(err.errors || {}) });
     } finally {
@@ -147,6 +152,26 @@ export default function BusinessUpdate() {
         </div>
         {errors.notices && <p className="alert error" role="alert">{errors.notices}</p>}
         <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => save('notices')}>{busy === 'notices' ? 'Đang lưu…' : 'Lưu thông báo'}</button>
+      </section>
+
+      <section className="form-card flat">
+        <h2>Khoá Google Maps (bản đồ điều phối giao hàng)</h2>
+        <p className="field-help">
+          Dán khoá vào đây thì bản đồ ở trang Đơn hàng chuyển từ sơ đồ mô phỏng sang <b>bản đồ đường phố thật</b> (Bồ Sơn, Kinh Bắc, Võ Cường…).
+          Cách lấy khoá: vào console.cloud.google.com → tạo dự án → APIs &amp; Services → bật <b>Maps JavaScript API</b> → Credentials → <b>Create API key</b>.
+          Nên giới hạn khoá: Application restrictions = <b>Websites</b>, thêm <code>https://gaokinhbac.com/*</code> và <code>https://www.gaokinhbac.com/*</code>.
+          Google yêu cầu gắn thẻ thanh toán và tính phí khi vượt hạn mức miễn phí hằng tháng.
+        </p>
+        <label className="business-maps-key">Khoá API (bắt đầu bằng AIza…)
+          <input className="input" value={mapsKey} maxLength={60} placeholder="AIzaSy…" autoComplete="off" spellCheck={false}
+                 onChange={(e) => setMapsKey(e.target.value)} aria-invalid={!!errors.maps_api_key} />
+          {errors.maps_api_key && <small className="err">{errors.maps_api_key}</small>}
+        </label>
+        {errors.maps && !errors.maps_api_key && <p className="alert error" role="alert">{errors.maps}</p>}
+        <div className="form-actions">
+          <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => save('maps')}>{busy === 'maps' ? 'Đang lưu…' : 'Lưu khoá Google Maps'}</button>
+          {data.maps_api_key && <button type="button" className="btn btn-secondary" disabled={!!busy} onClick={() => { setMapsKey(''); }}>Xoá khoá (bấm Lưu để áp dụng)</button>}
+        </div>
       </section>
     </div>
   );
