@@ -15,7 +15,7 @@ let { call } = app;
 const login = async (identifier, password) => (await call('/auth/login', { method: 'POST', body: { identifier, password } })).data.token;
 try {
   const owner = await login(app.env.ADMIN_EMAIL, app.env.ADMIN_PASSWORD);
-  const suffix = String(Date.now() % 1e7).padStart(7, '0');
+  const suffix = `6${String(Date.now() % 1e6).padStart(6, '0')}`;   // chữ số thứ ba luôn là 6 → đầu số di động hợp lệ
   const phone = (p, n) => `${p}${suffix}${n}`;
   const catalog = (await call('/admin/staff', { token: owner })).data;
   check('Quyền chấm công mô tả đúng quy chuẩn mới (quản lý tích 1 / 0,5 công)', /0,5 công/.test(catalog.permissions['attendance.manage'] || ''), catalog.permissions['attendance.manage']);
@@ -120,7 +120,7 @@ app = await fixture({ ATTENDANCE_TEST_NOW: '16:30' });
 ({ call } = app);
 try {
   const owner = await login(app.env.ADMIN_EMAIL, app.env.ADMIN_PASSWORD);
-  const suffix = String(Date.now() % 1e7).padStart(7, '0');
+  const suffix = `6${String(Date.now() % 1e6).padStart(6, '0')}`;   // chữ số thứ ba luôn là 6 → đầu số di động hợp lệ
   const mk = async (name, p, permissions) => {
     const r = await call('/admin/staff', { method: 'POST', token: owner, body: { full_name: name, phone: p, password: 'chamcong26', permissions } });
     return { id: r.data.staff.find((s) => s.phone === p)?.id, token: await login(p, 'chamcong26') };

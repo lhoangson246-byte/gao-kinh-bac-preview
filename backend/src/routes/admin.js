@@ -11,7 +11,7 @@ import { MAX_POINTS_PER_UNIT } from '../constants.js';
 import {
   ORDER_STATUSES, LIMITS, localDate, parseWeightKg, PRODUCT_CATEGORY_CODES,
 } from '../constants.js';
-import { HttpError, cleanImageUrl, cleanText, normalizePhone, toInteger } from '../validate.js';
+import { HttpError, cleanImageUrl, cleanText, normalizePhone, phoneKey, toInteger } from '../validate.js';
 import { writeAdminAudit } from '../audit.js';
 import { listAdminOrders } from '../order-lists.js';
 import { buildOrdersWorkbook } from '../orders-export.js';
@@ -1113,7 +1113,7 @@ router.put('/settings/storefront', (req, res, next) => {
 
     if (body.contact_phone !== undefined && body.contact_phone !== null) {
       const raw = cleanText(body.contact_phone, LIMITS.phone) || '';
-      const phone = raw ? normalizePhone(raw) : '';
+      const phone = raw ? phoneKey(raw) : '';
       if (raw && !phone) errors.contact_phone = 'Số điện thoại không hợp lệ (10 số, ví dụ 0912345678).';
       else updates.push(['contact_phone', phone]);
     }
@@ -1127,7 +1127,7 @@ router.put('/settings/storefront', (req, res, next) => {
 
     if (body.zalo_phone !== undefined && body.zalo_phone !== null) {
       const raw = cleanText(body.zalo_phone, LIMITS.phone) || '';
-      const phone = raw ? normalizePhone(raw) : '';
+      const phone = raw ? phoneKey(raw) : '';
       if (raw && !phone) errors.zalo_phone = 'Số Zalo không hợp lệ (10 số, ví dụ 0912345678).';
       else updates.push(['zalo_phone', phone]);
     }
@@ -1142,7 +1142,7 @@ router.put('/settings/storefront', (req, res, next) => {
           const name = cleanText(raw?.name, 80) || '';
           const address = cleanText(raw?.address, LIMITS.address) || '';
           const rawPhone = cleanText(raw?.phone, LIMITS.phone) || '';
-          const phone = rawPhone ? normalizePhone(rawPhone) : '';
+          const phone = rawPhone ? phoneKey(rawPhone) : '';
           if (!name && !address && !rawPhone) return;            // dòng để trống: bỏ qua
           if (address.length < 8) errors.branches = `Cơ sở ${index + 1}: nhập địa chỉ đầy đủ.`;
           else if (rawPhone && !phone) errors.branches = `Cơ sở ${index + 1}: số điện thoại không hợp lệ.`;

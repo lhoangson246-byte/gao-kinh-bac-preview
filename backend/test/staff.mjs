@@ -11,7 +11,7 @@ const { call } = app;
 const login = async (identifier, password) => (await call('/auth/login', { method: 'POST', body: { identifier, password } }));
 try {
   const owner = (await login(app.env.ADMIN_EMAIL, app.env.ADMIN_PASSWORD)).data.token;
-  const suffix = String(Date.now() % 1e7).padStart(7, '0');
+  const suffix = `6${String(Date.now() % 1e6).padStart(6, '0')}`;   // chữ số thứ ba luôn là 6 → đầu số di động hợp lệ
   const phone = (p) => `${p}${suffix}${Math.floor(Math.random() * 10)}`;
   const staff = (body) => call('/admin/staff', { method: 'POST', token: owner, body });
 
@@ -92,7 +92,7 @@ try {
   check('Kế toán không bấm hoàn thành đơn giao tận nơi (nhân viên giao bấm) (403)',
     await status(accountant, `/admin/orders/${order.id}/status`, { method: 'PATCH', body: { status: 'completed' } }) === 403);
   // Giao xong phải kèm ảnh (12/11/2026).
-  const proof = await (await fetch(`${app.base}/api/proofs`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', Authorization: `Bearer ${shipper}` },
+  const proof = await (await fetch(`${app.base}/api/proofs`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', 'X-CSRF-Protection': '1', Authorization: `Bearer ${shipper}` },
     body: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('anh-giao-hang-thu'.padEnd(40, 'x'))]) })).json();
   const done = await call(`/delivery/orders/${order.id}/status`, { method: 'PATCH', token: shipper, body: { status: 'completed', photo: proof.id } });
   check('Giao hàng: đã giao xong', done.status === 200 && done.data.order.status === 'completed' && !!done.data.order.completed_at);
@@ -105,7 +105,7 @@ try {
 
   // Đơn của người khác
   const other = (await call('/orders/guest', { method: 'POST', body: {
-    receiver_name: 'Chú Khác', phone: phone('06'), address: 'Số 2 đường Lý Thái Tổ, phường Suối Hoa', delivery_area: 'bac-ninh',
+    receiver_name: 'Chú Khác', phone: phone('08'), address: 'Số 2 đường Lý Thái Tổ, phường Suối Hoa', delivery_area: 'bac-ninh',
     payment_method: 'cod', items: [{ product_id: product.id, quantity: 1 }],
   } })).data.order;
   await call(`/admin/orders/${other.id}/status`, { method: 'PATCH', token: owner, body: { status: 'confirmed' } });

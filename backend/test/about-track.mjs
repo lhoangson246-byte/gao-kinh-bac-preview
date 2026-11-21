@@ -10,7 +10,7 @@ const app = await fixture();
 const { call } = app;
 try {
   const admin = (await call('/auth/login', { method: 'POST', body: { identifier: app.env.ADMIN_EMAIL, password: app.env.ADMIN_PASSWORD } })).data.token;
-  const suffix = Date.now() % 1e8;
+  const suffix = Number(`6${String(Date.now() % 1e7).padStart(7, '0')}`);   // → đầu số di động hợp lệ
   const customerPhone = `09${String(suffix).padStart(8, '0')}`;
   const customer = (await call('/auth/register', {
     method: 'POST', body: { full_name: 'Khách Tra Cứu', phone: customerPhone, password: 'gao2024!' },

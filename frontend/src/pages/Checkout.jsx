@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import Honeypot from '../components/Honeypot.jsx';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
 import AddressBook from '../components/AddressBook.jsx';
@@ -143,6 +144,7 @@ export default function Checkout() {
 
   return (
     <div className="page-shell">
+      <Honeypot />
       <div className="page-heading">
         <div><p className="eyebrow dark"><span></span>{t('checkout.eyebrow')}</p><h1>{t('checkout.title')}</h1></div>
         <Link to="/gio-hang" className="text-link">{t('checkout.back')}</Link>

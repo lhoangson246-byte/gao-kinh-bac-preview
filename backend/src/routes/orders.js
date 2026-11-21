@@ -10,7 +10,8 @@ import {
 } from '../constants.js';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { MAX_IMAGE_BYTES, sniffImage } from './images.js';
-import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../validate.js';
+import { HttpError, cleanText, isPhone, normalizePhone, phoneKey, toInteger } from '../validate.js';
+import { assertGuestOrderCapacity } from '../abuse.js';
 import { readLocation } from './addresses.js';
 import { promoGiftFor } from '../promotions.js';
 import { attachItems } from '../order-lists.js';
@@ -311,6 +312,8 @@ router.post('/guest', validateRoutes('guest-orders'), async (req, res, next) => 
     const { receiverName, rawAddress, paymentMethod } = readDelivery(body, errors);
     const location = readLocation(body, errors);
     if (Object.keys(errors).length) throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', errors);
+    // Chống đơn ảo giữ kho / spam thông báo: kiểm tra trước khi trừ kho (21/11/2026).
+    assertGuestOrderCapacity({ phone: normalizePhone(body.phone), address: normalizeBacNinhAddress(rawAddress) });
 
     const wanted = normalizeItems(body.items, GUEST_MAX_QTY_PER_LINE);
     const guestId = guestAccountId();
@@ -469,7 +472,7 @@ router.post('/', requireAuth, async (req, res, next) => {
     }
     // Điểm thuộc về SỐ ĐIỆN THOẠI CỦA TÀI KHOẢN, giống lúc cộng điểm khi đơn giao xong.
     const pointsPhone = rewardCount > 0
-      ? normalizePhone(db.prepare('SELECT phone FROM users WHERE id = ?').get(req.user.id)?.phone)
+      ? phoneKey(db.prepare('SELECT phone FROM users WHERE id = ?').get(req.user.id)?.phone)
       : null;
     if (rewardCount > 0 && !pointsPhone) {
       throw new HttpError(400, 'Tài khoản chưa có số điện thoại nên chưa dùng được điểm tích luỹ.');

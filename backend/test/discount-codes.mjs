@@ -10,7 +10,7 @@ const app = await fixture({ PROMO_TODAY: '2026-11-10' });
 const { call } = app;
 try {
   const admin = (await call('/auth/login', { method: 'POST', body: { identifier: app.env.ADMIN_EMAIL, password: app.env.ADMIN_PASSWORD } })).data.token;
-  const suffix = Date.now() % 1e7;
+  const suffix = Number(`6${String(Date.now() % 1e6).padStart(6, '0')}`);   // → đầu số di động hợp lệ
   const product = (await call('/admin/products', {
     method: 'POST', token: admin, body: { name: `Gạo mã giảm ${suffix}`, price: 100000, cost_price: 70000, unit: 'túi 5kg', stock: 500 },
   })).data.product;

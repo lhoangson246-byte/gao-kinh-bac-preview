@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import bcrypt from 'bcryptjs';
+import { bcryptHash } from '../abuse.js';
 import db from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { validateRoutes } from '../schemas.js';
@@ -72,7 +72,7 @@ router.post('/', async (req, res, next) => {
     const tracked = body.attendance_tracked === undefined ? 1 : (body.attendance_tracked ? 1 : 0);
     if (Object.keys(errors).length) throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', errors);
     assertFreeLogin({ phone, email });
-    const hash = await bcrypt.hash(body.password, 12);
+    const hash = await bcryptHash(body.password, 12);
     const id = db.prepare(`
       INSERT INTO users (full_name, phone, email, password_hash, role, permissions, staff_title, attendance_tracked)
       VALUES (?, ?, ?, ?, 'staff', ?, ?, ?)
@@ -136,7 +136,7 @@ router.patch('/:id/lock', (req, res, next) => {
 router.post('/:id/reset-password', async (req, res, next) => {
   try {
     const current = findStaff(req.params.id);
-    const hash = await bcrypt.hash(req.body.password, 12);
+    const hash = await bcryptHash(req.body.password, 12);
     db.prepare('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?').run(hash, current.id);
     writeAdminAudit(req, { action: 'staff.reset_password', entityType: 'user', entityId: current.id });
     res.json({ ok: true });

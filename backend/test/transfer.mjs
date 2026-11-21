@@ -19,7 +19,7 @@ const upload = async (orderId, { token, guestToken, body = PNG, type = 'image/pn
 };
 try {
   const owner = (await call('/auth/login', { method: 'POST', body: { identifier: app.env.ADMIN_EMAIL, password: app.env.ADMIN_PASSWORD } })).data.token;
-  const suffix = String(Date.now() % 1e7).padStart(7, '0');
+  const suffix = `6${String(Date.now() % 1e6).padStart(6, '0')}`;   // chữ số thứ ba luôn là 6 → đầu số di động hợp lệ
   const product = (await call('/admin/products', { method: 'POST', token: owner, body: { name: `Gạo chuyển khoản ${suffix}`, price: 120000, unit: 'túi 5kg', stock: 100 } })).data.product;
 
   /* QR trong cài đặt */

@@ -9,7 +9,7 @@ const app = await fixture();
 const { call } = app;
 try {
   const admin = (await call('/auth/login', { method: 'POST', body: { identifier: app.env.ADMIN_EMAIL, password: app.env.ADMIN_PASSWORD } })).data.token;
-  const suffix = Date.now() % 1e7;
+  const suffix = Number(`6${String(Date.now() % 1e6).padStart(6, '0')}`);   // → đầu số di động hợp lệ
   const makeProduct = async (price) => (await call('/admin/products', {
     method: 'POST', token: admin, body: { name: `Gạo phí ship ${price} ${suffix}`, price, cost_price: 1000, unit: 'túi', stock: 500 },
   })).data.product;
@@ -39,7 +39,7 @@ try {
   check('Trình duyệt không tự gửi được phí giao', forged.status === 400, String(forged.status));
 
   /* Mua nhanh không tài khoản */
-  const guestPhone = `06${String(suffix).padStart(7, '0')}2`;
+  const guestPhone = `09${String(suffix).padStart(7, '0')}2`;
   const guestBody = { receiver_name: 'Cô Mua Nhanh', phone: guestPhone, address: 'Số 9 đường Lý Thái Tổ, phường Suối Hoa', delivery_area: 'bac-ninh', payment_method: 'cod', items: [{ product_id: p50.id, quantity: 1 }] };
   const g1 = (await call('/orders/guest', { method: 'POST', body: guestBody })).data.order;
   check('Mua nhanh đơn đầu: giảm 20.000đ và vẫn tính phí giao', g1?.discount === 20000 && g1.shipping_fee === 10000 && g1.total === 40000, JSON.stringify(g1));

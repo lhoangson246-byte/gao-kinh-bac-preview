@@ -1400,5 +1400,13 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(deleteTestOrd
     if (!ucols.includes('attendance_tracked')) db.exec('ALTER TABLE users ADD COLUMN attendance_tracked INTEGER NOT NULL DEFAULT 1');
   }
 
+  // 21/11/2026 (2): chỉ mục cho cầu dao chống flood (đếm tài khoản mới, đơn mua nhanh chờ xác nhận theo thời gian,
+  // đơn chờ xác nhận cùng số điện thoại).
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_users_role_created ON users(role, created_at);
+    CREATE INDEX IF NOT EXISTS idx_orders_status_created ON orders(status, created_at);
+    CREATE INDEX IF NOT EXISTS idx_orders_phone_status ON orders(phone, status);
+  `);
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

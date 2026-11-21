@@ -6,7 +6,7 @@
  *    điện thoại cũng tra được. Giới hạn số lần tra theo IP ở server.js.
  */
 import db from './db.js';
-import { normalizePhone } from './validate.js';
+import { phoneKey } from './validate.js';
 
 /** Cột ghi giờ của từng bước (tên cột cố định, dùng trong câu UPDATE). */
 export const STATUS_STAMP = {
@@ -45,7 +45,7 @@ function withItems(order) {
 
 /** Các đơn gần đây của một số điện thoại, mới nhất trước. Tên người nhận đã che bớt. */
 export function trackOrdersByPhone(phone) {
-  const normalizedPhone = normalizePhone(phone);
+  const normalizedPhone = phoneKey(phone);
   if (!normalizedPhone) return [];
   return db.prepare(`
     SELECT ${TRACK_COLUMNS} FROM orders
@@ -56,11 +56,11 @@ export function trackOrdersByPhone(phone) {
 }
 
 export function trackOrder(phone, code) {
-  const normalizedPhone = normalizePhone(phone);
+  const normalizedPhone = phoneKey(phone);
   const normalizedCode = normalizeOrderCode(code);
   if (!normalizedPhone || !normalizedCode) return null;
   const order = db.prepare(`SELECT ${TRACK_COLUMNS} FROM orders WHERE code = ?`).get(normalizedCode);
-  if (!order || normalizePhone(order.phone) !== normalizedPhone) return null;
+  if (!order || phoneKey(order.phone) !== normalizedPhone) return null;
   // Không trả địa chỉ, số điện thoại hay mã nội bộ: khách chỉ cần biết đơn đang ở bước nào.
   return withItems(order);
 }

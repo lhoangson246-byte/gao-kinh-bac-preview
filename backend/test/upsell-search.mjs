@@ -11,7 +11,7 @@ const { call } = app;
 const login = async (identifier, password) => (await call('/auth/login', { method: 'POST', body: { identifier, password } })).data.token;
 try {
   const owner = await login(app.env.ADMIN_EMAIL, app.env.ADMIN_PASSWORD);
-  const suffix = String(Date.now() % 1e7).padStart(7, '0');
+  const suffix = `6${String(Date.now() % 1e6).padStart(6, '0')}`;   // chữ số thứ ba luôn là 6 → đầu số di động hợp lệ
   const phone = (p, n) => `${p}${suffix}${n}`;
   const staff = async (name, n, permissions) => {
     const p = phone('03', n);

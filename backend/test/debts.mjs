@@ -15,7 +15,7 @@ const { call } = app;
 const jpeg = (seed) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from(`anh-${seed}-${Math.random()}`.padEnd(40, 'x')), Buffer.from([0xff, 0xd9])]);
 try {
   const owner = (await call('/auth/login', { method: 'POST', body: { identifier: app.env.ADMIN_EMAIL, password: app.env.ADMIN_PASSWORD } })).data.token;
-  const suffix = String(Date.now() % 1e7).padStart(7, '0');
+  const suffix = `6${String(Date.now() % 1e6).padStart(6, '0')}`;   // chữ số thứ ba luôn là 6 → đầu số di động hợp lệ
   let n = 0;
   const phone = (p) => `${p}${suffix}${n++ % 10}`;
   const presets = (await call('/admin/staff', { token: owner })).data.presets;
@@ -34,7 +34,7 @@ try {
   const shipperId = shippers.find((s) => s.full_name === 'Chú Giao Hàng').id;
   const product = (await call('/admin/products', { method: 'POST', token: owner, body: { name: `Gạo công nợ ${suffix}`, price: 500000, cost_price: 400000, unit: 'bao 25kg', stock: 100 } })).data.product;
   const upload = async (token) => {
-    const r = await fetch(`${app.base}/api/proofs`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', Authorization: `Bearer ${token}` }, body: jpeg(n++) });
+    const r = await fetch(`${app.base}/api/proofs`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', 'X-CSRF-Protection': '1', Authorization: `Bearer ${token}` }, body: jpeg(n++) });
     return { status: r.status, data: await r.json().catch(() => ({})) };
   };
   const newOrder = async (receiver = 'Chị An', customer = phone('09'), qty = 2) => {
@@ -52,7 +52,7 @@ try {
   const otherPhoto = (await upload(shipper2)).data.id;
   check('Không dùng ảnh của người khác (400)',
     (await call(`/delivery/orders/${o1.id}/status`, { method: 'PATCH', token: shipper, body: { status: 'completed', photo: otherPhoto } })).status === 400);
-  const fake = await fetch(`${app.base}/api/proofs`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', Authorization: `Bearer ${shipper}` }, body: Buffer.from('khong-phai-anh-that-xxxxxxxx') });
+  const fake = await fetch(`${app.base}/api/proofs`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', 'X-CSRF-Protection': '1', Authorization: `Bearer ${shipper}` }, body: Buffer.from('khong-phai-anh-that-xxxxxxxx') });
   check('Tệp không phải ảnh bị từ chối (400)', fake.status === 400);
   const photo1 = await upload(shipper);
   check('Nhân viên giao tải ảnh lên', photo1.status === 201 && /^\/api\/proofs\/[0-9a-f]{32}$/.test(photo1.data.url));
@@ -68,7 +68,7 @@ try {
 
   /* Giao xong chọn khách trả bằng gì (19/11/2026) */
   const adminOrder = async (id) => (await call('/admin/orders?status=completed', { token: owner })).data.orders.find((o) => o.id === id);
-  const viaTransfer = await newOrder('Anh Chuyển', phone('06'), 1);
+  const viaTransfer = await newOrder('Anh Chuyển', phone('08'), 1);
   const shot = (await upload(shipper)).data;
   const doneT = await call(`/delivery/orders/${viaTransfer.id}/status`, { method: 'PATCH', token: shipper, body: { status: 'completed', photo: shot.id, paid_by: 'transfer' } });
   let rowT = await adminOrder(viaTransfer.id);

@@ -27,6 +27,10 @@ export async function fixture(overrides = {}) {
     DB_STRICT_TRANSACTIONS: '1',
     // Kiểm thử không gọi ra mạng để mở link Google Maps rút gọn.
     GEO_RESOLVE: '0',
+    // Bộ kiểm thử tạo hàng chục tài khoản / đơn từ cùng một IP trong vài giây: nới các ngưỡng chống flood.
+    // security.mjs có bài riêng đặt lại ngưỡng chặt để chứng minh bị chặn (21/11/2026).
+    REGISTER_LIMIT_PER_HOUR: '1000', TRACK_LIMIT_PER_15M: '1000', TRANSFER_PROOF_LIMIT_PER_15M: '1000',
+    REGISTRATION_BREAKER_PER_5M: '100000', GUEST_PENDING_BREAKER_PER_10M: '100000', GUEST_SAME_CONTACT_PENDING: '100000',
     TURSO_DATABASE_URL: '', LIBSQL_URL: '', TURSO_AUTH_TOKEN: '', LIBSQL_AUTH_TOKEN: '',
     VERCEL: '', VERCEL_ENV: '', PREVIEW_TURSO_DATABASE_URL: '', PREVIEW_TURSO_AUTH_TOKEN: '',
     CLIENT_ORIGIN: 'https://shop.example', COOKIE_SAME_SITE: 'lax', SERVE_FRONTEND: 'false',
@@ -55,9 +59,13 @@ export async function fixture(overrides = {}) {
       server.once('exit', (code) => { clearTimeout(timer); reject(new Error(`Server exited ${code}: ${logs}`)); });
     });
     const base = `http://127.0.0.1:${port}`;
+    // Như trình duyệt thật: luôn gửi X-CSRF-Protection: 1. Bài kiểm thử cố ý bỏ header thì truyền
+    // headers: { 'X-CSRF-Protection': '' } (giá trị rỗng = không gửi).
     async function call(route, { method = 'GET', body, token, headers = {}, raw } = {}) {
+      const merged = { 'Content-Type': 'application/json', 'X-CSRF-Protection': '1', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...headers };
+      for (const [key, value] of Object.entries(merged)) if (value === '' || value == null) delete merged[key];
       const response = await fetch(`${base}/api${route}`, {
-        method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...headers },
+        method, headers: merged,
         body: raw ?? (body === undefined ? undefined : JSON.stringify(body)),
       });
       return { status: response.status, data: await response.json().catch(() => ({})), headers: response.headers };

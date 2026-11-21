@@ -34,6 +34,23 @@ const EXACT = {
   'Tài khoản vừa thay đổi. Vui lòng đăng nhập lại.': {
     en: 'Your account was changed. Please log in again.', zh: '账户信息已变更，请重新登录。',
   },
+  // Chống flood / bot (21/11/2026)
+  'Hệ thống đang bận, vui lòng thử lại sau ít phút.': {
+    en: 'The system is busy. Please try again in a few minutes.', zh: '系统繁忙，请几分钟后再试。',
+  },
+  'Máy chủ đang xử lý nhiều yêu cầu, vui lòng thử lại sau giây lát.': {
+    en: 'The server is handling many requests. Please try again in a moment.', zh: '服务器请求较多，请稍后再试。',
+  },
+  'Số điện thoại / địa chỉ này đang có nhiều đơn chờ cửa hàng xác nhận. Cửa hàng sẽ gọi lại sớm; cần gấp vui lòng gọi trực tiếp cho cửa hàng.': {
+    en: 'This phone number / address already has several orders waiting for confirmation. The shop will call you soon; if urgent, please call the shop directly.',
+    zh: '该手机号/地址已有多笔订单等待店铺确认。店铺会尽快回电；如有急需请直接致电店铺。',
+  },
+  'Không gửi được biểu mẫu. Vui lòng tải lại trang rồi thử lại.': {
+    en: 'The form could not be sent. Please reload the page and try again.', zh: '表单未能提交，请刷新页面后重试。',
+  },
+  'Yêu cầu thiếu bảo vệ CSRF.': {
+    en: 'The request could not be verified. Please reload the page and try again.', zh: '请求无法验证，请刷新页面后重试。',
+  },
   'Bạn cần đăng nhập.': { en: 'Please log in.', zh: '请先登录。' },
   'Tài khoản không tồn tại.': { en: 'This account does not exist.', zh: '该账户不存在。' },
   'Mật khẩu hiện tại không đúng.': { en: 'Your current password is incorrect.', zh: '当前密码不正确。' },

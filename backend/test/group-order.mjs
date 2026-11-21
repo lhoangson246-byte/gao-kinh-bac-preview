@@ -9,7 +9,7 @@ const app = await fixture();
 const { call } = app;
 try {
   const owner = (await call('/auth/login', { method: 'POST', body: { identifier: app.env.ADMIN_EMAIL, password: app.env.ADMIN_PASSWORD } })).data.token;
-  const suffix = Date.now() % 1e7;
+  const suffix = Number(`6${String(Date.now() % 1e6).padStart(6, '0')}`);   // → đầu số di động hợp lệ
   const make = async (name, stock = 50) => (await call('/admin/products', {
     method: 'POST', token: owner, body: { name: `${name} ${suffix}`, price: 100000, unit: 'túi 5kg', stock },
   })).data.product.id;

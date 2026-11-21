@@ -10,7 +10,7 @@ const check = (name, ok, detail = '') => {
 };
 
 async function call(path, { method = 'GET', body, token } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { 'Content-Type': 'application/json', 'X-CSRF-Protection': '1' };
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${BASE}/api${path}`, {
     method, headers, body: body ? JSON.stringify(body) : undefined,
@@ -19,7 +19,7 @@ async function call(path, { method = 'GET', body, token } = {}) {
 }
 
 const suffix = Date.now();
-const phone = `09${String(suffix).slice(-8)}`;
+const phone = `096${String(suffix).slice(-7)}`;
 
 /* ---------- Đăng nhập quản trị ---------- */
 const login = await call('/auth/login', {
@@ -41,7 +41,7 @@ const admin = login.data.token;
   check('Khách vãng lai không vào được API bán lẻ (401)',
     (await call('/retail/invoices')).status === 401);
 
-  const cust = { full_name: 'Khách Thường', phone: `09${String(suffix).slice(-7)}7`, password: 'matkhau123!test' };
+  const cust = { full_name: 'Khách Thường', phone: `096${String(suffix).slice(-6)}7`, password: 'matkhau123!test' };
   const reg = await call('/auth/register', { method: 'POST', body: cust });
   if (reg.status === 201) {
     check('Khách thường không vào được API bán lẻ (403)',
@@ -398,7 +398,7 @@ let invoice10k;
 
   const gift = pol.rewards[0];
   const notGift = products.find((p) => !pol.rewards.some((g) => g.id === p.id));
-  const giftPhone = `09${String(suffix).slice(-7)}9`;
+  const giftPhone = `096${String(suffix).slice(-6)}9`;
 
   /* Khách mới chưa có điểm thì chưa đổi được */
   const tooSoon = await call('/retail/invoices', {

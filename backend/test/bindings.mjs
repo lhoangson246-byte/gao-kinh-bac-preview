@@ -21,7 +21,7 @@ try {
   check('Partial save returns the updated description', changed.status === 200 && changed.data.product.description === description);
   const products = await app.call('/admin/products', { token });
   const fresh = products.data.products.find(p => p.id === id);
-  check('Fresh GET verifies persistence and untouched fields', fresh.description === description && fresh.name === created.data.product.name && fresh.price === 12500 && fresh.stock === 10);
+  check('Fresh GET verifies persistence and untouched fields', fresh.description === description && fresh.name === created.data.product.name && fresh.price === 12500 && fresh.stock_bs === 10);   // tồn nhập ở trang Sản phẩm vào Kho Bồ Sơn (20/11/2026)
   const unknown = await app.call('/admin/products/999999999', { method: 'PUT', token, body: { description } });
   check('Unknown product never reports successful save', unknown.status === 404);
   const guard = await run('--input-type=module', app.env, ['--eval', `

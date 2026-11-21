@@ -82,13 +82,23 @@ export function originAllowed(req, origin) {
   return !origin || origins.includes(origin) || sameHostOrigin(req, origin);
 }
 
-// Custom headers force cross-origin browser requests through CORS preflight.
+const ON_VERCEL = Boolean(process.env.VERCEL || process.env.VERCEL_ENV);
+const SAFE_METHODS = ['GET', 'HEAD', 'OPTIONS'];
+
+/**
+ * Chặn sớm yêu cầu không đến từ trang web của cửa hàng (21/11/2026), trước khi chạm tới bcrypt hay cơ sở dữ liệu:
+ *  - mọi yêu cầu ghi (POST / PUT / PATCH / DELETE) tới /api phải có header X-CSRF-Protection: 1 — trang web luôn
+ *    gửi (frontend/src/api.js, sw.js); script tự động bắn thẳng API thường không có;
+ *  - trên Vercel, yêu cầu ghi còn phải có header Origin đúng tên miền của cửa hàng (trình duyệt luôn gửi Origin
+ *    với POST / PUT / PATCH / DELETE).
+ * Header tự đặt cũng buộc trình duyệt ở trang lạ phải hỏi CORS trước, nên vẫn chống CSRF như trước.
+ */
 export function protectBrowserRequests(req, res, next) {
-  if (!originAllowed(req, req.get('origin'))) return res.status(403).json({ message: 'Nguồn yêu cầu không được phép.' });
-  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)
-      && (sessionCookie(req) || req.get('x-session-mode') === 'cookie')
-      && req.get('x-csrf-protection') !== '1') {
-    return res.status(403).json({ message: 'Yêu cầu thiếu bảo vệ CSRF.' });
+  const origin = req.get('origin');
+  if (!originAllowed(req, origin)) return res.status(403).json({ message: 'Nguồn yêu cầu không được phép.' });
+  if (!SAFE_METHODS.includes(req.method) && (req.path === '/api' || req.path.startsWith('/api/'))) {
+    if (req.get('x-csrf-protection') !== '1') return res.status(403).json({ message: 'Yêu cầu thiếu bảo vệ CSRF.' });
+    if (ON_VERCEL && !origin) return res.status(403).json({ message: 'Nguồn yêu cầu không được phép.' });
   }
   next();
 }

@@ -2297,3 +2297,5 @@ ul.track-items li { display: flex; justify-content: space-between; gap: 10px; pa
   .track-card { padding: 14px; }
   .track-card h1 { font-size: 1.4rem; }
 }
+/* Ô bẫy bot: nằm ngoài màn hình, người thật không thấy (21/11/2026) */
+.hp-field { position: absolute !important; left: -10000px !important; top: auto; width: 1px; height: 1px; overflow: hidden; }

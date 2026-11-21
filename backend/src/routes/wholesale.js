@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import bcrypt from 'bcryptjs';
+import { bcryptHash } from '../abuse.js';
 import db from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { can, requirePermission, requireStaff } from '../permissions.js';
@@ -224,7 +224,7 @@ const LOGIN_NOTE = {
   password_reset: 'Đã đặt lại mật khẩu đăng nhập cho khách buôn.',
 };
 
-const hashOf = async (password) => (password ? bcrypt.hash(password, 12) : null);
+const hashOf = async (password) => (password ? bcryptHash(password, 12) : null);
 
 /** POST /api/admin/wholesale — thêm khách buôn; mã KB… tự cấp, cố định. */
 router.post('/', manage, async (req, res, next) => {

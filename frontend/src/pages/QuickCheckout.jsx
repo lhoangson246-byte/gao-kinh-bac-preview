@@ -1,4 +1,5 @@
 import { ListSkeleton } from '../components/Skeleton.jsx';
+import Honeypot from '../components/Honeypot.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import DeliveryPromise from '../components/DeliveryPromise.jsx';
@@ -190,6 +191,7 @@ export default function QuickCheckout() {
 
   return (
     <form className="quick-page" onSubmit={submit} noValidate>
+      <Honeypot />
       <div className="quick-head">
         <h1>{t('quick.title')}</h1>
         <p>{t('quick.subtitle')}</p>
@@ -414,6 +416,7 @@ function QuickSuccess({ order, token }) {
       </section>
 
       <form className="quick-card quick-account" onSubmit={createAccount} noValidate>
+            <Honeypot />
         <h2>{t('quick.accountTitle')}</h2>
         <ul className="quick-trust">
           <li>✓ {t('quick.accountTrack')}</li>

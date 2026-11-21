@@ -1866,6 +1866,17 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
 - API: `GET /api/admin/dispatch`. Kiểm thử trong `test:routes` (30 mục).
 - CSP: chỉ đường dẫn `/quan-tri(.*)` (vercel.json, và vite.config.js cho máy dev) được nạp script từ maps.googleapis.com / maps.gstatic.com; trang khách giữ `script-src 'self'`. Vào quản trị bằng cách bấm từ trang đăng nhập (chuyển trang trong ứng dụng) thì trang vẫn mang CSP cũ → bản đồ báo không tải được và có nút "Tải lại trang".
 
+## 21/11/2026 — Chống flood / DDoS / bot
+
+- `protectBrowserRequests` (security.js): mọi POST/PUT/PATCH/DELETE tới /api phải có `X-CSRF-Protection: 1` (403 nếu thiếu); trên Vercel còn phải có `Origin` đúng tên miền. Trang web (api.js, sw.js) đã luôn gửi.
+- Giới hạn tần suất mới (server.js, ngưỡng ở `backend/src/abuse.js`): đăng ký 5 lần / giờ / IP; ảnh chuyển khoản 6 lần / 15 phút / IP; tra cứu đơn 15 lần / 15 phút / IP. Các giới hạn này nằm trong RAM của từng bản máy chủ.
+- Cầu dao đọc thẳng cơ sở dữ liệu (đúng cả khi Vercel chạy nhiều bản / bot xoay IP): quá 15 tài khoản khách mới trong 5 phút → tạm dừng đăng ký (429); quá 15 đơn mua nhanh chờ xác nhận trong 10 phút → tạm dừng đặt nhanh; cùng SĐT hoặc cùng địa chỉ đã có 3 đơn chờ xác nhận (24 giờ) → không cho đặt thêm. Kiểm tra trước khi trừ kho và trước khi gửi thông báo.
+- bcrypt chạy qua hàng đợi: tối đa 3 phép tính cùng lúc, hàng đợi 8; đầy thì 429 ngay. Mọi kiểm tra nhẹ (dữ liệu, trùng SĐT, cầu dao) chạy trước bcrypt.
+- Ô bẫy bot "website" ẩn ngoài màn hình trên Đăng ký, Mua nhanh, Thanh toán (`components/Honeypot.jsx`); có giá trị → 400. Không dùng CAPTCHA.
+- `normalizePhone` (validate.js) chỉ nhận đầu số di động VN `03[2-9] 05[25689] 07[06-9] 08[1-9] 09[0-46-9]`, chặn số lặp 8 chữ số cuối. Tra cứu dữ liệu đã lưu (đăng nhập, tra đơn, tích điểm, tìm khách, số liên hệ cửa hàng) dùng `phoneKey` (kiểu cũ) để khách cũ có số lạ vẫn đăng nhập / tích điểm được.
+- Mọi ngưỡng chỉnh bằng biến môi trường (REGISTER_LIMIT_PER_HOUR, TRACK_LIMIT_PER_15M, TRANSFER_PROOF_LIMIT_PER_15M, REGISTRATION_BREAKER_PER_5M, GUEST_PENDING_BREAKER_PER_10M, GUEST_SAME_CONTACT_PENDING, BCRYPT_CONCURRENCY, BCRYPT_QUEUE). Máy dev (NODE_ENV=development) dùng ngưỡng rộng; bộ kiểm thử đặt ngưỡng rộng trong fixture.mjs, security.mjs có bài đặt ngưỡng chặt để chứng minh bị chặn.
+- Bài kiểm thử: số điện thoại thử luôn có chữ số thứ ba là 6 (hợp lệ với mọi đầu số); `call()` trong fixture tự gửi X-CSRF-Protection (truyền `''` để bỏ).
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

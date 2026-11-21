@@ -62,9 +62,15 @@ const evil = await fetch(U + '/api/auth/login', {
 });
 ok('Yêu cầu ghi từ tên miền lạ bị chặn', evil.status === 403, `mã ${evil.status}`);
 const same = await fetch(U + '/api/auth/login', {
-  method: 'POST', headers: { 'Content-Type': 'application/json', Origin: U },
+  method: 'POST', headers: { 'Content-Type': 'application/json', Origin: U, 'X-CSRF-Protection': '1' },
   body: JSON.stringify({ identifier: '0900000001', password: 'sai-mat-khau-khong-ton-tai' }),
 });
+// Chống flood (21/11/2026): script không gửi X-CSRF-Protection / Origin bị chặn ngay.
+const script = await fetch(U + '/api/auth/register', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ full_name: 'Bot', phone: '0961234599', password: 'Bot-passphrase-123!' }),
+});
+ok('Script bắn thẳng API (không Origin, không X-CSRF-Protection) bị chặn', script.status === 403, `mã ${script.status}`);
 const sameBody = await same.json().catch(() => ({}));
 ok('Yêu cầu từ chính trang vẫn chạy', same.status === 401, `mã ${same.status}`);
 

@@ -27,7 +27,7 @@ try {
   check('Browser receives only HttpOnly, Secure, host-scoped SameSite cookie', browser.status === 200 && !browser.data.token && cookie?.includes('__Host-gao_session=') && cookie.includes('HttpOnly') && cookie.includes('Secure') && cookie.includes('SameSite=Lax') && !cookie.includes('Domain='));
   const browserSession = cookie.split(';')[0];
   check('Cookie restores authenticated session', (await call('/auth/me', { headers: { Cookie: browserSession } })).status === 200);
-  check('Cookie mutation without CSRF header rejected', (await call('/auth/me', { method: 'PUT', headers: { Cookie: browserSession }, body: { full_name: 'Changed' } })).status === 403);
+  check('Cookie mutation without CSRF header rejected', (await call('/auth/me', { method: 'PUT', headers: { Cookie: browserSession, 'X-CSRF-Protection': '' }, body: { full_name: 'Changed' } })).status === 403);
   check('Untrusted origin rejected even with CSRF header', (await call('/auth/me', { method: 'PUT', headers: { ...browserHeaders, Cookie: browserSession, Origin: 'https://evil.example' }, body: { full_name: 'Changed' } })).status === 403);
   check('Allowed cookie mutation succeeds', (await call('/auth/me', { method: 'PUT', headers: { ...browserHeaders, Cookie: browserSession }, body: { full_name: 'Changed' } })).status === 200);
   const product = await call('/admin/products', { method: 'POST', token: admin, body: { name: 'Security product', price: 50000, cost_price: 31000, stock: 100 } });
@@ -181,6 +181,18 @@ try {
   });
   check('Vercel: cross-site write is still rejected', foreign.status === 403);
 
+  // Chống flood (21/11/2026): trên Vercel, yêu cầu ghi kiểu script (không Origin) bị chặn ngay.
+  const scriptBody = { full_name: 'Bot Python', phone: '0961234570', password: 'Bot-passphrase-123!' };
+  const noOrigin = await vercelApp.call('/auth/register', { method: 'POST', body: scriptBody, headers: { 'X-Forwarded-Proto': 'https' } });
+  check('Vercel: register without Origin (script) rejected 403', noOrigin.status === 403);
+  const noOriginGuest = await vercelApp.call('/orders/guest', { method: 'POST', headers: { 'X-Forwarded-Proto': 'https' },
+    body: { receiver_name: 'Bot', phone: '0961234571', address: 'Số 1 Lý Thái Tổ, Suối Hoa', delivery_area: 'bac-ninh', items: [{ product_id: 1, quantity: 1 }] } });
+  check('Vercel: guest order without Origin (script) rejected 403', noOriginGuest.status === 403);
+  const noCsrf = await vercelApp.call('/auth/register', { method: 'POST', body: scriptBody, headers: { ...browser, 'X-CSRF-Protection': '' } });
+  check('Vercel: register with Origin but without X-CSRF-Protection rejected 403', noCsrf.status === 403);
+  const real = await vercelApp.call('/auth/register', { method: 'POST', body: scriptBody, headers: browser });
+  check('Vercel: real browser registration (Origin + CSRF header) still works', real.status === 201);
+
   check('Vercel: client IP comes from the proxy header, not the proxy itself',
     trustedProxy('', { VERCEL: '1' }) === 1 && trustedProxy('', {}) === false
     && trustedProxy('0', { VERCEL: '1' }) === false);
@@ -188,5 +200,80 @@ try {
   await vercelApp.close();
   await rm(vercelDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }
+
+/* ---------------------------------------------------------------------------------------------------
+ * Chống flood / bot (21/11/2026): ngưỡng chặt như trang thật để chứng minh script bắn dồn dập bị chặn.
+ * ------------------------------------------------------------------------------------------------- */
+const strict = await fixture({ REGISTER_LIMIT_PER_HOUR: '4', REGISTRATION_BREAKER_PER_5M: '1000' });
+try {
+  const reg = (body, headers) => strict.call('/auth/register', { method: 'POST', body, headers });
+  const pw = 'Flood-passphrase-123!';
+  // Kiểu script Python: không có X-CSRF-Protection.
+  check('Script register without X-CSRF-Protection rejected 403',
+    (await reg({ full_name: 'Bot', phone: '0961234501', password: pw }, { 'X-CSRF-Protection': '' })).status === 403);
+  const products = (await strict.call('/products')).data.products;
+  const item = products.find((p) => p.stock > 2 && p.price > 0);
+  const guestBody = (phone, extra = {}) => ({ receiver_name: 'Khách Thử', phone, address: 'Số 7 Lý Thái Tổ, Suối Hoa', delivery_area: 'bac-ninh', items: [{ product_id: item.id, quantity: 1 }], ...extra });
+  check('Script guest order without X-CSRF-Protection rejected 403',
+    (await strict.call('/orders/guest', { method: 'POST', body: guestBody('0961234502'), headers: { 'X-CSRF-Protection': '' } })).status === 403);
+  check('Script order tracking without X-CSRF-Protection rejected 403',
+    (await strict.call('/orders/track', { method: 'POST', body: { phone: '0961234502' }, headers: { 'X-CSRF-Protection': '' } })).status === 403);
+  // Đầu số giả / số lặp vô nghĩa.
+  for (const phone of ['0001234567', '0112345678', '0999999999', '0741234567']) {
+    const r = await strict.call('/orders/guest', { method: 'POST', body: guestBody(phone) });
+    check(`Fake phone ${phone} rejected 400 (guest order)`, r.status === 400 && !!r.data.errors?.phone);
+  }
+  check('Fake phone rejected 400 (register)', (await reg({ full_name: 'Số Giả', phone: '0112345678', password: pw })).status === 400);
+  // Bẫy bot: ô ẩn "website" có giá trị.
+  check('Honeypot filled → 400', (await reg({ full_name: 'Bot Điền Form', phone: '0961234503', password: pw, website: 'http://spam.example' })).status === 400);
+  // Đăng ký dồn dập từ một IP: tối đa 4 / giờ trong bài này (trang thật 5).
+  const ok = await reg({ full_name: 'Khách Thật', phone: '0961234504', password: pw, website: '' });
+  check('Real registration with empty honeypot succeeds', ok.status === 201);
+  const burst = [];
+  for (let i = 0; i < 4; i++) burst.push((await reg({ full_name: `Bot ${i}`, phone: `096123451${i}`, password: pw })).status);
+  check('Registration spam beyond the per-IP limit gets 429', burst.includes(429) && burst[burst.length - 1] === 429);
+} finally { await strict.close(); }
+
+const breaker = await fixture({
+  REGISTER_LIMIT_PER_HOUR: '1000', REGISTRATION_BREAKER_PER_5M: '3',
+  GUEST_PENDING_BREAKER_PER_10M: '3', GUEST_SAME_CONTACT_PENDING: '2',
+  TRACK_LIMIT_PER_15M: '3', TRANSFER_PROOF_LIMIT_PER_15M: '2', BCRYPT_CONCURRENCY: '1', BCRYPT_QUEUE: '2',
+});
+try {
+  const pw = 'Flood-passphrase-123!';
+  // Cầu dao đăng ký toàn hệ thống (bot xoay IP vẫn bị chặn vì đếm trong cơ sở dữ liệu).
+  const regs = [];
+  for (let i = 0; i < 4; i++) regs.push(await breaker.call('/auth/register', { method: 'POST', body: { full_name: `Khách ${i}`, phone: `096200000${i + 1}`, password: pw } }));
+  check('Global registration breaker: 4th account within 5 minutes gets 429 "Hệ thống đang bận"',
+    regs.slice(0, 3).every((r) => r.status === 201) && regs[3].status === 429 && /Hệ thống đang bận/.test(regs[3].data.message || ''));
+  // Cầu dao đơn mua nhanh: cùng SĐT tối đa 2 đơn chờ xác nhận; toàn hệ thống tối đa 3 đơn / 10 phút.
+  const item = (await breaker.call('/products')).data.products.find((p) => p.stock > 5 && p.price > 0);
+  const guest = (phone, address = 'Số 7 Lý Thái Tổ, Suối Hoa') => breaker.call('/orders/guest', { method: 'POST',
+    body: { receiver_name: 'Khách Thử', phone, address, delivery_area: 'bac-ninh', items: [{ product_id: item.id, quantity: 1 }] } });
+  const stockBefore = (await breaker.call(`/products/${item.id}`)).data.product.stock;
+  const g1 = await guest('0963000001');
+  const g2 = await guest('0963000001', 'Số 8 Ngô Gia Tự, Tiền An');
+  const g3 = await guest('0963000001', 'Số 9 Nguyễn Văn Cừ, Ninh Xá');
+  check('Same phone with 2 pending guest orders: 3rd gets 429', g1.status === 201 && g2.status === 201 && g3.status === 429);
+  const g4 = await guest('0963000002', 'Số 10 Kinh Dương Vương, Vũ Ninh');
+  const g5 = await guest('0963000003', 'Số 11 Trần Hưng Đạo, Đại Phúc');
+  check('Global guest-order breaker: 4th pending guest order within 10 minutes gets 429', g4.status === 201 && g5.status === 429);
+  const stockAfter = (await breaker.call(`/products/${item.id}`)).data.product.stock;
+  check('Blocked guest orders do not hold stock', stockBefore - stockAfter === 3);
+  // Tra cứu đơn: tối đa 3 / 15 phút trong bài này (trang thật 15).
+  const tracks = [];
+  for (let i = 0; i < 4; i++) tracks.push((await breaker.call('/orders/track', { method: 'POST', body: { phone: `096300000${i}` } })).status);
+  check('Order tracking beyond the limit gets 429', tracks[3] === 429);
+  // Ảnh chuyển khoản: tối đa 2 / 15 phút trong bài này (trang thật 6).
+  const proofs = [];
+  for (let i = 0; i < 3; i++) {
+    proofs.push((await breaker.call(`/orders/${g1.data.order.id}/transfer-proof`, { method: 'POST', raw: Buffer.from('not-an-image'), headers: { 'Content-Type': 'image/jpeg', 'X-Guest-Token': g1.data.guest_token } })).status);
+  }
+  check('Transfer-proof uploads beyond the limit get 429', proofs[2] === 429);
+  // Hàng đợi bcrypt: 1 phép tính cùng lúc + hàng đợi 2 → bắn 8 đăng nhập cùng lúc thì phần dư bị 429 ngay.
+  const logins = await Promise.all(Array.from({ length: 8 }, (_, i) => breaker.call('/auth/login', { method: 'POST', body: { identifier: `09640000${String(i).padStart(2, '0')}`, password: 'Wrong-passphrase-1!' } })));
+  const busy = logins.filter((r) => r.status === 429 && /Máy chủ đang xử lý nhiều yêu cầu/.test(r.data.message || '')).length;
+  check('bcrypt concurrency limiter sheds excess load with 429 (no bcrypt work)', busy >= 4 && logins.filter((r) => r.status === 401).length >= 1);
+} finally { await breaker.close(); }
 
 console.log(`${passed} security checks passed.`);

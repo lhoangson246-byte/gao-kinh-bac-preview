@@ -1,5 +1,6 @@
 import { getActiveLang, getLocale } from './i18n/state.js';
 import { translateServerErrors, translateServerMessage } from './i18n/server.js';
+import { readHoneypot } from './components/Honeypot.jsx';
 
 const BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
@@ -99,7 +100,8 @@ async function downloadFile(path, fallbackName) {
 }
 
 export const api = {
-  register: (payload) => request('/auth/register', { method: 'POST', body: payload }),
+  // Kèm ô bẫy bot "website" (người thật luôn để trống) — 21/11/2026.
+  register: (payload) => request('/auth/register', { method: 'POST', body: { ...payload, website: readHoneypot() } }),
   /** Gia hạn phiên đăng nhập (trang đang mở gọi khoảng 15 phút/lần). */
   refreshSession: () => request('/auth/refresh', { method: 'POST', auth: true }),
   login: (payload) => request('/auth/login', { method: 'POST', body: payload }),
@@ -130,9 +132,9 @@ export const api = {
   adminUpdateStorefront: (payload) =>
     request('/admin/settings/storefront', { method: 'PUT', body: payload, auth: true }),
 
-  createOrder: (payload) => request('/orders', { method: 'POST', body: payload, auth: true }),
+  createOrder: (payload) => request('/orders', { method: 'POST', body: { ...payload, website: readHoneypot() }, auth: true }),
   /** Đặt hàng nhanh không cần tài khoản. */
-  createGuestOrder: (payload) => request('/orders/guest', { method: 'POST', body: payload }),
+  createGuestOrder: (payload) => request('/orders/guest', { method: 'POST', body: { ...payload, website: readHoneypot() } }),
   checkDiscountCode: (code, subtotal) => request('/orders/discount-code', { method: 'POST', body: { code, subtotal } }),
   adminDiscountCodes: () => request('/admin/discount-codes', { auth: true }),
   // Tài khoản nhân viên (chủ cửa hàng) và giao hàng.

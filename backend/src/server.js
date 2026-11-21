@@ -31,7 +31,8 @@ import { HttpError } from './validate.js';
 import imageRoutes from './routes/images.js';
 import { trustedProxy, originAllowed, protectBrowserRequests } from './security.js';
 import { createHash } from 'node:crypto';
-import { normalizePhone } from './validate.js';
+import { phoneKey } from './validate.js';
+import { ABUSE, honeypot } from './abuse.js';
 import { rejectDefaultAdministrator } from './admin-security.js';
 
 if (process.env.NODE_ENV === 'production') rejectDefaultAdministrator();
@@ -71,6 +72,10 @@ app.get('/api/time', (req, res) => res.json({ now: new Date().toISOString() }));
 app.use('/api', apiLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
+// Đăng ký: chặt hơn đăng nhập (mặc định 5 lần / giờ / IP), vì mỗi lần là một tài khoản mới + một bcrypt.
+app.post('/api/auth/register', rateLimit({ ...limiterOptions, windowMs: 60 * 60 * 1000, limit: ABUSE.registerPerHour }));
+// Ảnh chuyển khoản (tệp nhị phân, đi trước bộ đọc JSON): mặc định 6 lần / 15 phút / IP.
+app.post('/api/orders/:id/transfer-proof', rateLimit({ ...limiterOptions, windowMs: 15 * 60 * 1000, limit: ABUSE.transferProofPer15m }));
 app.use('/api/auth/password', authLimiter);
 // Ảnh gửi lên dưới dạng nhị phân, gắn trước express.json để bộ đọc JSON không nuốt mất.
 app.use('/api', imageRoutes);
@@ -81,10 +86,12 @@ const accountLimiter = rateLimit({
   keyGenerator: (req) => {
     const input = req.body?.identifier ?? req.body?.phone ?? req.body?.email;
     const raw = typeof input === 'string' ? input.trim().toLowerCase() : '';
-    return createHash('sha256').update(normalizePhone(raw) || raw).digest('hex');
+    return createHash('sha256').update(phoneKey(raw) || raw).digest('hex');
   },
 });
 app.use('/api/auth/login', accountLimiter);
+// Bẫy bot: ô "website" ẩn trên form đăng ký / đặt hàng phải để trống.
+app.post(['/api/auth/register', '/api/orders', '/api/orders/guest'], honeypot);
 app.post('/api/orders', orderLimiter);
 // Đặt hàng không cần tài khoản: chặt hơn, theo IP và theo số điện thoại người nhận,
 // để một người không thể đặt hàng loạt đơn ảo giữ kho.
@@ -93,12 +100,13 @@ const guestPhoneLimiter = rateLimit({
   ...limiterOptions, windowMs: 60 * 60 * 1000, limit: 5,
   keyGenerator: (req) => {
     const raw = typeof req.body?.phone === 'string' ? req.body.phone : '';
-    return createHash('sha256').update(`guest:${normalizePhone(raw) || raw.trim()}`).digest('hex');
+    return createHash('sha256').update(`guest:${phoneKey(raw) || raw.trim()}`).digest('hex');
   },
 });
 app.post('/api/orders/guest', guestOrderLimiter, guestPhoneLimiter);
 // Tra cứu đơn bằng SĐT + mã đơn: đủ cho khách xem lại nhiều lần, không đủ để dò đơn người khác.
-app.post('/api/orders/track', rateLimit({ ...limiterOptions, windowMs: 15 * 60 * 1000, limit: 30 }));
+// Mặc định 15 lần / 15 phút / IP: đủ cho khách xem lại, không đủ để quét dải số điện thoại.
+app.post('/api/orders/track', rateLimit({ ...limiterOptions, windowMs: 15 * 60 * 1000, limit: ABUSE.trackPer15m }));
 // Thử mã giảm giá: đủ cho khách gõ sai vài lần, không đủ để dò mã.
 app.post('/api/orders/discount-code', rateLimit({ ...limiterOptions, windowMs: 15 * 60 * 1000, limit: 30 }));
 // Nút "Gửi thông báo thử nghiệm": đủ để thử vài lần, không đủ để spam máy chủ push.

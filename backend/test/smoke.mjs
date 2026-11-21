@@ -11,7 +11,7 @@ function check(name, ok, detail = '') {
 }
 
 async function call(path, { method = 'GET', body, token } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { 'Content-Type': 'application/json', 'X-CSRF-Protection': '1' };
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${BASE}/api${path}`, {
     method, headers, body: body ? JSON.stringify(body) : undefined,
@@ -21,7 +21,7 @@ async function call(path, { method = 'GET', body, token } = {}) {
 }
 
 const suffix = Date.now();
-const phoneOf = (n) => `09${String(suffix).slice(-7)}${n}`;
+const phoneOf = (n) => `096${String(suffix).slice(-6)}${n}`;
 
 const customer = {
   full_name: 'Nguyễn Văn Test',

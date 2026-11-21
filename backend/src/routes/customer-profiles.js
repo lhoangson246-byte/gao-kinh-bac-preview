@@ -3,7 +3,7 @@ import db from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { can, requireStaff } from '../permissions.js';
 import { validateRoutes } from '../schemas.js';
-import { normalizePhone, toInteger } from '../validate.js';
+import { phoneKey, toInteger } from '../validate.js';
 import { shapeProfile } from '../customer-profiles.js';
 import { attachItems } from '../order-lists.js';
 
@@ -25,13 +25,13 @@ const fold = (value) => String(value || '').normalize('NFD').replace(/\p{M}/gu, 
 const PAGE = 30;
 
 router.get('/lookup', (req, res) => {
-  const phone = normalizePhone(req.query.phone);
+  const phone = phoneKey(req.query.phone);
   res.json({ profile: phone ? shapeProfile(db.prepare(`${SELECT} WHERE p.phone = ?`).get(phone)) : null });
 });
 
 const ORDER_LIMIT = 100;
 router.get('/orders', (req, res) => {
-  const phone = normalizePhone(req.query.phone);
+  const phone = phoneKey(req.query.phone);
   if (!phone) return res.json({ orders: [], total: 0 });
   const orders = db.prepare(`
     SELECT o.id, o.code, o.status, o.created_at, o.completed_at, o.cancelled_at, o.receiver_name, o.address, o.fulfillment,

@@ -1,6 +1,6 @@
 import { validateRoutes } from '../schemas.js';
 import { Router } from 'express';
-import bcrypt from 'bcryptjs';
+import { bcryptHash } from '../abuse.js';
 import db from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requirePermission } from '../permissions.js';
@@ -10,7 +10,7 @@ import {
   localDate, retailDiscountFor, pointsForSale,
   REWARD_VOUCHER_AMOUNT, MAX_REWARDS_PER_SALE, CUSTOMER_SEGMENTS, CUSTOMER_SEGMENT_CODES,
 } from '../constants.js';
-import { HttpError, cleanText, isPhone, normalizePhone, toInteger } from '../validate.js';
+import { HttpError, cleanText, isPhone, normalizePhone, phoneKey, toInteger } from '../validate.js';
 import { writeAdminAudit } from '../audit.js';
 import { promoGiftFor } from '../promotions.js';
 import { loyaltyProfile, onlineAccount } from '../loyalty.js';
@@ -66,7 +66,7 @@ router.get('/policy', (req, res) => {
 /** GET /api/retail/customers?phone=0912345678 */
 router.get('/customers', (req, res, next) => {
   try {
-    const phone = normalizePhone(req.query.phone);
+    const phone = phoneKey(req.query.phone);
     if (!phone) {
       throw new HttpError(400, 'Nhập số điện thoại hợp lệ (10 số, ví dụ 0912345678).', {
         phone: 'Số điện thoại không hợp lệ.',
@@ -132,7 +132,7 @@ router.post('/customers/account', async (req, res, next) => {
       });
     }
 
-    const hash = await bcrypt.hash(password, 12);
+    const hash = await bcryptHash(password, 12);
     const created = db.transaction(() => {
       const userId = db.prepare(`
         INSERT INTO users (full_name, email, password_hash, phone, address)
@@ -496,7 +496,7 @@ router.get('/invoices', (req, res, next) => {
     if (q) {
       // Cho phép gõ "HD12", "12", số điện thoại hoặc tên khách.
       const digits = q.replace(/\D/g, '');
-      const phone = normalizePhone(q);
+      const phone = phoneKey(q);
       where.push(`(
         code = ?
         OR code LIKE ? ESCAPE '\\'

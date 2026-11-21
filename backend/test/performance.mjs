@@ -30,7 +30,7 @@ try {
     await new Promise(resolve => server.once('listening',resolve));
     compares = 0;
     const response = await fetch('http://127.0.0.1:' + server.address().port + '/api/auth/login', {
-      method:'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({identifier:'0000000998',password:'Not-a-real-password!'})
+      method:'POST', headers: {'Content-Type':'application/json','X-CSRF-Protection':'1'}, body: JSON.stringify({identifier:'0000000998',password:'Not-a-real-password!'})
     });
     assert.equal(response.status,401); assert.equal(compares,1);
     const { default: db } = await import('./src/db.js');

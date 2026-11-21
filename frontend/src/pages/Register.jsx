@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Honeypot from '../components/Honeypot.jsx';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isPhone } from '../api';
@@ -58,6 +59,7 @@ export default function Register() {
       {error && <p className="alert error" role="alert">{error}</p>}
 
       <form onSubmit={onSubmit} noValidate>
+        <Honeypot />
         <label>{t('register.fullName')} <b>*</b>
           <input className="input" name="full_name" value={form.full_name} onChange={onChange}
                  autoComplete="name" required aria-invalid={!!fieldErrors.full_name} />

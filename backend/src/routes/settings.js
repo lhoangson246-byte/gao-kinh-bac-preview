@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import db from '../db.js';
-import { cleanImageUrl, normalizePhone } from '../validate.js';
+import { cleanImageUrl, phoneKey } from '../validate.js';
 import { publicPromotion } from '../promotions.js';
 import { activeNotices, parseInvoice, parseNotices } from '../shop-info.js';
 
@@ -43,7 +43,7 @@ function parseBranches(raw) {
       .map((b) => ({
         name: typeof b.name === 'string' ? b.name.slice(0, 80) : '',
         address: b.address.slice(0, 300),
-        phone: normalizePhone(typeof b.phone === 'string' ? b.phone : ''),
+        phone: phoneKey(typeof b.phone === 'string' ? b.phone : ''),
       }));
   } catch {
     return [];
@@ -64,9 +64,9 @@ export function readStorefront() {
     banner_images: banners,
     // Giữ cho bản ứng dụng cũ còn trong bộ nhớ đệm của khách.
     banner_image_url: banners[0] || '',
-    contact_phone: normalizePhone(stored.contact_phone || ''),
+    contact_phone: phoneKey(stored.contact_phone || ''),
     // Số Zalo riêng; để trống thì trang khách dùng số tư vấn ở trên.
-    zalo_phone: normalizePhone(stored.zalo_phone || ''),
+    zalo_phone: phoneKey(stored.zalo_phone || ''),
     branches: parseBranches(stored.store_branches),
     // Mã QR chuyển khoản hiện khi khách chọn "Chuyển khoản ngân hàng".
     bank_qr_url: cleanImageUrl(stored.bank_qr_url || '') || DEFAULT_BANK_QR,

@@ -11,7 +11,7 @@ const app = await fixture({ PROMO_TODAY: '2026-11-10' });
 const { call } = app;
 try {
   const owner = (await call('/auth/login', { method: 'POST', body: { identifier: app.env.ADMIN_EMAIL, password: app.env.ADMIN_PASSWORD } })).data.token;
-  const suffix = String(Date.now() % 1e7).padStart(7, '0');
+  const suffix = `6${String(Date.now() % 1e6).padStart(6, '0')}`;   // chữ số thứ ba luôn là 6 → đầu số di động hợp lệ
   let n = 0;
   const phone = (p) => `${p}${suffix}${n++ % 10}`;
   const mk = async (perms, title) => {
@@ -66,7 +66,7 @@ try {
 
   /* Hoàn thành rồi xuất Excel đơn đã hoàn thành */
   await call(`/delivery/orders/${o1.id}/status`, { method: 'PATCH', token: shipper, body: { status: 'shipping' } });
-  const proof = await (await fetch(`${app.base}/api/proofs`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', Authorization: `Bearer ${shipper}` },
+  const proof = await (await fetch(`${app.base}/api/proofs`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', 'X-CSRF-Protection': '1', Authorization: `Bearer ${shipper}` },
     body: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('anh-giao-don-tay'.padEnd(40, 'x'))]) })).json();
   await call(`/delivery/orders/${o1.id}/status`, { method: 'PATCH', token: shipper, body: { status: 'completed', photo: proof.id } });
   const exported = await fetch(`${app.base}/api/admin/export/orders?period=range&from=${vnToday}&to=${vnToday}&status=completed`, { headers: { Authorization: `Bearer ${accountant}` } });

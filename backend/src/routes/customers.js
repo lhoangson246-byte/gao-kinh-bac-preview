@@ -1,11 +1,11 @@
 import { validateRoutes } from '../schemas.js';
 import { Router } from 'express';
-import bcrypt from 'bcryptjs';
+import { bcryptHash } from '../abuse.js';
 import db from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requirePermission } from '../permissions.js';
 import { CUSTOMER_SEGMENTS, CUSTOMER_SEGMENT_CODES, LIMITS } from '../constants.js';
-import { HttpError, cleanText, normalizePhone, toInteger } from '../validate.js';
+import { HttpError, cleanText, phoneKey, toInteger } from '../validate.js';
 import { writeAdminAudit } from '../audit.js';
 
 const router = Router();
@@ -44,7 +44,7 @@ router.get('/', (req, res, next) => {
 
     if (q) {
       const escaped = q.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-      const phone = normalizePhone(q);
+      const phone = phoneKey(q);
       where.push(`(
         u.full_name LIKE ? ESCAPE '\\'
         OR IFNULL(u.email, '') LIKE ? ESCAPE '\\'
@@ -129,7 +129,7 @@ router.post('/:id/reset-password', async (req, res, next) => {
     const password = req.body?.password;
 
 
-    const hash = await bcrypt.hash(password, 12);
+    const hash = await bcryptHash(password, 12);
     db.prepare('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?')
       .run(hash, id);
 
@@ -188,7 +188,7 @@ router.patch('/:id/segment', (req, res, next) => {
 
     const result = db.transaction(() => {
       const customer = findCustomer(id);
-      const phone = normalizePhone(customer.phone);
+      const phone = phoneKey(customer.phone);
       if (!phone) throw new HttpError(400, 'Tài khoản chưa có số điện thoại nên chưa xếp nhóm được.');
       const before = db.prepare('SELECT segment FROM retail_customers WHERE phone = ?').get(phone)?.segment ?? 'thuong';
       db.prepare(`

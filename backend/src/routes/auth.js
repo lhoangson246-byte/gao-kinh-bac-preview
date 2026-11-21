@@ -1,12 +1,12 @@
 import { adminPassword, validateRoutes } from '../schemas.js';
 import { Router } from 'express';
-import bcrypt from 'bcryptjs';
 import { WHOLESALE_CODE_RE } from '../wholesale.js';
 import { createHash } from 'node:crypto';
 import db from '../db.js';
 import { signToken, requireAuth } from '../middleware/auth.js';
 import { LIMITS } from '../constants.js';
-import { HttpError, cleanText, isEmail, isPhone, normalizePhone } from '../validate.js';
+import { HttpError, cleanText, isEmail, isPhone, normalizePhone, phoneKey } from '../validate.js';
+import { assertRegistrationCapacity, bcryptCompare, bcryptHash } from '../abuse.js';
 import { writeLoginHistory } from '../audit.js';
 import { deliverSession, COOKIE_NAME, COOKIE_OPTIONS } from '../security.js';
 import { permissionsOf } from '../permissions.js';
@@ -52,7 +52,9 @@ router.post('/register', async (req, res, next) => {
       });
     }
 
-    const hash = await bcrypt.hash(password, 12);
+    // Mọi kiểm tra nhẹ (dữ liệu, trùng SĐT / email, cầu dao toàn hệ thống) xong rồi mới tính bcrypt.
+    assertRegistrationCapacity();
+    const hash = await bcryptHash(password, 12);
     const userId = db.transaction(() => {
       const id = db
         .prepare(
@@ -109,13 +111,13 @@ router.post('/login', async (req, res, next) => {
     } else if (raw.includes('@')) {
       row = db.prepare('SELECT * FROM users WHERE email = ?').get(raw.toLowerCase());
     } else {
-      const normalized = normalizePhone(raw);
+      const normalized = phoneKey(raw);
       // Số điện thoại được chuẩn hoá khi lưu nên chỉ cần một truy vấn.
       if (normalized) row = db.prepare('SELECT * FROM users WHERE phone = ?').get(normalized);
     }
 
     // Thông báo giống nhau cho mọi trường hợp để không lộ tài khoản nào đang tồn tại.
-    const validPassword = await bcrypt.compare(password, row?.password_hash || dummyHash);
+    const validPassword = await bcryptCompare(password, row?.password_hash || dummyHash);
     if (!row || !validPassword) {
       throw new HttpError(401, 'Số điện thoại/email/mã khách buôn hoặc mật khẩu không đúng.');
     }
@@ -166,10 +168,10 @@ router.put('/password', requireAuth, async (req, res, next) => {
       throw new HttpError(400, 'Dữ liệu chưa hợp lệ.', { password: 'Mật khẩu quản trị tối thiểu 12 ký tự.' });
     }
     const row = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.id);
-    if (!await bcrypt.compare(req.body.current_password, row.password_hash)) {
+    if (!await bcryptCompare(req.body.current_password, row.password_hash)) {
       throw new HttpError(401, 'Mật khẩu hiện tại không đúng.');
     }
-    const hash = await bcrypt.hash(req.body.password, 12);
+    const hash = await bcryptHash(req.body.password, 12);
     const changed = db.prepare(`UPDATE users SET password_hash = ?, session_version = session_version + 1
       WHERE id = ? AND password_hash = ? AND is_locked = 0`).run(hash, req.user.id, row.password_hash).changes;
     if (!changed) throw new HttpError(409, 'Tài khoản vừa thay đổi. Vui lòng đăng nhập lại.');

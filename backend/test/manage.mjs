@@ -10,7 +10,7 @@ const check = (name, ok, detail = '') => {
 };
 
 async function call(path, { method = 'GET', body, token } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { 'Content-Type': 'application/json', 'X-CSRF-Protection': '1' };
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${BASE}/api${path}`, {
     method, headers, body: body ? JSON.stringify(body) : undefined,
@@ -19,7 +19,7 @@ async function call(path, { method = 'GET', body, token } = {}) {
 }
 
 const suffix = Date.now();
-const phoneOf = (n) => `09${String(suffix).slice(-7)}${n}`;
+const phoneOf = (n) => `096${String(suffix).slice(-6)}${n}`;
 
 /* ---------- Đăng nhập quản trị ---------- */
 const login = await call('/auth/login', {
@@ -496,7 +496,7 @@ const posPhone = phoneOf(8);
 
   const send = (body, tok, type = 'image/jpeg') => fetch(`${BASE}/api/admin/images`, {
     method: 'POST',
-    headers: { 'Content-Type': type, ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
+    headers: { 'Content-Type': type, 'X-CSRF-Protection': '1', ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
     body,
   });
 
@@ -1120,7 +1120,7 @@ const guestToken = (await call('/auth/register', {
  * 03/10/2026: đơn huỷ không được cộng điểm; trả hàng tại quầy trừ lại điểm
  * ================================================================== */
 {
-  const phone = `08${String(suffix).slice(-8)}`;
+  const phone = `086${String(suffix).slice(-7)}`;
   const signup = await call('/auth/register', {
     method: 'POST', body: { full_name: 'Khách Huỷ Đơn', phone, password: 'matkhau123!test' },
   });
@@ -1194,7 +1194,7 @@ const guestToken = (await call('/auth/register', {
  * 03/10/2026: đặt hàng nhanh không cần tài khoản
  * ================================================================== */
 {
-  const last8 = String(suffix).slice(-8);
+  const last8 = `6${String(suffix).slice(-7)}`;   // → đầu số di động hợp lệ
   const gp1 = `07${last8}`;
   const gp2 = `03${last8}`;
   const gp3 = `05${last8}`;
@@ -1269,7 +1269,7 @@ const guestToken = (await call('/auth/register', {
     (await call(`/orders/${placed.data.order.id}/cancel`, { method: 'PATCH', token: claim.data.token })).status === 200);
   const reuse = await call('/auth/register', {
     method: 'POST',
-    body: { full_name: 'Kẻ Dùng Lại', phone: `04${last8}`, password: 'matkhau123!test',
+    body: { full_name: 'Kẻ Dùng Lại', phone: `094${last8.slice(1)}`, password: 'matkhau123!test',
       guest_order: { id: placed.data.order.id, token: claimToken } },
   });
   const reusedOrders = reuse.data.token ? (await call('/orders', { token: reuse.data.token })).data.orders : null;
@@ -1346,7 +1346,7 @@ const guestToken = (await call('/auth/register', {
   })).data.product;
   const placed = await call('/orders/guest', {
     method: 'POST',
-    body: { receiver_name: 'Chị Báo Đơn', phone: `06${String(suffix).slice(-8)}`, address: 'Số 9 đường Thử Chuông, phường Suối Hoa',
+    body: { receiver_name: 'Chị Báo Đơn', phone: `058${String(suffix).slice(-7)}`, address: 'Số 9 đường Thử Chuông, phường Suối Hoa',
       delivery_area: 'bac-ninh', items: [{ product_id: product.id, quantity: 1 }] },
   });
   const after = await call('/admin/orders/latest', { token: admin });

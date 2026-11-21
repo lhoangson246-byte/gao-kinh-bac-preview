@@ -20,7 +20,7 @@ const { call } = app;
 const login = async (identifier, password) => (await call('/auth/login', { method: 'POST', body: { identifier, password } })).data.token;
 try {
   const owner = await login(app.env.ADMIN_EMAIL, app.env.ADMIN_PASSWORD);
-  const suffix = String(Date.now() % 1e6).padStart(6, '0');
+  const suffix = `6${String(Date.now() % 1e5).padStart(5, '0')}`;   // → đầu số di động hợp lệ
   const product = (await call('/products')).data.products.find((p) => p.stock > 10 && p.price > 0);
   const create = async (n, map) => (await call('/admin/orders', { method: 'POST', token: owner, body: {
     receiver_name: `Khách ${n}`, phone: `09${suffix}${n}${n}`.slice(0, 10), home_delivery: true, address: `Số ${n} Lý Thái Tổ, Suối Hoa`,

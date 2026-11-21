@@ -1,6 +1,6 @@
 import db from './db.js';
 import { retailPointsFor } from './constants.js';
-import { HttpError, normalizePhone } from './validate.js';
+import { HttpError, phoneKey } from './validate.js';
 
 /**
  * Hồ sơ tích điểm dùng chung cho cả hai kênh bán:
@@ -14,9 +14,9 @@ import { HttpError, normalizePhone } from './validate.js';
 /** Số điện thoại dùng để tích điểm cho một đơn online. */
 export function loyaltyPhoneForOrder(order) {
   // Đơn mua nhanh không có tài khoản: tích vào số điện thoại khách ghi trên đơn.
-  if (order.is_guest) return normalizePhone(order.phone) || null;
+  if (order.is_guest) return phoneKey(order.phone) || null;
   const account = db.prepare('SELECT phone FROM users WHERE id = ?').get(order.user_id);
-  return normalizePhone(account?.phone) || null;
+  return phoneKey(account?.phone) || null;
 }
 
 /**
@@ -26,7 +26,7 @@ export function loyaltyPhoneForOrder(order) {
  * thì tính theo tiền như cũ. Trả về số điểm đã cộng.
  */
 export function creditPoints(phone, { amountPaid, points: preset = null, fullName = null }) {
-  const normalized = normalizePhone(phone);
+  const normalized = phoneKey(phone);
   if (!normalized) return 0;
 
   const points = preset ?? retailPointsFor(amountPaid);
@@ -51,14 +51,14 @@ export function creditPoints(phone, { amountPaid, points: preset = null, fullNam
 
 /** Hồ sơ tích điểm của một số điện thoại, hoặc null. */
 export function loyaltyProfile(phone) {
-  const normalized = normalizePhone(phone);
+  const normalized = phoneKey(phone);
   if (!normalized) return null;
   return db.prepare('SELECT * FROM retail_customers WHERE phone = ?').get(normalized) || null;
 }
 
 /** Tài khoản đăng nhập online gắn với số điện thoại, hoặc null. */
 export function onlineAccount(phone) {
-  const normalized = normalizePhone(phone);
+  const normalized = phoneKey(phone);
   if (!normalized) return null;
   return db.prepare(
     `SELECT u.id, u.full_name, u.email, u.phone, u.is_locked, u.created_at,
@@ -77,7 +77,7 @@ export function onlineAccount(phone) {
  * quá số điểm đang có; thiếu điểm thì ném lỗi để cả transaction bị huỷ.
  */
 export function spendPoints(phone, points) {
-  const normalized = normalizePhone(phone);
+  const normalized = phoneKey(phone);
   if (!normalized || points <= 0) return;
   const changed = db.prepare(`
     UPDATE retail_customers SET points = points - ?, updated_at = datetime('now')
@@ -91,7 +91,7 @@ export function spendPoints(phone, points) {
 
 /** Hoàn lại điểm đã trừ (ví dụ đơn đổi điểm bị huỷ). Gọi trong transaction đã khoá trạng thái đơn. */
 export function refundPoints(phone, points) {
-  const normalized = normalizePhone(phone);
+  const normalized = phoneKey(phone);
   if (!normalized || points <= 0) return;
   db.prepare(`
     UPDATE retail_customers SET points = points + ?, updated_at = datetime('now') WHERE phone = ?
