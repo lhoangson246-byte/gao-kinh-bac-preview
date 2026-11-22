@@ -573,3 +573,4 @@ tr.ws-open td { background: var(--green-100); }
 .dship-badge.waiting { background: #e8a317; font-size: .62rem; }
 .lg-wait { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: #e8a317; color: #fff; font-size: .6rem; }
 .dship-status.waiting { color: #a86a00; }
+.gmap-inner { position: absolute; inset: 0; }

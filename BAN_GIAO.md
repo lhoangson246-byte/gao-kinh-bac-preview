@@ -1899,6 +1899,11 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
 - Giảm 20.000đ đơn đầu chỉ cho đơn khách tự đặt trên web; đơn nhân viên / kế toán / chủ cửa hàng tạo (`source = 'staff'`) không giảm và không tính là đã dùng ưu đãi (khách vẫn được giảm ở đơn web đầu tiên). Mã giảm giá vẫn dùng được cho đơn nhân viên tạo.
 - Tự tìm định vị theo địa chỉ chạy NGẦM: `POST /api/admin/orders/locate` (tối đa 3 đơn / lần), trang Đơn hàng gọi sau khi danh sách đã hiện — mở trang không còn bị chậm vì tra bản đồ.
 
+## 22/11/2026 (3) — Bản đồ Google: một lượt tải cho mỗi lần mở trang
+
+- Google tính phí Maps JavaScript API theo lượt TẠO bản đồ (miễn phí 10.000 lượt / tháng). Trang Đơn hàng tải lại sau mỗi thao tác làm khung bản đồ dựng lại; giờ giữ một bản đồ (`mapCache` trong DispatchMap.jsx) và gắn lại vào khung mới, nên mỗi lần mở trang chỉ tính 1 lượt. Shipper di chuyển, ghim đổi không tính thêm.
+- Trang CẬP NHẬT hướng dẫn: chỉ cần bật Maps JavaScript API (không dùng Geocoding của Google); nên đặt Quotas khoảng 300 lượt / ngày.
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

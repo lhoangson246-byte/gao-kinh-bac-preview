@@ -160,7 +160,10 @@ export default function BusinessUpdate() {
           Dán khoá vào đây thì bản đồ ở trang Đơn hàng chuyển từ sơ đồ mô phỏng sang <b>bản đồ đường phố thật</b> (Bồ Sơn, Kinh Bắc, Võ Cường…).
           Cách lấy khoá: vào console.cloud.google.com → tạo dự án → APIs &amp; Services → bật <b>Maps JavaScript API</b> → Credentials → <b>Create API key</b>.
           Nên giới hạn khoá: Application restrictions = <b>Websites</b>, thêm <code>https://gaokinhbac.com/*</code> và <code>https://www.gaokinhbac.com/*</code>.
-          Google yêu cầu gắn thẻ thanh toán và tính phí khi vượt hạn mức miễn phí hằng tháng.
+          Chỉ cần bật <b>Maps JavaScript API</b> (trang không dùng Geocoding của Google — định vị theo địa chỉ dùng bản đồ miễn phí OpenStreetMap).
+          Google yêu cầu gắn thẻ thanh toán; miễn phí 10.000 lượt tải bản đồ mỗi tháng (mỗi lần mở trang Đơn hàng có bản đồ tính 1 lượt,
+          shipper di chuyển không tính thêm). Để chắc chắn không mất tiền: vào Google Cloud → Maps JavaScript API → <b>Quotas</b>,
+          đặt giới hạn khoảng <b>300 lượt / ngày</b> — chạm ngưỡng thì Google tạm ngừng hiện bản đồ tới hôm sau, không phát sinh cước.
         </p>
         <label className="business-maps-key">Khoá API (bắt đầu bằng AIza…)
           <input className="input" value={mapsKey} maxLength={60} placeholder="AIzaSy…" autoComplete="off" spellCheck={false}

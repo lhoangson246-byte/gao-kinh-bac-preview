@@ -193,6 +193,13 @@ function SimMap({ data, fleet, selected, onSelect, focus }) {
  * Google Maps trong thẻ <div id="map">. Ghim là thẻ HTML (OverlayView) do React vẽ vào bằng createPortal,
  * nên giống hệt bản đồ mô phỏng. Khoá sai / bị chặn thì gọi onFail để chuyển sang mô phỏng.
  */
+/**
+ * Google tính phí theo LƯỢT TẠO bản đồ (Dynamic Maps; 10.000 lượt / tháng miễn phí). Trang Đơn hàng tải lại sau mỗi
+ * thao tác (xác nhận, giao đơn…) làm khung bản đồ dựng lại, nên giữ MỘT bản đồ cho cả lần mở trang và gắn lại vào
+ * khung mới thay vì tạo bản đồ mới (22/11/2026). Shipper di chuyển / ghim thay đổi không tính thêm lượt.
+ */
+const mapCache = { maps: null, map: null, div: null };
+
 function GoogleMap({ maps, data, fleet, selected, onSelect, focus }) {
   const mapDiv = useRef(null);
   const mapRef = useRef(null);
@@ -200,18 +207,33 @@ function GoogleMap({ maps, data, fleet, selected, onSelect, focus }) {
   const overlays = useRef(new Map());   // key → { overlay, el }
   const [, setVersion] = useState(0);
 
-  // Tạo bản đồ một lần.
+  // Tạo bản đồ MỘT lần cho cả lần mở trang; lần sau chỉ gắn lại thẻ bản đồ cũ vào khung (không tính thêm lượt).
   useEffect(() => {
-    mapRef.current = new maps.Map(mapDiv.current, {
-      center: { lat: data.warehouse.lat, lng: data.warehouse.lng }, zoom: 13,
-      mapTypeControl: false, streetViewControl: false, fullscreenControl: true, clickableIcons: false, gestureHandling: 'greedy',
-    });
-    const bounds = new maps.LatLngBounds();
-    bounds.extend({ lat: data.warehouse.lat, lng: data.warehouse.lng });
-    for (const o of data.orders) if (o.located) bounds.extend({ lat: o.lat, lng: o.lng });
-    if (!bounds.isEmpty() && data.orders.some((o) => o.located)) mapRef.current.fitBounds(bounds, 60);
+    const host = mapDiv.current;
+    if (mapCache.maps !== maps || !mapCache.map) {
+      const div = document.createElement('div');
+      div.id = 'map';
+      div.className = 'gmap-inner';
+      host.appendChild(div);
+      const map = new maps.Map(div, {
+        center: { lat: data.warehouse.lat, lng: data.warehouse.lng }, zoom: 13,
+        mapTypeControl: false, streetViewControl: false, fullscreenControl: true, clickableIcons: false, gestureHandling: 'greedy',
+      });
+      const bounds = new maps.LatLngBounds();
+      bounds.extend({ lat: data.warehouse.lat, lng: data.warehouse.lng });
+      for (const o of data.orders) if (o.located) bounds.extend({ lat: o.lat, lng: o.lng });
+      if (!bounds.isEmpty() && data.orders.some((o) => o.located)) map.fitBounds(bounds, 60);
+      Object.assign(mapCache, { maps, map, div });
+    } else {
+      host.appendChild(mapCache.div);
+    }
+    mapRef.current = mapCache.map;
     const all = overlays.current;
-    return () => { for (const { overlay } of all.values()) overlay.setMap(null); all.clear(); };
+    return () => {
+      for (const { overlay } of all.values()) overlay.setMap(null);
+      all.clear();
+      if (mapCache.div?.parentNode === host) host.removeChild(mapCache.div);
+    };
   }, [maps]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Đồng bộ ghim với dữ liệu: thêm ghim mới, bỏ ghim không còn, dời ghim đã có. */
@@ -252,7 +274,7 @@ function GoogleMap({ maps, data, fleet, selected, onSelect, focus }) {
   const shipperById = new Map(fleet.map((s) => [`s${s.id}`, s]));
   return (
     <>
-      <div id="map" ref={mapDiv} className="gmap" />
+      <div ref={mapDiv} className="gmap" />
       {[...overlays.current.entries()].map(([key, { el }]) => {
         if (key === 'wh') return createPortal(<WarehousePin warehouse={data.warehouse} />, el, key);
         const order = orderById.get(key);
