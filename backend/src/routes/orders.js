@@ -155,7 +155,9 @@ export function placeOrder({
     // Ưu đãi đơn đầu tiên. Đơn đã huỷ không tính là đã mua, nhưng đơn còn chờ xác nhận thì
     // có, nên không thể đặt liền hai đơn để ăn giảm giá hai lần. Câu lệnh nằm trong cùng
     // transaction với INSERT bên dưới nên hai yêu cầu song song cũng chỉ một đơn được giảm.
-    const boughtBefore = firstOrderUsed({ userId: guest ? null : userId, phone: customerPhone, guest });
+    // Chỉ đơn KHÁCH TỰ ĐẶT trên web mới được giảm đơn đầu (22/11/2026): đơn kế toán / chủ cửa hàng / nhân viên
+    // tạo bằng tay (staff) không giảm, và cũng không tính là "đã dùng" ưu đãi — khách vẫn được giảm ở đơn web đầu tiên.
+    const boughtBefore = staff ? true : firstOrderUsed({ userId: guest ? null : userId, phone: customerPhone, guest });
     // Không để tiền giảm vượt quá tiền hàng.
     const firstCandidate = boughtBefore || wholesaleCustomerId ? 0 : Math.min(FIRST_ORDER_DISCOUNT, subtotal);
     // Mã giảm giá khách nhập (sai, hết hạn, chưa đủ tiền… thì báo lỗi ngay tại ô nhập mã).
@@ -261,13 +263,13 @@ function firstOrderUsed({ userId, phone, guest }) {
     const accountPhone = db.prepare('SELECT phone FROM users WHERE id = ?').get(userId)?.phone || '';
     return !!db.prepare(`
       SELECT 1 FROM orders
-      WHERE status <> 'cancelled' AND (user_id = ? OR (is_guest = 1 AND ? <> '' AND phone = ?))
+      WHERE status <> 'cancelled' AND COALESCE(source, '') <> 'staff' AND (user_id = ? OR (is_guest = 1 AND ? <> '' AND phone = ?))
       LIMIT 1
     `).get(userId, accountPhone, accountPhone);
   }
   return !!db.prepare(`
     SELECT 1 FROM orders o LEFT JOIN users u ON u.id = o.user_id
-    WHERE o.status <> 'cancelled' AND (o.phone = ? OR u.phone = ?)
+    WHERE o.status <> 'cancelled' AND COALESCE(o.source, '') <> 'staff' AND (o.phone = ? OR u.phone = ?)
     LIMIT 1
   `).get(phone, phone);
 }

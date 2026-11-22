@@ -169,6 +169,8 @@ export const api = {
   adminRoutes: ({ radius = '2', split = true } = {}) => request(`/admin/routes?${new URLSearchParams({ radius: String(radius), split: split ? '1' : '0' })}`, { auth: true }),
   /** Bản đồ điều phối: đơn đã xác nhận / đang giao + shipper (21/11/2026). */
   adminDispatch: () => request('/admin/dispatch', { auth: true }),
+  /** Tự tìm định vị (chạy ngầm) cho vài đơn chưa có (22/11/2026). */
+  adminLocateOrders: () => request('/admin/orders/locate', { method: 'POST', auth: true }),
   adminAssignTrip: (orderIds, shipperId) => request('/admin/routes/assign', { method: 'POST', auth: true, body: { order_ids: orderIds, shipper_id: shipperId } }),
   adminSetOrderLocation: (orderId, mapUrl) => request(`/admin/orders/${orderId}/location`, { method: 'PATCH', auth: true, body: { map_url: mapUrl } }),
   /** Tìm khách / địa chỉ để chỉ đường, kể cả khách không có đơn giao cho mình. */

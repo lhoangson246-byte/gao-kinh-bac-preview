@@ -36,13 +36,22 @@ try {
   check('Nhân viên tạo đơn giao tận nơi (201)', first.status === 201, JSON.stringify(first.data).slice(0, 200));
   check('Đơn tay: đã xác nhận ngay, ghi nguồn "nhân viên", người tạo, giao tận nơi', o1?.status === 'confirmed' && o1.source === 'staff'
     && o1.fulfillment === 'delivery' && !!o1.created_by && !!o1.confirmed_at && /Bắc Ninh/.test(o1.address), JSON.stringify(o1 && { s: o1.status, src: o1.source }));
-  check('Giá và tổng tiền do máy chủ tính; đơn đầu của số này được giảm 20.000đ', o1?.subtotal === 240000 && o1.discount === 20000 && o1.total === 220000);
+  // 22/11/2026: giảm 20.000đ đơn đầu chỉ cho đơn khách tự đặt trên web; đơn nhân viên / kế toán tạo không giảm.
+  check('Giá và tổng tiền do máy chủ tính; đơn nhân viên tạo KHÔNG giảm 20.000đ đơn đầu', o1?.subtotal === 240000 && o1.discount === 0 && o1.total === 240000,
+    JSON.stringify(o1 && { d: o1.discount, t: o1.total }));
   check('Đơn tay giao luôn cho nhân viên giao hàng', o1?.shipper_name === 'Anh Giao');
   check('Nhân viên giao hàng thấy đơn ngay', (await call('/delivery/orders', { token: shipper })).data.orders.some((o) => o.id === o1.id));
   check('Trừ tồn kho như đơn online', (await call('/admin/products', { token: owner })).data.products.find((p) => p.id === product.id).stock_bs === 38);
   const pickup = (await create(sales, { home_delivery: false, address: '', discount_code: 'GAOKINHBAC11', items: [{ product_id: product.id, quantity: 1 }] })).data.order;
   check('Khách lấy tại cửa hàng: không cần địa chỉ', pickup?.fulfillment === 'pickup' && pickup.address === 'Khách lấy tại cửa hàng');
   check('Đơn tay thứ hai cùng số dùng được mã GAOKINHBAC11', pickup?.discount_code === 'GAOKINHBAC11' && pickup.total === 110000);
+  const webFirst = (await call('/orders/guest', { method: 'POST', body: { receiver_name: 'Bác Hùng', phone: customerPhone, address: 'Số 15 đường Trần Hưng Đạo, phường Đại Phúc',
+    delivery_area: 'bac-ninh', items: [{ product_id: product.id, quantity: 1 }] } })).data.order;
+  check('Khách tự đặt trên web lần đầu (dù đã có đơn nhân viên tạo) vẫn được giảm 20.000đ', webFirst?.discount === 20000 && webFirst.total === 100000,
+    JSON.stringify(webFirst && { d: webFirst.discount, t: webFirst.total }));
+  const webSecond = (await call('/orders/guest', { method: 'POST', body: { receiver_name: 'Bác Hùng', phone: customerPhone, address: 'Số 15 đường Trần Hưng Đạo, phường Đại Phúc',
+    delivery_area: 'bac-ninh', items: [{ product_id: product.id, quantity: 1 }] } })).data.order;
+  check('Đơn web thứ hai không giảm nữa', webSecond?.discount === 0);
 
   /* Kiểm tra dữ liệu */
   const err = async (body) => (await create(sales, body)).data.errors || {};

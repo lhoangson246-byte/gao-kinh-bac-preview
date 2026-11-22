@@ -162,6 +162,7 @@ add('admin', 'PATCH', /^\/orders\/[^/]+\/shipper\/?$/, obj({ shipper_id: id.null
 // Gom đơn và lộ trình giao từ Kho Bồ Sơn (20/11/2026).
 add('admin', 'GET', /^\/routes\/?$/, empty, obj({ radius: z.enum(['1', '2', '3', '5']).optional(), split: z.enum(['0', '1']).optional() }));
 add('admin', 'GET', /^\/dispatch\/?$/);
+add('admin', 'POST', /^\/orders\/locate\/?$/);
 add('admin', 'POST', /^\/routes\/assign\/?$/, obj({ order_ids: z.array(id).min(1).max(20), shipper_id: id }));
 add('admin', 'PATCH', /^\/orders\/[^/]+\/location\/?$/, obj({ map_url: text(2000) }));
 add('admin', 'PATCH', /^\/orders\/[^/]+\/transfer\/?$/, obj({ confirmed: z.literal(true) }));

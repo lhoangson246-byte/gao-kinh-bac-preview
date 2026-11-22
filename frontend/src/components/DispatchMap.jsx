@@ -19,7 +19,13 @@ const BASE_KMH = 25;              // vận tốc xe máy trung bình trong phố
 const REFRESH_MS = 15_000;        // tự tải lại đơn / shipper (kèm vị trí thật từ điện thoại) từ máy chủ
 const SPEEDS = [1, 10, 30, 60];
 const STATUS_LABEL = { confirmed: 'Chờ giao', shipping: 'Đang giao' };
-const SHIPPER_STATUS = { delivering: 'Đang giao hàng', done: 'Đã giao xong', idle: 'Chưa bắt đầu' };
+// Trạng thái shipper (22/11/2026): Chờ giao = đã được giao đơn (đơn đã xác nhận) nhưng chưa bấm Bắt đầu giao.
+const SHIPPER_STATUS = { waiting: 'Chờ giao', delivering: 'Đang giao hàng', done: 'Đã giao xong', idle: 'Chưa có đơn' };
+const BADGE = { waiting: ['⏳', 'Chờ giao'], delivering: ['✕', 'Đang giao hàng'], done: ['✓', 'Đã giao xong'] };
+function StatusBadge({ status }) {
+  const badge = BADGE[status];
+  return badge ? <span className={`dship-badge ${status}`} title={badge[1]}>{badge[0]}</span> : null;
+}
 const km = (v) => `${(Math.round(v * 10) / 10).toString().replace('.', ',')} km`;
 const readPref = (key, fallback) => { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } };
 const savePref = (key, value) => { try { localStorage.setItem(key, value); } catch { /* bỏ qua */ } };
@@ -35,9 +41,9 @@ function OrderPin({ order, active, onSelect }) {
     <button type="button" className={`dpin ${order.status}${order.shipper_id ? ' assigned' : ''}${active ? ' active' : ''}`}
             onClick={(e) => { e.stopPropagation(); onSelect({ kind: 'order', id: order.id }); }}
             aria-label={`Đơn ${order.code} · ${order.customer_label} · ${order.address}`}>
-      <span className="dpin-label">{order.wholesale ? '🏢 ' : ''}{order.customer_label}</span>
-      {/* Chưa có người giao: icon lửa cháy cho kế toán thấy ngay đơn cần phân công */}
-      {order.shipper_id ? <span className="dpin-dot" aria-hidden="true" /> : <span className="dpin-fire" aria-hidden="true">🔥</span>}
+      {/* Khách hàng: icon khách (khách buôn là toà nhà) + tên, dấu ghim đúng chỗ giao (22/11/2026) */}
+      <span className="dpin-label"><span className="dpin-who" aria-hidden="true">{order.wholesale ? '🏢' : '👤'}</span>{order.customer_label}</span>
+      <span className="dpin-pin" aria-hidden="true">📍</span>
       {/* Di chuột vào ghim thì hiện địa chỉ chi tiết */}
       <span className="dpin-tip" role="tooltip"><b>{order.code}</b> · {order.address}</span>
     </button>
@@ -51,9 +57,8 @@ function ShipperPin({ shipper, active, onSelect }) {
             aria-label={`${shipper.full_name}: ${SHIPPER_STATUS[shipper.status]}`}>
       <span className="dship-avatar" style={{ background: `hsl(${hue(shipper.id)} 55% 42%)` }}>
         {shipper.avatar_url ? <img src={shipper.avatar_url} alt="" /> : initials(shipper.full_name)}
-        {/* Huy hiệu trạng thái góc trên ảnh: ✕ đỏ = đang giao, ✓ xanh = đã giao xong */}
-        {shipper.status === 'delivering' && <span className="dship-badge delivering" title="Đang giao hàng">✕</span>}
-        {shipper.status === 'done' && <span className="dship-badge done" title="Đã giao xong">✓</span>}
+        {/* Huy hiệu trạng thái góc trên ảnh: ⏳ chờ giao, ✕ đỏ đang giao, ✓ xanh đã giao xong */}
+        <StatusBadge status={shipper.status} />
       </span>
       <span className="dship-name">{shipper.source === 'live' ? '📡' : '🛵'} {shipper.full_name}</span>
     </button>
@@ -375,9 +380,10 @@ export default function DispatchMap({ shippers: shipperOptions = [] }) {
         </p>
       )}
       <p className="dispatch-legend">
-        <span><i className="lg-pin confirmed" /> Chờ giao</span><span><i className="lg-pin shipping" /> Đang giao</span>
-        <span>🔥 Chưa có người giao</span><span><b className="lg-x">✕</b> Shipper đang giao</span><span><b className="lg-ok">✓</b> Shipper đã giao xong</span>
-        <span>📡 Vị trí thật từ điện thoại</span><span>🛵 Vị trí mô phỏng (shipper chưa bật chia sẻ vị trí)</span>
+        <b>Trạng thái shipper:</b>
+        <span><b className="lg-wait">⏳</b> Chờ giao (đã nhận đơn, chưa đi)</span>
+        <span><b className="lg-x">✕</b> Đang giao</span>
+        <span><b className="lg-ok">✓</b> Đã giao xong</span>
       </p>
 
       <div className="dispatch-layout">
@@ -431,7 +437,7 @@ export default function DispatchMap({ shippers: shipperOptions = [] }) {
               {shipper && (
                 <>
                   <h3>🛵 {shipper.full_name}</h3>
-                  <p>Trạng thái: <b className={`dship-status ${shipper.status}`}>{shipper.status === 'delivering' ? '✕ ' : shipper.status === 'done' ? '✓ ' : ''}{SHIPPER_STATUS[shipper.status]}</b></p>
+                  <p>Trạng thái: <b className={`dship-status ${shipper.status}`}>{BADGE[shipper.status] ? `${BADGE[shipper.status][0]} ` : ''}{SHIPPER_STATUS[shipper.status]}</b></p>
                   <p>Đang giữ {shipper.active_count} đơn · đã giao xong hôm nay {shipper.done_today} đơn</p>
                   <p className="muted">{shipper.source === 'live' ? `📡 Vị trí thật từ điện thoại${shipper.live_at ? ` · cập nhật ${shipper.live_at}` : ''}${shipper.accuracy ? ` · sai số ~${shipper.accuracy} m` : ''}.` : shipper.demo ? 'Shipper mô phỏng để thử giao diện (chưa có tài khoản giao hàng).' : 'Vị trí đang mô phỏng theo lộ trình.'}</p>
                   {shipper.orderIds.length > 0 && (
@@ -439,6 +445,7 @@ export default function DispatchMap({ shippers: shipperOptions = [] }) {
                   )}
                   <div className="dispatch-assign">
                     <span>Thử trạng thái:</span>
+                    <button type="button" className={`btn btn-secondary${shipper.status === 'waiting' ? ' active' : ''}`} onClick={() => setFleet((f) => setShipperStatus(f, shipper.id, 'waiting'))}>⏳ Chờ giao</button>
                     <button type="button" className={`btn btn-secondary${shipper.status === 'delivering' ? ' active' : ''}`} onClick={() => setFleet((f) => setShipperStatus(f, shipper.id, 'delivering'))}>✕ Đang giao</button>
                     <button type="button" className={`btn btn-secondary${shipper.status === 'done' ? ' active' : ''}`} onClick={() => setFleet((f) => setShipperStatus(f, shipper.id, 'done'))}>✓ Đã giao</button>
                   </div>
@@ -457,8 +464,7 @@ export default function DispatchMap({ shippers: shipperOptions = [] }) {
                 <button type="button" onClick={() => focusShipper(s)}>
                   <span className="dship-avatar small" style={{ background: `hsl(${hue(s.id)} 55% 42%)` }}>
                     {initials(s.full_name)}
-                    {s.status === 'delivering' && <span className="dship-badge delivering">✕</span>}
-                    {s.status === 'done' && <span className="dship-badge done">✓</span>}
+                    <StatusBadge status={s.status} />
                   </span>
                   <span><b>{s.source === 'live' ? '📡 ' : ''}{s.full_name}</b><small>{SHIPPER_STATUS[s.status]} · {s.active_count} đơn{s.source === 'live' ? ' · vị trí thật' : ''}</small></span>
                 </button>

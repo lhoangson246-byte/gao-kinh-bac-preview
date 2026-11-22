@@ -101,8 +101,9 @@ try {
   const dShip = disp.data.shippers?.find((s) => s.id === shipperId);
   check('Bản đồ điều phối: kế toán xem được đơn đã xác nhận kèm toạ độ, tên, hàng hoá, khoảng cách', disp.status === 200 && dOrder?.located
     && dOrder.lat === 21.18 && dOrder.customer_label === dOrder.receiver_name && dOrder.items.length === 1 && typeof dOrder.distance_km === 'number', short(dOrder));
-  check('Bản đồ điều phối: shipper có trạng thái, lộ trình và chỗ chờ vị trí thật (location)', dShip && ['delivering', 'idle', 'done'].includes(dShip.status)
+  check('Bản đồ điều phối: shipper có trạng thái, lộ trình và chỗ chờ vị trí thật (location)', dShip && dShip.status === 'waiting'
     && dShip.route.stops.length === ids.length && 'location' in dShip && dShip.location === null, short(dShip));
+  check('Shipper đã được giao đơn nhưng chưa bắt đầu: trạng thái "chờ giao" (waiting), không phải đã giao xong', dShip?.status === 'waiting');
   check('Bản đồ điều phối không lộ giá vốn', !/cost_price/.test(JSON.stringify(disp.data)));
   check('Nhân viên giao không mở được bản đồ điều phối (403); chưa đăng nhập (401)', (await call('/admin/dispatch', { token: shipper })).status === 403
     && (await call('/admin/dispatch')).status === 401);
@@ -121,6 +122,10 @@ try {
   const stopped = await call('/delivery/location', { method: 'DELETE', token: shipper });
   check('Tắt chia sẻ vị trí → bản đồ quay về mô phỏng (location null)', stopped.status === 200
     && (await call('/admin/dispatch', { token: accountant })).data.shippers.find((s) => s.id === shipperId)?.location === null);
+  // Tự tìm định vị chạy ngầm (22/11/2026): trang Đơn hàng gọi sau khi danh sách đã hiện.
+  const locate = await call('/admin/orders/locate', { method: 'POST', token: accountant });
+  check('Tìm định vị ngầm: kế toán gọi được, trả danh sách + số đơn còn lại', locate.status === 200 && Array.isArray(locate.data.orders) && typeof locate.data.remaining === 'number', JSON.stringify(locate.data));
+  check('Nhân viên giao không gọi được tìm định vị của quản trị (403)', (await call('/admin/orders/locate', { method: 'POST', token: shipper })).status === 403);
   const disp2 = (await call('/admin/dispatch', { token: owner })).data;
   check('Shipper bấm "Bắt đầu giao" → bản đồ điều phối báo đang giao', disp2.shippers.find((s) => s.id === shipperId)?.status === 'delivering'
     && disp2.orders.find((o) => o.id === firstId)?.status === 'shipping');

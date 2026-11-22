@@ -37,6 +37,7 @@ router.use(requireAuth, requireStaff, accessTable([
   ['PATCH', /^\/orders\/[^/]+\/status\/?$/, ['orders.manage']],
   ['PATCH', /^\/orders\/[^/]+\/shipper\/?$/, ['orders.manage']],
   ['PATCH', /^\/orders\/[^/]+\/location\/?$/, ['orders.manage']],
+  ['POST', /^\/orders\/locate\/?$/, ['orders.view']],
   ['*', /^\/routes(\/assign)?\/?$/, ['orders.manage']],
   ['GET', /^\/dispatch\/?$/, ['orders.manage']],
   ['PATCH', /^\/orders\/[^/]+\/transfer\/?$/, ['orders.manage']],
@@ -50,17 +51,8 @@ router.use(requireAuth, requireStaff, accessTable([
 router.use(validateRoutes('admin'));
 
 /** GET /api/admin/orders — Tất cả đơn hàng (lọc ?status=) */
-router.get('/orders', async (req, res, next) => {
+router.get('/orders', (req, res, next) => {
   try {
-    // Vài đơn đang giao chưa có định vị: tự tìm (link Google Maps rút gọn, khách quen, địa chỉ chữ trên bản đồ) để
-    // thẻ đơn có khoảng cách ngay. Mỗi đơn chỉ tìm một lần (6 tiếng mới thử lại), tối đa 2 đơn / lượt tải.
-    const missing = db.prepare(`
-      SELECT id, phone, address, map_url, fulfillment, delivery_lat, delivery_lng, geo_lat, geo_lng, geo_source, geo_checked_at FROM orders
-      WHERE status IN ('pending', 'confirmed', 'shipping') AND COALESCE(fulfillment, 'delivery') <> 'pickup'
-        AND delivery_lat IS NULL AND geo_lat IS NULL AND (geo_checked_at IS NULL OR geo_checked_at < datetime('now', '-6 hours'))
-      ORDER BY id DESC LIMIT 2
-    `).all();
-    if (missing.length) await ensureOrderPoints(missing, { max: 2, budgetMs: 5000 });
     const status = req.query.status ? String(req.query.status) : null;
     if (status && !ORDER_STATUSES.includes(status)) {
       throw new HttpError(400, `Trạng thái phải thuộc: ${ORDER_STATUSES.join(', ')}.`);
@@ -73,6 +65,33 @@ router.get('/orders', async (req, res, next) => {
     const to = req.query.to || req.query.from || null;
     if (from && to && from > to) throw new HttpError(400, '"Từ ngày" phải trước hoặc bằng "đến ngày".');
     res.json(listAdminOrders({ status, from, to, limit, offset, transferPending: req.query.transfer === 'pending' }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/admin/orders/locate — tự tìm định vị cho vài đơn đang xử lý chưa có (link Google Maps rút gọn, khách
+ * quen, địa chỉ chữ trên bản đồ) (22/11/2026). Trang Đơn hàng gọi NGẦM sau khi danh sách đã hiện, để việc tra bản
+ * đồ không làm chậm lúc mở trang. Mỗi đơn chỉ tìm một lần (6 tiếng mới thử lại), tối đa 3 đơn / lần gọi.
+ * Trả về { orders: [{ id, distance_km, geo_source, geo_label, geo_lat, geo_lng }], remaining }.
+ */
+router.post('/orders/locate', async (req, res, next) => {
+  try {
+    const pending = `
+      FROM orders WHERE status IN ('pending', 'confirmed', 'shipping') AND COALESCE(fulfillment, 'delivery') <> 'pickup'
+        AND delivery_lat IS NULL AND geo_lat IS NULL AND (geo_checked_at IS NULL OR geo_checked_at < datetime('now', '-6 hours'))`;
+    const missing = db.prepare(`
+      SELECT id, phone, address, map_url, fulfillment, delivery_lat, delivery_lng, geo_lat, geo_lng, geo_source, geo_checked_at ${pending}
+      ORDER BY id DESC LIMIT 3
+    `).all();
+    if (missing.length) await ensureOrderPoints(missing, { max: 3, budgetMs: 7000 });
+    res.json({
+      orders: missing.filter((o) => o.geo_lat != null).map((o) => ({
+        id: o.id, distance_km: distanceFromWarehouse(o), geo_source: o.geo_source, geo_label: o.geo_label || null, geo_lat: o.geo_lat, geo_lng: o.geo_lng,
+      })),
+      remaining: db.prepare(`SELECT COUNT(*) AS n ${pending}`).get().n,
+    });
   } catch (err) {
     next(err);
   }
@@ -446,7 +465,9 @@ router.get('/dispatch', async (req, res, next) => {
         const done = doneToday.get(u.id) || 0;
         return {
           id: u.id, full_name: u.full_name, phone: u.phone, avatar_url: null,
-          status: shipping ? 'delivering' : !mine.length && done ? 'done' : 'idle',
+          // Đang giao: có đơn đã bấm "Bắt đầu giao". Chờ giao: đã được giao đơn nhưng chưa bắt đầu.
+          // Đã giao xong: hết đơn đang giữ và hôm nay đã giao xong ít nhất 1 đơn. Còn lại: chưa có đơn.
+          status: shipping ? 'delivering' : mine.length ? 'waiting' : done ? 'done' : 'idle',
           active_count: mine.length, done_today: done,
           location: live.get(u.id) || null,
           route: { stops: plan.stops.map(({ id, step, lat, lng }) => ({ id, step, lat, lng })), total_km: plan.total_km },

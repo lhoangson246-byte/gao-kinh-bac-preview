@@ -1892,6 +1892,13 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
 - Thẻ đơn: địa chỉ giao hàng và khung giờ giao chữ to (~17px), in đậm, khung giờ có nền vàng nhạt.
 - Kiểm thử: `test:geocode` (10 mục, không gọi mạng).
 
+## 22/11/2026 (2) — Trạng thái shipper trên bản đồ, ghim khách, giảm giá đơn đầu chỉ cho đơn web
+
+- Sửa lỗi: mô phỏng đi hết lộ trình từng tự đổi shipper sang "Đã giao xong" dù đơn chưa giao. Giờ trạng thái luôn theo đơn thật (`GET /api/admin/dispatch`): ⏳ Chờ giao (`waiting` — đã được giao đơn, chưa bấm Bắt đầu giao), ✕ Đang giao (`delivering`), ✓ Đã giao xong (`done` — hết đơn đang giữ, hôm nay đã giao xong). Shipper chưa đi giao đứng chờ quanh kho; chỉ shipper đang giao mới chạy (hết vòng thì chạy lại).
+- Chú thích bản đồ chỉ còn 3 trạng thái shipper. Ghim khách: icon khách 👤 (khách buôn 🏢) + tên + dấu ghim 📍 (bỏ màu trạng thái đơn và icon 🔥).
+- Giảm 20.000đ đơn đầu chỉ cho đơn khách tự đặt trên web; đơn nhân viên / kế toán / chủ cửa hàng tạo (`source = 'staff'`) không giảm và không tính là đã dùng ưu đãi (khách vẫn được giảm ở đơn web đầu tiên). Mã giảm giá vẫn dùng được cho đơn nhân viên tạo.
+- Tự tìm định vị theo địa chỉ chạy NGẦM: `POST /api/admin/orders/locate` (tối đa 3 đơn / lần), trang Đơn hàng gọi sau khi danh sách đã hiện — mở trang không còn bị chậm vì tra bản đồ.
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

@@ -365,7 +365,7 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
         {errors.items && <small className="err">{errors.items}</small>}
         <p className="manual-subtotal">Tiền hàng: <strong>{formatVND(subtotal)}</strong>
           {form.home_delivery && subtotal > 0 && <> · Phí giao: <strong>{shippingFeeFor(subtotal) ? formatVND(shippingFeeFor(subtotal)) : 'Freeship'}</strong></>}
-          {' '}<small>{wholesale ? '(khách buôn: không áp dụng mã giảm giá, không tích điểm)' : '(đơn đầu của số điện thoại tự giảm 20.000đ, hoặc nhập mã)'}</small></p>
+          {' '}<small>{wholesale ? '(khách buôn: không áp dụng mã giảm giá, không tích điểm)' : '(đơn nhân viên tạo không áp dụng giảm 20.000đ đơn đầu — ưu đãi này chỉ cho khách tự đặt trên web; vẫn nhập được mã giảm giá)'}</small></p>
       </fieldset>
 
       <div className="about-admin-row">

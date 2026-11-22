@@ -43,13 +43,16 @@ export function createFleet(data) {
     if (stops.length) path = [wh, ...stops.map((p) => ({ lat: p.lat, lng: p.lng })), wh];
     else if (located.length && s.demo) path = [wh, ...located.slice(0, 4).map((o) => ({ lat: o.lat, lng: o.lng })), wh];
     else path = demoLoop(wh, 0.8 + index * 0.35, index * 1.3);
+    // Chỗ đứng chờ ở kho (xếp vòng quanh kho cho khỏi chồng lên nhau) khi chưa đi giao.
+    const park = demoLoop(wh, 0.22, (index / Math.max(list.length, 1)) * 2 * Math.PI)[0];
     const live = s.location && Number.isFinite(s.location.lat) && Number.isFinite(s.location.lng);
+    const start = s.status === 'delivering' ? path[0] : park;
     return {
       id: s.id, full_name: s.full_name, avatar_url: s.avatar_url || null, demo: !!s.demo,
       status: s.status, active_count: s.active_count || 0, done_today: s.done_today || 0,
       orderIds: stops.map((p) => p.id),
-      path, leg: 0, progress: 0,
-      lat: live ? s.location.lat : path[0].lat, lng: live ? s.location.lng : path[0].lng,
+      path, park, leg: 0, progress: 0,
+      lat: live ? s.location.lat : start.lat, lng: live ? s.location.lng : start.lng,
       source: live ? 'live' : 'simulated',
       // Giờ (Việt Nam) và sai số của vị trí thật gần nhất.
       live_at: live && s.location.at ? new Date(`${String(s.location.at).replace(' ', 'T')}Z`).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }) : null,
@@ -59,8 +62,9 @@ export function createFleet(data) {
 }
 
 /**
- * Một nhịp mô phỏng: shipper "Đang giao" đi tiếp trên đường của mình `seconds` giây với vận tốc
- * `kmh` (đã nhân tốc độ tua). Đi hết đường thì quay về kho và chuyển "Đã giao xong". Trả về mảng mới.
+ * Một nhịp mô phỏng: chỉ shipper "Đang giao" (đơn đã bấm Bắt đầu giao) đi tiếp trên đường của mình `seconds`
+ * giây với vận tốc `kmh` (đã nhân tốc độ tua); đi hết đường thì đi lại vòng mới. Mô phỏng KHÔNG tự đổi trạng
+ * thái: trạng thái luôn theo đơn thật (22/11/2026 — trước đây đi hết đường là báo "Đã giao xong" sai).
  */
 export function tickFleet(fleet, { seconds, kmh }) {
   return fleet.map((s) => {
@@ -82,18 +86,16 @@ export function tickFleet(fleet, { seconds, kmh }) {
     const b = s.path[Math.min(leg + 1, s.path.length - 1)];
     const lat = a.lat + (b.lat - a.lat) * progress;
     const lng = a.lng + (b.lng - a.lng) * progress;
-    // Shipper mô phỏng không có đơn thật thì đi vòng mãi; shipper có lộ trình thì về kho là xong.
-    if (finished && (s.demo || !s.orderIds.length)) return { ...s, leg: 0, progress: 0, lat: s.path[0].lat, lng: s.path[0].lng };
-    if (finished) return { ...s, leg: s.path.length - 1, progress: 0, lat: s.path[s.path.length - 1].lat, lng: s.path[s.path.length - 1].lng, status: 'done' };
+    if (finished) return { ...s, leg: 0, progress: 0, lat: s.path[0].lat, lng: s.path[0].lng };
     return { ...s, leg, progress, lat, lng };
   });
 }
 
-/** Đổi trạng thái để thử (Đang giao / Đã giao). Bấm "Đang giao" lại sau khi đã xong thì đi lại từ kho. */
+/** Đổi trạng thái để thử (Chờ giao / Đang giao / Đã giao). Chuyển sang "Đang giao" thì xuất phát từ kho. */
 export function setShipperStatus(fleet, id, status) {
   return fleet.map((s) => {
     if (s.id !== id) return s;
-    if (status === 'delivering' && s.status !== 'delivering' && s.leg >= s.path.length - 1) {
+    if (status === 'delivering' && s.status !== 'delivering' && s.source !== 'live') {
       return { ...s, status, manual: true, leg: 0, progress: 0, lat: s.path[0].lat, lng: s.path[0].lng };
     }
     return { ...s, status, manual: true };
@@ -119,11 +121,17 @@ export function mergeFleet(old, fresh) {
   return fresh.map((s) => {
     const prev = byId.get(s.id);
     if (!prev || s.source === 'live') return s;
+    const status = prev.manual ? prev.status : s.status;
+    // Chưa đi giao: đứng chờ ở kho (hoặc đứng yên chỗ vừa giao xong).
+    if (status !== 'delivering') {
+      return { ...s, status, manual: prev.manual, ...(prev.status === 'delivering' ? { lat: prev.lat, lng: prev.lng } : { lat: s.park.lat, lng: s.park.lng }) };
+    }
     const samePath = JSON.stringify(prev.path) === JSON.stringify(s.path);
     const here = { lat: prev.lat, lng: prev.lng };
+    if (prev.status !== 'delivering') return { ...s, status, manual: prev.manual, lat: s.path[0].lat, lng: s.path[0].lng, leg: 0, progress: 0 };
     return {
       ...s,
-      status: prev.manual ? prev.status : s.status,
+      status,
       manual: prev.manual,
       lat: prev.lat, lng: prev.lng,
       ...(samePath ? { leg: prev.leg, progress: prev.progress } : { path: [here, ...s.path.slice(1)], leg: 0, progress: 0 }),

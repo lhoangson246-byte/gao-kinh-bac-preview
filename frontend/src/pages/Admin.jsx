@@ -212,6 +212,23 @@ export default function Admin() {
     return () => { requestId.current++; };
   }, [reload, reloadTick]);
 
+  // Tự tìm định vị NGẦM cho các đơn chưa có (sau khi danh sách đã hiện), cập nhật khoảng cách trên thẻ đơn.
+  const locating = useRef(false);
+  const locateTried = useRef(new Set());   // đơn đã nhờ máy chủ tìm trong lần mở trang này
+  useEffect(() => {
+    if (!canOrders || locating.current) return;
+    const need = orders.filter((o) => o.fulfillment !== 'pickup' && ['pending', 'confirmed', 'shipping'].includes(o.status)
+      && o.distance_km == null && !o.geo_checked_at && !locateTried.current.has(o.id));
+    if (!need.length) return;
+    need.forEach((o) => locateTried.current.add(o.id));
+    locating.current = true;
+    api.adminLocateOrders().then(({ orders: found }) => {
+      if (!found.length) return;
+      const byId = new Map(found.map((o) => [o.id, o]));
+      setOrders((cur) => cur.map((o) => (byId.has(o.id) ? { ...o, ...byId.get(o.id), geo_checked_at: 'now' } : o)));
+    }).catch(() => {}).finally(() => { locating.current = false; });
+  }, [orders, canOrders]);
+
   /*
    * Bấm thông báo đơn mới → /quan-tri?orderId=123[&action=confirm|call]: mở tab Đơn hàng ở mục
    * "Tất cả" (đơn mới nhất nằm đầu), cuộn tới đơn đó và đặt sẵn con trỏ vào nút Xác nhận / số gọi.
