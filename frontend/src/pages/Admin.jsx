@@ -24,6 +24,7 @@ import OrdersTable from '../components/OrdersTable.jsx';
 import OrderReturnForm from '../components/OrderReturnForm.jsx';
 import BusinessUpdate from '../components/BusinessUpdate.jsx';
 import DispatchPanel from '../components/DispatchPanel.jsx';
+import OrderLocation from '../components/OrderLocation.jsx';
 import OrderPrint from '../components/OrderPrint.jsx';
 import { ListSkeleton } from '../components/Skeleton.jsx';
 import useScrollTabs from '../components/useScrollTabs.js';
@@ -780,9 +781,8 @@ export default function Admin() {
                                 <a href={`tel:${order.phone}`} className="phone-link">{order.phone}</a>
                                 <p className="address-text">{order.address}</p>
                                 {order.fulfillment !== 'pickup' && !['completed', 'cancelled'].includes(order.status) && (
-                                  <p className="distance-text">{order.distance_km != null
-                                    ? <>📏 Cách Kho Bồ Sơn ≈ <strong>{String(order.distance_km).replace('.', ',')} km</strong> (đường chim bay)</>
-                                    : <>📏 Chưa có định vị để tính khoảng cách</>}</p>
+                                  <OrderLocation order={order} canEdit={canManageOrders}
+                                                 onSaved={(patch) => setOrders((cur) => cur.map((o) => (o.id === order.id ? { ...o, ...patch } : o)))} />
                                 )}
                                 {order.map_url && order.fulfillment !== 'pickup' && (
                                   <a className="map-link" href={order.map_url} target="_blank" rel="noopener noreferrer">

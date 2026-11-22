@@ -50,8 +50,17 @@ router.use(requireAuth, requireStaff, accessTable([
 router.use(validateRoutes('admin'));
 
 /** GET /api/admin/orders — Tất cả đơn hàng (lọc ?status=) */
-router.get('/orders', (req, res, next) => {
+router.get('/orders', async (req, res, next) => {
   try {
+    // Vài đơn đang giao chưa có định vị: tự tìm (link Google Maps rút gọn, khách quen, địa chỉ chữ trên bản đồ) để
+    // thẻ đơn có khoảng cách ngay. Mỗi đơn chỉ tìm một lần (6 tiếng mới thử lại), tối đa 2 đơn / lượt tải.
+    const missing = db.prepare(`
+      SELECT id, phone, address, map_url, fulfillment, delivery_lat, delivery_lng, geo_lat, geo_lng, geo_source, geo_checked_at FROM orders
+      WHERE status IN ('pending', 'confirmed', 'shipping') AND COALESCE(fulfillment, 'delivery') <> 'pickup'
+        AND delivery_lat IS NULL AND geo_lat IS NULL AND (geo_checked_at IS NULL OR geo_checked_at < datetime('now', '-6 hours'))
+      ORDER BY id DESC LIMIT 2
+    `).all();
+    if (missing.length) await ensureOrderPoints(missing, { max: 2, budgetMs: 5000 });
     const status = req.query.status ? String(req.query.status) : null;
     if (status && !ORDER_STATUSES.includes(status)) {
       throw new HttpError(400, `Trạng thái phải thuộc: ${ORDER_STATUSES.join(', ')}.`);
@@ -499,7 +508,7 @@ router.patch('/orders/:id/location', async (req, res, next) => {
     const map = parseMapLink(req.body.map_url);
     if (map.error || !map.url) throw new HttpError(400, map.error || 'Dán link Google Maps của khách.', { map_url: map.error || 'Dán link Google Maps.' });
     const found = await resolveMapLink(map.url);
-    db.prepare("UPDATE orders SET map_url = ?, geo_lat = ?, geo_lng = ?, geo_source = ?, geo_checked_at = datetime('now') WHERE id = ?")
+    db.prepare("UPDATE orders SET map_url = ?, geo_lat = ?, geo_lng = ?, geo_source = ?, geo_label = NULL, geo_checked_at = datetime('now') WHERE id = ?")
       .run(map.url, found?.lat ?? null, found?.lng ?? null, found ? 'map' : null, orderId);
     writeAdminAudit(req, { action: 'order_location', entityType: 'order', entityId: orderId, before: { map_url: order.map_url }, after: { map_url: map.url } });
     const row = db.prepare('SELECT id, map_url, delivery_lat, delivery_lng, geo_lat, geo_lng FROM orders WHERE id = ?').get(orderId);

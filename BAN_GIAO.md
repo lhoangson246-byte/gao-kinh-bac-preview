@@ -1884,6 +1884,14 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
 - Ghim đơn chưa có người giao trên bản đồ: icon lửa 🔥.
 - Kiểm thử: test:routes (34), test:business (26).
 
+## 22/11/2026 — Tự tìm định vị theo địa chỉ chữ; địa chỉ và khung giờ to, đậm
+
+- Đơn không có vị trí khách ghim / link Google Maps / định vị khách quen: máy chủ tra địa chỉ chữ trên bản đồ OpenStreetMap (dịch vụ Photon, miễn phí, không khoá) trong khung tỉnh Bắc Ninh, chấm điểm khớp (số nhà + tên đường, phường, tên toà nhà) rồi gắn vào đơn (`orders.geo_source = 'address'`, `geo_label` = tên chỗ tìm được). Ví dụ "chung cư cao nguyên - võ cường" → Chung cư Cao Nguyên 2, Đường Lê Thái Tổ, Võ Cường (không lấy toà cùng tên ở Từ Sơn). Code: `backend/src/geocode.js`; chạy trong `ensureOrderPoints` (route-plan.js). Chỉ gửi đi địa chỉ, không gửi tên / SĐT. Tối đa ~1 yêu cầu / giây.
+- Mở trang Đơn hàng: tự tìm cho tối đa 2 đơn đang xử lý chưa có định vị mỗi lượt tải (mỗi đơn 6 tiếng mới thử lại). Bản đồ điều phối / gợi ý gom chuyến cũng tự tìm.
+- Thẻ đơn: "📍 Định vị tự tìm theo địa chỉ: … — gần đúng, nên kiểm tra" + "Xem trên Google Maps"; nút "✏️ Sửa định vị / Thêm định vị" dán link Google Maps hoặc toạ độ (PATCH /api/admin/orders/:id/location) để sửa sau khi cần.
+- Thẻ đơn: địa chỉ giao hàng và khung giờ giao chữ to (~17px), in đậm, khung giờ có nền vàng nhạt.
+- Kiểm thử: `test:geocode` (10 mục, không gọi mạng).
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

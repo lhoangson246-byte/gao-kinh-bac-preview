@@ -553,3 +553,15 @@ tr.ws-open td { background: var(--green-100); }
 .delivery-gps p { flex: 1 1 200px; margin: 0; font-size: .88rem; }
 .delivery-gps .btn { flex: none; }
 .business-maps-key { display: flex; flex-direction: column; gap: 4px; max-width: 520px; margin: 8px 0; font-weight: 700; font-size: .86rem; }
+
+/* Thẻ đơn hàng: địa chỉ và khung giờ giao to, đậm, dễ nhận ra; định vị tự tìm + sửa định vị (22/11/2026) */
+.admin-order-card .address-text { font-family: var(--font-sans); max-width: 520px; margin: 8px 0 4px; color: #1f2a1f; font-size: 1.08rem; font-weight: 800; line-height: 1.4; }
+.admin-order-card .slot-text { font-family: var(--font-sans); display: inline-block; margin: 8px 0 0; padding: 5px 10px; border-radius: 8px; background: #fff3d6; border: 1px solid #ecd49a; color: #5a3e05; font-size: 1.04rem; font-weight: 800; line-height: 1.4; }
+.admin-order-card .slot-text strong { font-weight: 900; }
+.order-location { margin: 2px 0 6px; }
+.order-location .link-button { font-size: .86rem; }
+.geo-auto { margin: 2px 0 4px; padding: 6px 9px; border-radius: 8px; background: #f4f8f1; font-size: .84rem; color: #2f4a2c; }
+.geo-auto a { white-space: nowrap; }
+.geo-edit { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; max-width: 560px; }
+.geo-edit .input { flex: 1 1 240px; min-width: 0; }
+.geo-edit small { flex-basis: 100%; }

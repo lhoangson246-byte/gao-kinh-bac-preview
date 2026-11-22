@@ -1420,5 +1420,11 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(deleteTestOrd
     );
   `);
 
+  // 22/11/2026: tên địa điểm tìm được khi tự tra địa chỉ chữ trên bản đồ (để nhân viên kiểm tra định vị gần đúng).
+  {
+    const ocols = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
+    if (!ocols.includes('geo_label')) db.exec('ALTER TABLE orders ADD COLUMN geo_label TEXT');
+  }
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

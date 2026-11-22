@@ -38,6 +38,7 @@
     "test:returns": "node test/returns.mjs",
     "test:business": "node test/business.mjs",
     "test:routes": "node test/routes.mjs",
+    "test:geocode": "node test/geocode.mjs",
     "check:live": "node test/live-security.mjs"
   },
   "dependencies": {

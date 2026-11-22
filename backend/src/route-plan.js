@@ -1,4 +1,6 @@
 import db from './db.js';
+import { geocodeAddress } from './geocode.js';
+import { MAP_ONLY_ADDRESS } from './map-link.js';
 
 /**
  * Tính khoảng cách và lộ trình giao hàng từ Kho Bồ Sơn (20/11/2026).
@@ -130,11 +132,18 @@ export async function ensureOrderPoints(orders, { max = 12, budgetMs = 6000 } = 
         source = found ? 'profile' : null;
       }
     }
-    db.prepare("UPDATE orders SET geo_lat = ?, geo_lng = ?, geo_source = ?, geo_checked_at = datetime('now') WHERE id = ?")
-      .run(found?.lat ?? null, found?.lng ?? null, source, order.id);
+    // Không có gì khác: tự tìm địa chỉ chữ trên bản đồ (gần đúng — nhân viên sửa được ở thẻ đơn) (22/11/2026).
+    let label = null;
+    if (!found && order.address && order.address !== MAP_ONLY_ADDRESS && Date.now() - started < budgetMs) {
+      const hit = await geocodeAddress(order.address);
+      if (hit) { found = { lat: hit.lat, lng: hit.lng }; source = 'address'; label = hit.label.slice(0, 200); }
+    }
+    db.prepare("UPDATE orders SET geo_lat = ?, geo_lng = ?, geo_source = ?, geo_label = ?, geo_checked_at = datetime('now') WHERE id = ?")
+      .run(found?.lat ?? null, found?.lng ?? null, source, label, order.id);
     order.geo_lat = found?.lat ?? null;
     order.geo_lng = found?.lng ?? null;
     order.geo_source = source;
+    order.geo_label = label;
   }
 }
 
