@@ -737,6 +737,12 @@ export default function Admin() {
                     <ManualOrderForm shippers={shippers} onClose={() => setShowCreate(false)}
                                      onCreated={(order) => { setShowCreate(false); notify(`Đã tạo đơn ${order.code}.`); reload({ refreshProducts: false }); }} />
                   )}
+                  {orders.some((o) => o.stock_warnings?.length) && (
+                    <div className="alert warning stock-warn-banner" role="status">
+                      ⚠️ Có <strong>{orders.filter((o) => o.stock_warnings?.length).length} đơn</strong> đang thiếu hàng ở kho xuất (web bán theo tổng cửa hàng + kho).
+                      Điều chuyển hàng sang hoặc để shipper qua cửa hàng lấy. <Link to="/quan-tri/kho">Mở trang Kho</Link>
+                    </div>
+                  )}
                   {(transferPending > 0 || transferOnly) && (
                     <div className={`alert transfer-alert${transferOnly ? ' active' : ''}`} role="status">
                       💳 {transferOnly
@@ -795,6 +801,7 @@ export default function Admin() {
                                 <h2>{order.receiver_name}</h2>
                                 {order.wholesale_code && <p className="wholesale-tag">🏢 Khách buôn {order.wholesale_code} · {order.wholesale_company}</p>}
                                 {order.warehouse === 'KH_BS' && <p className="warehouse-tag">📦 Xuất hàng từ Kho Bồ Sơn</p>}
+                                {order.stock_warnings?.length > 0 && <StockWarning warnings={order.stock_warnings} />}
                                 <a href={`tel:${order.phone}`} className="phone-link">{order.phone}</a>
                                 <p className="address-text">{order.address}</p>
                                 {order.fulfillment !== 'pickup' && !['completed', 'cancelled'].includes(order.status) && (
@@ -1095,6 +1102,29 @@ export default function Admin() {
           )}
         </main>
       </div>
+    </div>
+  );
+}
+
+const WH_NAME = { KH_BS: 'Kho Bồ Sơn', KH_NC: 'Cửa hàng Nguyễn Cao' };
+const fmtKg = (v) => String(v).replace('.', ',');
+/**
+ * Kho xuất của đơn đang thiếu hàng (24/11/2026): web bán theo tổng hai nơi nên đơn vẫn được nhận. Báo kế toán
+ * điều chuyển từ nơi kia sang, hoặc để shipper qua cửa hàng lấy sau khi điều chuyển đúng số lượng.
+ */
+function StockWarning({ warnings }) {
+  const where = WH_NAME[warnings[0].warehouse];
+  return (
+    <div className="stock-warn" role="alert">
+      <b>⚠️ {where} đang hết / thiếu hàng cho đơn này</b>
+      <ul>
+        {warnings.map((w, i) => (
+          <li key={i}>{w.product_name}: thiếu <b>{w.short_kg != null ? `${fmtKg(w.short_kg)} kg` : `${fmtKg(w.short)} ${w.unit}`}</b>
+            {' '}— {WH_NAME[w.other_warehouse]} còn {w.other_kg != null ? `${fmtKg(w.other_kg)} kg` : fmtKg(w.other_stock)}</li>
+        ))}
+      </ul>
+      <small>Điều chuyển từ {WH_NAME[warnings[0].other_warehouse]} sang {where}, hoặc để nhân viên giao qua cửa hàng lấy sau khi điều chuyển số lượng tương ứng.</small>
+      <Link to="/quan-tri/kho" className="btn btn-secondary">🔄 Mở trang Kho để điều chuyển</Link>
     </div>
   );
 }

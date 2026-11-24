@@ -1912,6 +1912,14 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
 - Phiếu nhập: nút "➕ Mặt hàng mới (chưa có trên web)" — `POST /api/admin/inventory/products` (quyền inventory.receive hoặc products.manage): tạo mặt hàng ĐANG ẨN trên web, giá 0đ (tên, quy cách, kg mỗi bao — gõ "bao 25kg" tự điền 25, nhóm hàng); chủ cửa hàng đặt giá, ảnh ở trang Sản phẩm rồi bật hiện. Trùng tên + quy cách → 409.
 - Kiểm thử: test:inventory (77).
 
+## 24/11/2026 (2) — Web bán theo tổng hai nơi, kho thiếu vẫn nhận đơn + cảnh báo, lọc kho theo nơi
+
+- Khách thấy trên web TỔNG tồn cửa hàng + kho (`ONLINE_STOCK_SQL` = stock + stock_bs). Đơn web trừ ở kho của sản phẩm (cột "Đơn web trừ ở", mặc định Bồ Sơn); đơn kế toán tạo trừ ở kho chọn khi tạo đơn.
+- Kho xuất thiếu mà tổng hai nơi còn đủ: VẪN nhận đơn (`moveStock({ totalGuard: true })` chỉ chặn khi vượt tổng), tồn kho đó âm. `GET /api/admin/orders` trả `stock_warnings` cho đơn đang xử lý; thẻ đơn hiện "⚠️ Kho … đang hết / thiếu hàng" (thiếu bao nhiêu kg, nơi kia còn bao nhiêu) + nút mở trang Kho để điều chuyển, hoặc để shipper qua cửa hàng lấy sau khi điều chuyển. Đầu trang Đơn hàng có dải báo số đơn thiếu hàng. Form Tạo đơn chỉ chặn khi vượt tổng, kho xuất thiếu thì báo vàng.
+- Bán tại quầy trừ tồn Cửa hàng Nguyễn Cao (đã có từ trước, nay web cũng giảm theo vì web thấy tổng).
+- Trang Kho: lọc "Cửa hàng Nguyễn Cao" = hàng chọn đơn web trừ ở Nguyễn Cao + hàng đang có ở cửa hàng; lọc "Kho Bồ Sơn" = chỉ hàng của Kho Bồ Sơn. Cảnh báo: kho của sản phẩm hết mà nơi kia còn → vàng "… hết (còn ở …, web vẫn bán)"; tồn âm → đỏ "… thiếu hàng cho đơn — điều chuyển".
+- Kiểm thử: test:inventory (82), returns, retail, isolated cập nhật theo quy tắc mới.
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

@@ -29,7 +29,12 @@ export const ONLINE_COLUMN = COLUMN[ONLINE];
  *  - ONLINE_STOCK_SQL: biểu thức SQL tồn bán online (dùng được với bí danh bảng qua onlineStockSql('p.')).
  */
 export const onlineWarehouseOf = (product) => (product?.online_warehouse === STORE ? STORE : MAIN);
-export const onlineStockSql = (prefix = '') => `(CASE ${prefix}online_warehouse WHEN '${STORE}' THEN ${prefix}stock ELSE ${prefix}stock_bs END)`;
+/**
+ * 24/11/2026: khách thấy trên web TỔNG tồn của cả hai nơi (cửa hàng + kho). Đơn vẫn trừ ở kho của sản phẩm
+ * (cột "Bán web từ", mặc định Kho Bồ Sơn) hoặc kho nhân viên chọn khi tạo đơn; kho đó thiếu thì vẫn nhận đơn
+ * (tồn kho đó âm) và thẻ đơn báo kế toán điều chuyển từ nơi kia sang / để shipper qua cửa hàng lấy.
+ */
+export const onlineStockSql = (prefix = '') => `(${prefix}stock + ${prefix}stock_bs)`;
 export const ONLINE_STOCK_SQL = onlineStockSql();
 
 export const isWarehouse = (code) => Object.hasOwn(COLUMN, code);
@@ -87,13 +92,17 @@ export const MOVEMENT_GROUPS = {
  * để nơi gọi huỷ cả giao dịch — không bao giờ bán vượt tồn. `strict: false` dùng cho bán tại quầy và
  * kiểm kê, nơi số trên máy phải theo hàng thật (tồn được phép âm, bảng tồn kho sẽ báo đỏ).
  */
-export function moveStock({ productId, warehouse, delta, kind, ref = null, note = null, actor = null, strict = true }) {
+export function moveStock({ productId, warehouse, delta, kind, ref = null, note = null, actor = null, strict = true, totalGuard = false }) {
   const column = stockColumn(warehouse);
   if (!Number.isFinite(delta)) throw new Error('Số lượng thay đổi tồn không hợp lệ.');
   delta = roundQty(delta);
   if (!Object.hasOwn(MOVEMENT_KINDS, kind)) throw new Error(`Loại biến động kho không hợp lệ: ${kind}`);
   let changed = 1;
-  if (delta < 0 && strict) {
+  if (delta < 0 && totalGuard) {
+    // Đơn hàng (24/11/2026): trừ ở kho của đơn, chỉ cần TỔNG hai nơi còn đủ (kho đó được phép âm).
+    changed = db.prepare(`UPDATE products SET ${column} = ROUND(${column} - ?, ${QTY_DECIMALS}) WHERE id = ? AND stock + stock_bs >= ?`)
+      .run(-delta, productId, -delta).changes;
+  } else if (delta < 0 && strict) {
     changed = db.prepare(`UPDATE products SET ${column} = ROUND(${column} - ?, ${QTY_DECIMALS}) WHERE id = ? AND ${column} >= ?`)
       .run(-delta, productId, -delta).changes;
   } else if (delta !== 0) {
@@ -128,20 +137,24 @@ export function inTransitByProduct() {
 }
 
 /**
- * Trạng thái cảnh báo của một dòng trong bảng tồn kho. Kho bán online của sản phẩm (mặc định Bồ Sơn) xét
- * trước: kho đó hết thì web báo hết hàng dù kho kia còn.
+ * Trạng thái cảnh báo của một dòng trong bảng tồn kho (24/11/2026): web bán theo TỔNG hai nơi; kho của sản phẩm
+ * (Bán web từ) hết mà nơi kia còn thì web vẫn bán, chỉ nhắc điều chuyển.
  */
 export function stockStatus({ stock_nc: nc, stock_bs: bs, moving_to_nc: toNc = 0, moving_to_bs: toBs = 0, online = MAIN }) {
   const webAtStore = online === STORE;
-  const web = webAtStore ? nc : bs;
-  const toWeb = webAtStore ? toNc : toBs;
-  const webName = webAtStore ? 'cửa hàng' : 'Bồ Sơn';
-  if (nc < 0 || bs < 0) return { level: 'red', code: 'negative', label: 'Âm kho, cần kiểm kê' };
+  const home = webAtStore ? nc : bs;
+  const toHome = webAtStore ? toNc : toBs;
+  const homeName = webAtStore ? 'cửa hàng' : 'Bồ Sơn';
+  const otherName = webAtStore ? 'Bồ Sơn' : 'cửa hàng';
   if (nc + bs <= 0) return { level: 'red', code: 'out', label: toNc + toBs > 0 ? 'Hết hàng, đang chuyển về' : 'Hết hàng, cần nhập' };
-  if (web <= 0) {
-    return { level: 'red', code: 'web_out', label: toWeb > 0 ? `Web hết hàng, đang chuyển về ${webName}` : `Web báo hết (chỉ còn ở ${webAtStore ? 'Bồ Sơn' : 'cửa hàng'})` };
+  if (nc < 0 || bs < 0) {
+    // Âm vì đơn đã nhận khi kho thiếu: cần điều chuyển từ nơi kia sang cho khớp.
+    return { level: 'red', code: 'negative', label: `${nc < 0 ? 'Cửa hàng' : 'Bồ Sơn'} thiếu hàng cho đơn — điều chuyển từ ${nc < 0 ? 'Bồ Sơn' : 'cửa hàng'}` };
   }
-  if (web <= LOW_STOCK_AT) return { level: 'yellow', code: 'low', label: `Sắp hết ở ${webName} (web)` };
+  if (home <= 0) {
+    return { level: 'yellow', code: 'web_out', label: toHome > 0 ? `${homeName === 'Bồ Sơn' ? 'Bồ Sơn' : 'Cửa hàng'} hết, đang chuyển về` : `${homeName === 'Bồ Sơn' ? 'Bồ Sơn' : 'Cửa hàng'} hết (còn ở ${otherName}, web vẫn bán)` };
+  }
+  if (nc + bs <= LOW_STOCK_AT) return { level: 'yellow', code: 'low', label: 'Sắp hết (web)' };
   if (!webAtStore && nc <= 0) return { level: 'blue', code: 'store_empty', label: toNc > 0 ? 'Đang chuyển về cửa hàng' : 'Cửa hàng hết, chỉ có ở Bồ Sơn' };
   if (!webAtStore && nc <= LOW_STOCK_AT) return { level: 'yellow', code: 'store_low', label: 'Sắp hết ở cửa hàng' };
   return { level: 'green', code: 'ok', label: 'Đủ hàng' };

@@ -35,7 +35,9 @@ try {
   const b = await make('Gạo bán ở kho', 50);
   await inv('/count', { method: 'POST', body: { warehouse: 'KH_NC', kind: 'opening', items: [{ product_id: a.id, counted: 30 }, { product_id: b.id, counted: 5 }] } });
   let r = await row(a.id);
-  check('Mặc định bán web từ Bồ Sơn: Bồ Sơn hết thì web báo hết dù cửa hàng còn 30', r.online === 'KH_BS' && (await pub(a.id)).stock === 0 && r.status.code === 'web_out', short(r));
+  // 24/11/2026: web thấy tổng hai nơi; Bồ Sơn hết chỉ nhắc điều chuyển (vàng), web vẫn bán.
+  check('Mặc định đơn web trừ ở Bồ Sơn: Bồ Sơn hết thì web vẫn thấy tổng 30, bảng tồn nhắc điều chuyển', r.online === 'KH_BS' && (await pub(a.id)).stock === 30
+    && r.status.code === 'web_out' && r.status.level === 'yellow', short(r));
   const viewer = await staff('Em Xem Kho', 1, ['inventory.view']);
   check('Quyền xem kho không đổi được kho bán online (403)', (await call(`/admin/inventory/products/${a.id}/online`, { method: 'PUT', token: viewer, body: { warehouse: 'KH_NC' } })).status === 403);
   const switched = await inv(`/products/${a.id}/online`, { method: 'PUT', body: { warehouse: 'KH_NC' } });

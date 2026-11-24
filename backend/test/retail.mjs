@@ -236,7 +236,8 @@ let invoice10k;
   });
   const after = (await stocks()).stock;
   check('Bán tại quầy trừ tồn Cửa hàng Nguyễn Cao', after === before - 3, `${before} -> ${after}`);
-  check('Bán tại quầy không đổi số tồn khách thấy trên web (Bồ Sơn)', (await call(`/products/${p35.id}`)).data.product.stock === webBefore);
+  // 24/11/2026: web thấy TỔNG cửa hàng + kho, nên bán tại quầy (trừ cửa hàng) làm số trên web giảm đúng số đã bán.
+  check('Bán tại quầy: số tồn khách thấy trên web (tổng hai nơi) giảm đúng 3', (await call(`/products/${p35.id}`)).data.product.stock === Math.max(webBefore - 3, 0));
 }
 
 /* ---------- Tra cứu khách theo số điện thoại ---------- */

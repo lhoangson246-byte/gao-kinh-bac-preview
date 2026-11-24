@@ -98,6 +98,8 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
   const stockAt = (p, code) => Math.floor(Math.max(whStock?.get(p.id)?.[code] ?? (code === 'KH_BS' ? p.stock : 0), 0));
   const avail = (p) => stockAt(p, warehouse);
   const otherStock = (p) => stockAt(p, fromMain ? 'KH_NC' : 'KH_BS');
+  // 24/11/2026: nhận đơn theo TỔNG hai nơi; kho xuất thiếu thì vẫn tạo được đơn (máy báo để điều chuyển).
+  const totalStock = (p) => avail(p) + otherStock(p);
   const selectable = products.filter((p) => p.price > 0 || (wholesale && fixedPrice(p.id)));
   const pickWarehouse = (code) => {
     if (code === warehouse) return;
@@ -169,10 +171,10 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
     event.preventDefault();
     if (wholesale && !ws) { setErrors({ wholesale: 'Chọn khách buôn trong danh sách.' }); return; }
     if (!chosen.length) { setErrors({ items: 'Chọn ít nhất một loại gạo.' }); return; }
-    const short = chosen.find((l) => byId[l.product_id] && Number(l.quantity) > avail(byId[l.product_id]));
+    const short = chosen.find((l) => byId[l.product_id] && Number(l.quantity) > totalStock(byId[l.product_id]));
     if (short) {
       const p = byId[short.product_id];
-      setErrors({ items: `“${p.name}” ở ${whName} chỉ còn ${avail(p)} ${p.unit}${otherStock(p) > 0 ? `. Bấm “${fromMain ? 'Cửa hàng' : 'Kho'}” ở góc trên để xuất từ ${fromMain ? 'cửa hàng' : 'kho'} (còn ${otherStock(p)}).` : '.'}` });
+      setErrors({ items: `“${p.name}” cả cửa hàng và kho chỉ còn ${totalStock(p)} ${p.unit}.` });
       return;
     }
     if (wholesale && chosen.some((l) => !(Number.isInteger(Number(l.price)) && Number(l.price) > 0))) {
@@ -335,7 +337,7 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
               <select className="input" value={line.product_id} onChange={(e) => pickProduct(index, e.target.value)} aria-label={`Loại gạo ${index + 1}`}>
                 <option value="">— Chọn loại gạo —</option>
                 {selectable.map((p) => (
-                  <option key={p.id} value={p.id} disabled={avail(p) <= 0 && String(p.id) !== line.product_id}>
+                  <option key={p.id} value={p.id} disabled={totalStock(p) <= 0 && String(p.id) !== line.product_id}>
                     {p.name} · {p.unit} · {wholesale && fixedPrice(p.id) ? `giá riêng ${formatVND(fixedPrice(p.id))}` : formatVND(p.price)}
                     {avail(p) > 0 ? ` (còn ${avail(p)})` : ` (${whName.toLowerCase()} hết${otherStock(p) > 0 ? `, ${fromMain ? 'cửa hàng' : 'kho'} còn ${otherStock(p)}` : ''})`}
                   </option>
@@ -355,8 +357,11 @@ export default function ManualOrderForm({ shippers, onCreated, onClose }) {
               {lines.length > 1 && (
                 <button type="button" className="icon-close" onClick={() => setLines((cur) => cur.filter((_, i) => i !== index))} aria-label="Bỏ dòng">×</button>
               )}
-              {product && Number(line.quantity) > avail(product) && (
-                <small className="err manual-short">{whName} chỉ còn {avail(product)} {product.unit}{otherStock(product) > 0 ? ` · ${fromMain ? 'cửa hàng' : 'kho'} còn ${otherStock(product)}` : ''}</small>
+              {product && Number(line.quantity) > totalStock(product) && (
+                <small className="err manual-short">Cả cửa hàng và kho chỉ còn {totalStock(product)} {product.unit}</small>
+              )}
+              {product && Number(line.quantity) > avail(product) && Number(line.quantity) <= totalStock(product) && (
+                <small className="manual-short warn">⚠️ {whName} chỉ còn {avail(product)} {product.unit} — đơn vẫn tạo được; nhớ điều chuyển từ {fromMain ? 'cửa hàng' : 'kho'} (còn {otherStock(product)}) hoặc để shipper qua {fromMain ? 'cửa hàng' : 'kho'} lấy.</small>
               )}
             </div>
           );

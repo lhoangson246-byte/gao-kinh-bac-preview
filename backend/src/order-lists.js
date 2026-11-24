@@ -61,6 +61,29 @@ export function listAdminOrders({ status, from = null, to = null, limit = 30, of
     FROM order_returns WHERE order_id IN (${page}) ORDER BY id
   `).all(...args);
   for (const row of rows) row.returns = returns.filter((r) => r.order_id === row.id);
+  // Kho xuất đang thiếu hàng (24/11/2026): web bán theo tổng hai nơi nên đơn vẫn nhận khi kho của đơn đã hết; tồn
+  // kho đó âm. Báo trên thẻ đơn đang xử lý để kế toán điều chuyển từ nơi kia sang / shipper qua cửa hàng lấy.
+  const productIds = [...new Set(items.filter((i) => i.product_id).map((i) => i.product_id))];
+  const stocks = productIds.length ? new Map(db.prepare(`SELECT id, stock, stock_bs, weight_kg FROM products WHERE id IN (${productIds.map(() => '?').join(',')})`)
+    .all(...productIds).map((p) => [p.id, p])) : new Map();
+  for (const row of rows) {
+    row.stock_warnings = [];
+    if (!['pending', 'confirmed', 'shipping'].includes(row.status)) continue;
+    for (const item of items) {
+      if (item.order_id !== row.id || !item.product_id) continue;
+      const p = stocks.get(item.product_id);
+      if (!p) continue;
+      const warehouse = item.warehouse || row.warehouse || 'KH_BS';
+      const here = warehouse === 'KH_NC' ? p.stock : p.stock_bs;
+      if (here >= 0) continue;
+      const short = Math.min(item.quantity, -here);
+      row.stock_warnings.push({
+        product_name: item.product_name, unit: item.unit, warehouse, short, short_kg: p.weight_kg > 0 ? Math.round(short * p.weight_kg * 10) / 10 : null,
+        other_warehouse: warehouse === 'KH_NC' ? 'KH_BS' : 'KH_NC', other_stock: warehouse === 'KH_NC' ? p.stock_bs : p.stock,
+        other_kg: p.weight_kg > 0 ? Math.round((warehouse === 'KH_NC' ? p.stock_bs : p.stock) * p.weight_kg * 10) / 10 : null,
+      });
+    }
+  }
   const counts = Object.fromEntries(ORDER_STATUSES.map(s => [s, 0]));
   const countClause = range.length ? `WHERE ${range[0]}` : '';
   for (const row of db.prepare(`SELECT status, COUNT(*) AS n FROM orders ${countClause} GROUP BY status`).all(...rangeArgs)) counts[row.status] = row.n;

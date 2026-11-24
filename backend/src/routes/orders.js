@@ -15,7 +15,7 @@ import { assertGuestOrderCapacity } from '../abuse.js';
 import { readLocation } from './addresses.js';
 import { promoGiftFor } from '../promotions.js';
 import { attachItems } from '../order-lists.js';
-import { MAIN, ONLINE_STOCK_SQL, moveStock, onlineWarehouseOf, stockColumn, warehouseName } from '../inventory.js';
+import { MAIN, ONLINE_STOCK_SQL, moveStock, onlineWarehouseOf } from '../inventory.js';
 import { loyaltyProfile, refundPoints, spendPoints } from '../loyalty.js';
 import { notifyNewOrder, notifyTransferReported, siteOrigin } from '../push.js';
 import { trackOrder, trackOrdersByPhone } from '../order-tracking.js';
@@ -114,6 +114,7 @@ export function placeOrder({
     // và cả transaction bị huỷ bỏ, tránh bán vượt tồn kho. Mỗi lần trừ ghi một dòng nhật ký kho.
     const whOf = (product) => warehouse || onlineWarehouseOf(product);
     const takeStock = (product, quantity, orderId) => moveStock({
+      totalGuard: true,
       productId: product.id, warehouse: whOf(product), delta: -quantity, kind: wholesaleCustomerId ? 'order_wholesale' : 'order',
       ref: { type: 'order', id: orderId, code: orderCode(orderId) }, actor: stockActor,
     });
@@ -134,9 +135,11 @@ export function placeOrder({
         // Cửa hàng chưa nhập giá — không được để khách đặt với giá 0 đồng.
         throw new HttpError(400, `“${product.name}” chưa có giá bán. Vui lòng liên hệ cửa hàng.`);
       }
-      const available = Math.floor(Math.max(product[stockColumn(whOf(product))], 0));
+      // Web bán theo TỔNG hai nơi (24/11/2026); đơn trừ ở kho của sản phẩm / kho nhân viên chọn, kho đó thiếu thì
+      // vẫn nhận đơn và thẻ đơn báo kế toán điều chuyển.
+      const available = Math.floor(Math.max(product.stock + product.stock_bs, 0));
       if (available < quantity) {
-        throw new HttpError(400, `“${product.name}” chỉ còn ${available} ${product.unit}${staff ? ` ở ${warehouseName(whOf(product))}` : ''}.`);
+        throw new HttpError(400, `“${product.name}” chỉ còn ${available} ${product.unit}.`);
       }
       lines.push({ product, quantity });
       subtotal += product.price * quantity;

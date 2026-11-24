@@ -585,3 +585,10 @@ tr.ws-open td { background: var(--green-100); }
 .inv-new-product { display: grid; gap: 8px; margin: 8px 0; padding: 12px; border: 1px dashed #b9a46a; border-radius: 12px; background: #fffaf0; }
 .inv-new-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 12px; }
 .inv-new-grid label { display: flex; flex-direction: column; gap: 4px; font-size: .86rem; font-weight: 700; }
+
+/* Kho xuất thiếu hàng cho đơn (24/11/2026) */
+.stock-warn { display: grid; gap: 4px; margin: 8px 0; padding: 10px 12px; border: 1px solid #e6b85c; border-left: 4px solid #d9822b; border-radius: 10px; background: #fff6e5; color: #5a3a05; font-size: .88rem; }
+.stock-warn ul { margin: 2px 0; padding-left: 18px; }
+.stock-warn .btn { justify-self: start; margin-top: 4px; }
+.stock-warn-banner a { font-weight: 800; }
+.manual-short.warn { color: #8a5a00; }

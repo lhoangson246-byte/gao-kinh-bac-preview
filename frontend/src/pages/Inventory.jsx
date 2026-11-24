@@ -168,14 +168,16 @@ export default function Inventory() {
     return products.filter((p) => {
       if (q && !fold(`${p.sku || ''} ${p.name}`).includes(q)) return false;
       if (onlyAlert && p.status.level === 'green') return false;
-      if (warehouse === STORE) return p.stock_nc !== 0 || p.moving_to_nc > 0;
-      if (warehouse === MAIN) return p.stock_bs !== 0 || p.moving_to_bs > 0;
+      // 24/11/2026: Cửa hàng Nguyễn Cao = hàng chọn "Đơn web trừ ở Nguyễn Cao" + hàng đang có ở cửa hàng;
+      // Kho Bồ Sơn = chỉ hàng của Kho Bồ Sơn (đơn web trừ ở Bồ Sơn).
+      if (warehouse === STORE) return p.online === STORE || p.stock_nc !== 0 || p.moving_to_nc > 0;
+      if (warehouse === MAIN) return p.online === MAIN && (p.is_active || p.stock_bs !== 0 || p.moving_to_bs > 0);
       // Hàng đã ẩn khỏi cửa hàng và không còn tồn ở đâu thì không cần hiện.
       return p.is_active || p.total !== 0 || p.moving_to_nc > 0 || p.moving_to_bs > 0;
     });
   }, [products, query, onlyAlert, warehouse]);
   const alerts = useMemo(() => ({
-    out: products.filter((p) => p.is_active && ['out', 'negative', 'web_out'].includes(p.status.code)).length,
+    out: products.filter((p) => p.is_active && ['out', 'negative'].includes(p.status.code)).length,
     webLow: products.filter((p) => p.is_active && p.status.code === 'low').length,
     storeLow: products.filter((p) => p.is_active && ['store_empty', 'store_low'].includes(p.status.code)).length,
   }), [products]);
@@ -200,7 +202,7 @@ export default function Inventory() {
   const canSetOnline = canTransfer || canManageProducts;
   const setOnline = async (p, code) => {
     if (code === p.online) return;
-    if (!window.confirm(`Bán “${p.name}” trên web từ ${WAREHOUSE_NAME[code]}?\nKhách sẽ thấy tồn ${WAREHOUSE_NAME[code]} (${amountText(p, code === STORE ? p.stock_nc : p.stock_bs)}) và đơn web trừ hàng ở đó.`)) return;
+    if (!window.confirm(`Đơn web của “${p.name}” trừ hàng ở ${WAREHOUSE_NAME[code]}?\nKhách vẫn thấy tổng tồn cửa hàng + kho (${amountText(p, p.total)}). ${WAREHOUSE_NAME[code]} hết thì đơn vẫn nhận và thẻ đơn báo kế toán điều chuyển.`)) return;
     try {
       const result = await api.inventorySetOnline(p.id, code);
       setData((cur) => ({ ...cur, ...result, transfers: result.transfers || cur?.transfers || [] }));
@@ -238,17 +240,17 @@ export default function Inventory() {
               <div className={`inv-kpi total${alerts.out ? ' warn' : ''}`}>
                 <span>Tổng tồn hệ thống</span>
                 <strong>{kgText(data.totals.all)}</strong>
-                <small>{alerts.out ? `🔴 ${alerts.out} loại web báo hết hoặc âm kho` : '🟢 An toàn'}{data.totals.all.other_units ? ` · ${formatQty(data.totals.all.other_units)} đơn vị hàng khác` : ''}</small>
+                <small>{alerts.out ? `🔴 ${alerts.out} loại hết hàng hoặc kho thiếu cho đơn` : '🟢 An toàn'}{data.totals.all.other_units ? ` · ${formatQty(data.totals.all.other_units)} đơn vị hàng khác` : ''}</small>
               </div>
               <div className="inv-kpi store">
                 <span>Cửa hàng Nguyễn Cao (bán tại quầy)</span>
                 <strong>{kgText(data.totals[STORE])}</strong>
-                <small>{alerts.storeLow ? `🟡 ${alerts.storeLow} loại sắp hết hoặc hết ở cửa hàng` : 'Khách tới mua tại cửa hàng, đủ hàng'}</small>
+                <small>{alerts.storeLow ? `🟡 ${alerts.storeLow} loại sắp hết hoặc hết ở cửa hàng` : 'Bán tại quầy trừ ở đây, đủ hàng'}</small>
               </div>
               <div className="inv-kpi main">
-                <span>Kho Bồ Sơn (bán online)</span>
+                <span>Kho Bồ Sơn (đơn web trừ ở đây)</span>
                 <strong>{kgText(data.totals[MAIN])}</strong>
-                <small>{[alerts.webLow ? `🟡 ${alerts.webLow} loại sắp hết trên web` : '', data.in_transit ? `🔄 ${data.in_transit} lệnh đang chuyển` : ''].filter(Boolean).join(' · ') || 'Số khách thấy trên web'}</small>
+                <small>{[alerts.webLow ? `🟡 ${alerts.webLow} loại sắp hết trên web` : '', data.in_transit ? `🔄 ${data.in_transit} lệnh đang chuyển` : ''].filter(Boolean).join(' · ') || 'Web hiện tổng cửa hàng + kho'}</small>
               </div>
             </section>
 
@@ -298,7 +300,7 @@ export default function Inventory() {
                       <th>Mã SP</th><th>Tên sản phẩm</th>
                       {showNc && showBs && <th className="inv-total-col">Tổng tồn</th>}
                       {showNc && <th className="wh-col KH_NC">Tồn Nguyễn Cao</th>}{showBs && <th className="wh-col KH_BS">Tồn Bồ Sơn</th>}
-                      <th>Bán web từ</th><th>Đang chuyển</th><th>Cảnh báo</th><th>Thao tác nhanh</th>
+                      <th title="Đơn khách đặt trên web và đơn kế toán tạo trừ hàng ở kho này">Đơn web trừ ở</th><th>Đang chuyển</th><th>Cảnh báo</th><th>Thao tác nhanh</th>
                     </tr>
                   </thead>
                   <tbody ref={sort.listRef}>
@@ -365,8 +367,9 @@ export default function Inventory() {
                 </table>
               </div>
               <p className="field-help">
-                Cột "Bán web từ": khách thấy tồn của kho đó trên web và đơn khách đặt online trừ ở kho đó (mặc định Bồ Sơn). Chuyển hàng sang Cửa hàng Nguyễn Cao mà vẫn muốn bán online thì chọn Nguyễn Cao.
-                Bán tại quầy trừ ở cửa hàng. Đơn nhân viên tạo trừ ở kho chọn khi tạo đơn. "Sắp hết" khi kho bán web còn từ {data.low_stock_at} trở xuống.
+                Khách thấy trên web <b>tổng tồn</b> cửa hàng + kho. Cột "Đơn web trừ ở": đơn khách đặt online trừ hàng ở kho đó (mặc định Bồ Sơn); kho đó hết thì đơn vẫn nhận,
+                thẻ đơn báo kế toán điều chuyển từ nơi kia sang hoặc để shipper qua cửa hàng lấy. Bán tại quầy trừ ở Cửa hàng Nguyễn Cao. Đơn kế toán tạo trừ ở kho chọn khi tạo đơn.
+                "Sắp hết" khi tổng còn từ {data.low_stock_at} trở xuống.
               </p>
             </section>
 

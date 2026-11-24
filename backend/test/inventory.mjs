@@ -42,13 +42,27 @@ try {
   check('Ô tồn kho khi thêm sản phẩm là tồn Bồ Sơn (kho bán online)', r.stock_bs === 7 && r.stock_nc === 0 && r.status.code === 'low', short(r));
   let led = await ledgerSum(webp.id, 'KH_BS');
   check('Thêm sản phẩm có tồn: ghi dòng "Tồn đầu kỳ" ở Bồ Sơn', led.sum === 7 && led.last?.kind === 'opening' && !!led.last?.actor_name, short(led.last));
-  check('Khách trên web thấy tồn Bồ Sơn', (await call(`/products/${webp.id}`)).data.product.stock === 7);
+  check('Khách trên web thấy tồn (tổng hai nơi)', (await call(`/products/${webp.id}`)).data.product.stock === 7);
+  // 24/11/2026: web bán theo TỔNG cửa hàng + kho; đơn trừ ở kho của sản phẩm (Bồ Sơn), kho thiếu thì vẫn nhận đơn.
   r = await row(gao.id);
-  check('Bồ Sơn hết mà cửa hàng còn: web báo hết (0), bảng tồn báo đỏ', (await call(`/products/${gao.id}`)).data.product.stock === 0 && r.status.code === 'web_out', short(r));
+  check('Bồ Sơn hết mà cửa hàng còn: web vẫn thấy tổng (100), bảng tồn nhắc điều chuyển (vàng)', (await call(`/products/${gao.id}`)).data.product.stock === 100
+    && r.status.code === 'web_out' && r.status.level === 'yellow', short(r));
   const webOut = await call('/orders/guest', { method: 'POST', body: {
     receiver_name: 'Khách Web', phone: phone('07', 1), address: 'Số 1, đường Ngô Gia Tự, phường Tiền An', delivery_area: 'bac-ninh',
     payment_method: 'cod', items: [{ product_id: gao.id, quantity: 1 }] } });
-  check('Đơn web không lấy hàng của cửa hàng Nguyễn Cao (400)', webOut.status === 400 && (await row(gao.id)).stock_nc === 100, short(webOut.data));
+  const afterWeb = await row(gao.id);
+  check('Kho Bồ Sơn hết vẫn nhận đơn web: trừ ở Bồ Sơn (âm 1), cửa hàng giữ nguyên', webOut.status === 201 && afterWeb.stock_bs === -1 && afterWeb.stock_nc === 100
+    && afterWeb.status.code === 'negative', short({ s: webOut.status, r: afterWeb }));
+  const warnOrder = (await call('/admin/orders?status=pending&limit=50', { token: owner })).data.orders.find((o) => o.id === webOut.data.order?.id);
+  check('Thẻ đơn báo kế toán: Kho Bồ Sơn thiếu 1 bao (25 kg), cửa hàng còn 100 bao (2.500 kg)', warnOrder?.stock_warnings?.length === 1
+    && warnOrder.stock_warnings[0].warehouse === 'KH_BS' && warnOrder.stock_warnings[0].short === 1 && warnOrder.stock_warnings[0].short_kg === 25
+    && warnOrder.stock_warnings[0].other_warehouse === 'KH_NC' && warnOrder.stock_warnings[0].other_kg === 2500, short(warnOrder?.stock_warnings));
+  const overTotal = await call('/admin/orders', { method: 'POST', token: owner, body: {
+    receiver_name: 'Khách Web', phone: phone('07', 2), home_delivery: true, address: 'Số 1, đường Ngô Gia Tự, phường Tiền An',
+    payment_method: 'cod', warehouse: 'KH_BS', items: [{ product_id: gao.id, quantity: 100 }] } });
+  check('Vượt TỔNG hai nơi thì không nhận (400)', overTotal.status === 400 && /chỉ còn 99/.test(overTotal.data.message || ''), short(overTotal.data));
+  await call(`/admin/orders/${webOut.data.order.id}/status`, { method: 'PATCH', token: owner, body: { status: 'cancelled' } });
+  check('Huỷ đơn: trả hàng về đúng Bồ Sơn (về 0)', (await row(gao.id)).stock_bs === 0);
 
   /* ---------- Bắt đầu: tồn Nguyễn Cao ---------- */
   r = await row(gao.id);
@@ -139,8 +153,12 @@ try {
   r = await row(gao.id);
   check('Đơn khách buôn xuất từ Kho Bồ Sơn: trừ Bồ Sơn, Nguyễn Cao giữ nguyên', sỉ.status === 201 && sỉ.data.order.warehouse === 'KH_BS' && r.stock_bs === 360 && r.stock_nc === 210, short(r));
   check('Nhật ký kho ghi "Đơn khách buôn" ở Kho Bồ Sơn', (await ledgerSum(gao.id, 'KH_BS')).last.kind === 'order_wholesale');
+  // 24/11/2026: kho xuất thiếu nhưng TỔNG hai nơi còn đủ thì vẫn nhận đơn (kho âm, thẻ đơn báo điều chuyển).
   const over = await wsOrder({ warehouse: 'KH_BS', items: [{ product_id: gao.id, quantity: 361 }] });
-  check('Kho Bồ Sơn không đủ hàng: từ chối dù Nguyễn Cao còn, báo rõ kho', over.status === 400 && /Kho Bồ Sơn/.test(over.data.message || '') && (await row(gao.id)).stock_bs === 360, short(over.data));
+  check('Kho Bồ Sơn thiếu nhưng tổng còn đủ: vẫn nhận đơn, Bồ Sơn âm 1', over.status === 201 && (await row(gao.id)).stock_bs === -1, short(over.data).slice(0, 200));
+  await call(`/admin/orders/${over.data.order?.id}/status`, { method: 'PATCH', token: owner, body: { status: 'cancelled' } });
+  const overAll = await wsOrder({ warehouse: 'KH_BS', items: [{ product_id: gao.id, quantity: 571 }] });
+  check('Vượt tổng hai nơi (570): từ chối, không trừ gì', overAll.status === 400 && (await row(gao.id)).stock_bs === 360, short(overAll.data));
   const wsDefault = await wsOrder({ items: [{ product_id: gao.id, quantity: 1 }] });
   r = await row(gao.id);
   check('Đơn nhân viên không chọn kho: xuất từ Bồ Sơn (kho bán online)', wsDefault.status === 201 && wsDefault.data.order.warehouse === 'KH_BS' && r.stock_bs === 359 && r.stock_nc === 210, short(r));
@@ -169,7 +187,7 @@ try {
   const overSale = await call('/retail/invoices', { method: 'POST', token: owner, body: { items: [{ product_id: tui.id, quantity: 40 }] } });
   r = await row(tui.id);
   check('Quầy vẫn bán được khi số trên máy không đủ: tồn âm, bảng tồn kho báo đỏ', overSale.status === 201 && r.stock_nc === -5 && r.status.code === 'negative', short(r));
-  check('Cửa hàng âm không ảnh hưởng web: web vẫn thấy tồn Bồ Sơn (20)', (await call(`/products/${tui.id}`)).data.product.stock === 20);
+  check('Web thấy tổng hai nơi (Bồ Sơn 20 + cửa hàng −5 = 15)', (await call(`/products/${tui.id}`)).data.product.stock === Math.max(Math.floor(r.stock_nc + r.stock_bs), 0) && r.stock_bs === 20);
   const zeroBs = await inv('/count', { method: 'POST', body: { warehouse: 'KH_BS', kind: 'count', items: [{ product_id: webp.id, counted: 0 }] } });
   check('Bồ Sơn về 0: khách trên web thấy hết hàng (0)', zeroBs.status === 200 && (await call(`/products/${webp.id}`)).data.product.stock === 0);
 
@@ -210,12 +228,14 @@ try {
   await inv(`/transfers/${partial.data.transfer.id}/receive`, { method: 'POST', body: {} });
   r = await row(bulk.id);
   check('Chuyển 12,5 bao: Bồ Sơn còn 45,7, Nguyễn Cao 12,5 (không lệch số lẻ)', r.stock_bs === 45.7 && r.stock_nc === 12.5, short(r));
-  check('Khách trên web thấy số nguyên của Bồ Sơn (45 bao)', (await call(`/products/${bulk.id}`)).data.product.stock === 45);
+  check('Khách trên web thấy số nguyên của tổng hai nơi (45,7 + 12,5 = 58 bao)', (await call(`/products/${bulk.id}`)).data.product.stock === 58);
   const sellBulk = await call('/admin/orders', { method: 'POST', token: owner, body: { receiver_name: 'Chị Hoa', phone: phone('09', 7), home_delivery: true, address: 'Số 12 đường Nguyễn Trãi, phường Võ Cường', payment_method: 'cod', warehouse: 'KH_NC', items: [{ product_id: bulk.id, quantity: 12 }] } });
   r = await row(bulk.id);
   check('Bán 12 bao từ 12,5: còn 0,5 bao (5 kg)', sellBulk.status === 201 && r.stock_nc === 0.5, short(r));
   const over13 = await call('/admin/orders', { method: 'POST', token: owner, body: { receiver_name: 'Chị Hoa', phone: phone('09', 8), home_delivery: true, address: 'Số 12 đường Nguyễn Trãi, phường Võ Cường', payment_method: 'cod', warehouse: 'KH_NC', items: [{ product_id: bulk.id, quantity: 1 }] } });
-  check('Còn 0,5 bao thì không bán được 1 bao', over13.status === 400, short(over13.data));
+  check('Cửa hàng còn 0,5 bao, kho còn 45,7: vẫn bán 1 bao từ cửa hàng (âm 0,5), huỷ thì trả lại', over13.status === 201 && (await row(bulk.id)).stock_nc === -0.5, short(over13.data).slice(0, 200));
+  await call(`/admin/orders/${over13.data.order?.id}/status`, { method: 'PATCH', token: owner, body: { status: 'cancelled' } });
+  check('Huỷ: cửa hàng về 0,5 bao', (await row(bulk.id)).stock_nc === 0.5);
   const countDec = await inv('/count', { method: 'POST', body: { warehouse: 'KH_BS', kind: 'count', items: [{ product_id: bulk.id, counted: '45,25' }] } });
   check('Kiểm kê số lẻ 45,25: chênh lệch −0,45 ghi đúng', countDec.status === 200 && (await row(bulk.id)).stock_bs === 45.25 && (await ledgerSum(bulk.id, 'KH_BS')).last.quantity === -0.45, short((await ledgerSum(bulk.id, 'KH_BS')).last));
   const bulkNc = await ledgerSum(bulk.id, 'KH_NC');
