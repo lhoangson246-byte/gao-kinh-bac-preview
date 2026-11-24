@@ -1904,6 +1904,14 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
 - Google tính phí Maps JavaScript API theo lượt TẠO bản đồ (miễn phí 10.000 lượt / tháng). Trang Đơn hàng tải lại sau mỗi thao tác làm khung bản đồ dựng lại; giờ giữ một bản đồ (`mapCache` trong DispatchMap.jsx) và gắn lại vào khung mới, nên mỗi lần mở trang chỉ tính 1 lượt. Shipper di chuyển, ghim đổi không tính thêm.
 - Trang CẬP NHẬT hướng dẫn: chỉ cần bật Maps JavaScript API (không dùng Geocoding của Google); nên đặt Quotas khoảng 300 lượt / ngày.
 
+## 24/11/2026 — Kho hàng: nút ▲▼, cột Tổng tồn, số tồn theo kg, điều chuyển theo kg, thêm mặt hàng mới khi nhập
+
+- Bảng tồn: cột Tổng tồn đứng trước Tồn Nguyễn Cao / Tồn Bồ Sơn; số tồn, tổng, đang chuyển ghi theo KG (số bao × kg mỗi bao); hàng không có khối lượng (miến, trứng…) ghi theo đơn vị của nó. Máy chủ vẫn lưu số bao / túi.
+- Bấm "Sắp xếp thứ tự" → mỗi dòng có nút ▲ / ▼ (và tay nắm ⠿ kéo thả); đổi là lưu ngay (`useDragReorder().move`).
+- Điều chuyển chỉ nhập KG (bỏ chọn bao / túi); lệnh đang chuyển và ô "Thực nhận" cũng theo kg. Phiếu nhập kho vẫn chọn được Bao / túi hoặc Kg.
+- Phiếu nhập: nút "➕ Mặt hàng mới (chưa có trên web)" — `POST /api/admin/inventory/products` (quyền inventory.receive hoặc products.manage): tạo mặt hàng ĐANG ẨN trên web, giá 0đ (tên, quy cách, kg mỗi bao — gõ "bao 25kg" tự điền 25, nhóm hàng); chủ cửa hàng đặt giá, ảnh ở trang Sản phẩm rồi bật hiện. Trùng tên + quy cách → 409.
+- Kiểm thử: test:inventory (77).
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

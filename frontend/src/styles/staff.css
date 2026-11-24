@@ -574,3 +574,14 @@ tr.ws-open td { background: var(--green-100); }
 .lg-wait { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: #e8a317; color: #fff; font-size: .6rem; }
 .dship-status.waiting { color: #a86a00; }
 .gmap-inner { position: absolute; inset: 0; }
+
+/* Kho hàng (24/11/2026): nút ▲▼ đổi thứ tự, cột Tổng tồn lên trước, thêm mặt hàng mới trong phiếu nhập */
+.inv-move { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; }
+.inv-move-btn { width: 30px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: #fff; color: #2f6b3a; font-size: .8rem; line-height: 1; cursor: pointer; }
+.inv-move-btn:hover:not(:disabled) { background: #eef4ea; }
+.inv-move-btn:disabled { opacity: .35; cursor: default; }
+.inv-table th.inv-total-col, .inv-table td.inv-total-col { background: #f4f1ea; }
+.inv-line-actions { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; }
+.inv-new-product { display: grid; gap: 8px; margin: 8px 0; padding: 12px; border: 1px dashed #b9a46a; border-radius: 12px; background: #fffaf0; }
+.inv-new-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 12px; }
+.inv-new-grid label { display: flex; flex-direction: column; gap: 4px; font-size: .86rem; font-weight: 700; }

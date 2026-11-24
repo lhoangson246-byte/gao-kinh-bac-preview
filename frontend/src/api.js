@@ -155,6 +155,8 @@ export const api = {
   inventory: () => request('/admin/inventory', { auth: true }),
   inventoryStock: () => request('/admin/inventory/stock', { auth: true }),
   inventoryMovements: (params = {}) => request(`/admin/inventory/movements?${new URLSearchParams(params)}`, { auth: true }),
+  /** Thêm mặt hàng mới ngay trong phiếu nhập (ẩn trên web) — 24/11/2026. */
+  inventoryNewProduct: (body) => request('/admin/inventory/products', { method: 'POST', auth: true, body }),
   inventoryReceive: (body) => request('/admin/inventory/receipts', { method: 'POST', body, auth: true }),
   inventoryTransfer: (body) => request('/admin/inventory/transfers', { method: 'POST', body, auth: true }),
   inventoryTransferReceive: (id, body) => request(`/admin/inventory/transfers/${id}/receive`, { method: 'POST', body, auth: true }),

@@ -96,5 +96,8 @@ export default function useDragReorder({ ids, onSave, disabled = false, onStart 
     save(next);
   };
 
-  return { listRef, order: draft || ids, dragId, start, keyMove };
+  /** Nút ▲ / ▼: đưa dòng lên (step = -1) hoặc xuống (step = 1) một bậc rồi lưu. */
+  const move = (id, step) => keyMove({ key: step < 0 ? 'ArrowUp' : 'ArrowDown', preventDefault() {} }, id);
+
+  return { listRef, order: draft || ids, dragId, start, keyMove, move };
 }

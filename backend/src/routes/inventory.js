@@ -4,7 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { can, requireStaff } from '../permissions.js';
 import { validateRoutes } from '../schemas.js';
 import { HttpError, cleanText, toInteger } from '../validate.js';
-import { LIMITS, localDate } from '../constants.js';
+import { LIMITS, PRODUCT_CATEGORY_CODES, localDate } from '../constants.js';
 import { writeAdminAudit } from '../audit.js';
 import {
   LOW_STOCK_AT, MAIN, MOVEMENT_GROUPS, MOVEMENT_KINDS, STORE, WAREHOUSES, inTransitByProduct, isWarehouse,
@@ -125,6 +125,39 @@ router.put('/order', allow('inventory.receive', 'inventory.transfer', 'inventory
       ids.forEach((id, index) => set.run(index + 1, id));
     })();
     res.json({ ...overview(), transfers: transfersList("WHERE status = 'in_transit'") });
+  } catch (err) { next(err); }
+});
+
+/**
+ * POST /api/admin/inventory/products — kế toán / người nhập kho thêm MẶT HÀNG MỚI ngay trong phiếu nhập (24/11/2026),
+ * khi hàng về mà chưa có trên web. Mặt hàng được tạo ở trạng thái ẨN trên web, giá bán 0đ; chủ cửa hàng vào trang
+ * Sản phẩm đặt giá, ảnh rồi bật hiện khi muốn bán online. Tồn kho cộng bằng chính phiếu nhập.
+ * body: { name, unit, weight_kg?, category?, sku? }
+ */
+router.post('/products', allow('inventory.receive', 'products.manage'), (req, res, next) => {
+  try {
+    const name = cleanText(req.body.name, LIMITS.name);
+    const unit = cleanText(req.body.unit, 40);
+    const weight = req.body.weight_kg == null || req.body.weight_kg === '' ? 0 : Number(String(req.body.weight_kg).replace(',', '.'));
+    const category = PRODUCT_CATEGORY_CODES.includes(req.body.category) ? req.body.category : 'gao';
+    const sku = cleanText(req.body.sku, 20);
+    const errors = {};
+    if (!name || name.length < 2) errors.name = 'Nhập tên mặt hàng.';
+    if (!unit) errors.unit = 'Nhập quy cách (ví dụ bao 25kg, túi 5kg, kg, gói).';
+    if (!Number.isFinite(weight) || weight < 0 || weight > 1000) errors.weight_kg = 'Khối lượng một đơn vị từ 0 đến 1000 kg.';
+    if (Object.keys(errors).length) throw new HttpError(400, 'Thông tin mặt hàng chưa đủ.', errors);
+    if (db.prepare('SELECT 1 FROM products WHERE LOWER(name) = LOWER(?) AND LOWER(unit) = LOWER(?)').get(name, unit)) {
+      throw new HttpError(409, `Đã có mặt hàng “${name}” (${unit}). Chọn trong danh sách thay vì thêm mới.`, { name: 'Mặt hàng này đã có.' });
+    }
+    if (sku && db.prepare('SELECT 1 FROM products WHERE LOWER(sku) = LOWER(?)').get(sku)) {
+      throw new HttpError(400, 'Mã sản phẩm này đã dùng cho loại hàng khác.', { sku: 'Mã này đã dùng.' });
+    }
+    const id = db.prepare(`
+      INSERT INTO products (name, price, cost_price, unit, weight_kg, stock, stock_bs, is_active, category, sku, sort_order)
+      VALUES (?, 0, 0, ?, ?, 0, 0, 0, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM products))
+    `).run(name, unit, Math.round(weight * 1000) / 1000, category, sku || null).lastInsertRowid;
+    writeAdminAudit(req, { action: 'create', entityType: 'product', entityId: id, after: { name, unit, weight_kg: weight, category, sku, is_active: 0, via: 'phiếu nhập kho' } });
+    res.status(201).json({ ...overview(), product_id: id, message: `Đã thêm mặt hàng mới “${name}” (${unit}) — đang ẩn trên web, chủ cửa hàng đặt giá ở trang Sản phẩm khi muốn bán online.` });
   } catch (err) { next(err); }
 });
 

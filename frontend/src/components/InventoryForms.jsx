@@ -29,6 +29,11 @@ const unitWord = (p) => String(p?.unit || '').split(' ')[0] || 'đơn vị';
 /** Số gõ vào → số đơn vị của sản phẩm. */
 const toUnits = (p, value, mode) => (mode === 'kg' && canKg(p) ? round3(num(value) / p.weight_kg) : round3(num(value)));
 const kgText = (p, units) => (canKg(p) ? `${formatQty(round3(units * p.weight_kg))} kg` : '');
+/**
+ * Số tồn / số chuyển hiện theo KG (24/11/2026): hàng có khối lượng (gạo bao, túi) ghi "480 kg"; hàng không có
+ * khối lượng (miến, trứng…) ghi theo đơn vị của nó ("12 gói").
+ */
+export const amountText = (p, units) => (p?.weight_kg > 0 ? `${formatQty(Math.round(units * p.weight_kg * 10) / 10)} kg` : `${formatQty(units)} ${unitWord(p)}`);
 
 /** Chọn nhập theo bao / túi hay theo kg. */
 function UnitToggle({ mode, onChange }) {
@@ -82,17 +87,89 @@ function ProductSelect({ products, value, taken, onChange, label, hint }) {
  *  - Nhập công gạo (kế toán): mặc định về Kho Bồ Sơn, có thể ghi luôn phần giao thẳng Cửa hàng Nguyễn Cao.
  *  - Nhập hàng cửa hàng: về Cửa hàng Nguyễn Cao (hàng lẻ từ nhà cung cấp phụ, đồ khô, miến, bột…).
  */
-export function ReceiptForm({ products, canCost, initial = null, onSaved, onClose }) {
+/**
+ * Thêm mặt hàng mới ngay trong phiếu nhập (24/11/2026): hàng về mà chưa có trên web. Mặt hàng tạo ra đang ẨN trên
+ * web (giá 0đ); chủ cửa hàng đặt giá, ảnh ở trang Sản phẩm rồi bật hiện khi muốn bán online.
+ */
+function NewProductForm({ onCreated, onCancel }) {
+  const [form, setForm] = useState({ name: '', unit: '', weight_kg: '', category: 'gao' });
+  const [errors, setErrors] = useState({});
+  const [busy, setBusy] = useState(false);
+  const set = (patch) => setForm((cur) => ({ ...cur, ...patch }));
+  // Gõ quy cách có số kg ("bao 25kg", "túi 5 kg") thì tự điền khối lượng.
+  const setUnit = (unit) => {
+    const m = /(\d+(?:[.,]\d+)?)\s*kg/i.exec(unit);
+    set({ unit, ...(m && !form.weight_kg ? { weight_kg: m[1].replace('.', ',') } : {}) });
+  };
+  const save = async () => {
+    setBusy(true);
+    setErrors({});
+    try {
+      const result = await api.inventoryNewProduct({
+        name: form.name.trim(), unit: form.unit.trim(), category: form.category,
+        weight_kg: form.weight_kg === '' ? null : Number(String(form.weight_kg).replace(',', '.')),
+      });
+      onCreated(result);
+    } catch (err) {
+      setErrors({ form: err.message, ...(err.errors || {}) });
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="inv-new-product" role="group" aria-label="Thêm mặt hàng mới">
+      <strong>➕ Mặt hàng mới (chưa có trên web)</strong>
+      <div className="inv-new-grid">
+        <label>Tên mặt hàng
+          <input className="input" value={form.name} maxLength={120} onChange={(e) => set({ name: e.target.value })} placeholder="VD: Gạo Bắc Hương" aria-invalid={!!errors.name} />
+          {errors.name && <small className="err">{errors.name}</small>}
+        </label>
+        <label>Quy cách
+          <input className="input" value={form.unit} maxLength={40} onChange={(e) => setUnit(e.target.value)} placeholder="VD: bao 25kg, túi 5kg, gói" aria-invalid={!!errors.unit} />
+          {errors.unit && <small className="err">{errors.unit}</small>}
+        </label>
+        <label>Kg mỗi bao / túi <small className="optional">để trống nếu không tính kg</small>
+          <input className="input" inputMode="decimal" value={form.weight_kg} onChange={(e) => set({ weight_kg: qtyInput(e.target.value) })} placeholder="VD: 25" aria-invalid={!!errors.weight_kg} />
+          {errors.weight_kg && <small className="err">{errors.weight_kg}</small>}
+        </label>
+        <label>Nhóm hàng
+          <select className="input" value={form.category} onChange={(e) => set({ category: e.target.value })}>
+            <option value="gao">Gạo</option>
+            <option value="do-kho">Thực phẩm khô</option>
+          </select>
+        </label>
+      </div>
+      {errors.form && <p className="alert error" role="alert">{errors.form}</p>}
+      <div className="form-actions">
+        <button type="button" className="btn btn-primary" disabled={busy || !form.name.trim() || !form.unit.trim()} onClick={save}>{busy ? 'Đang thêm…' : 'Thêm vào danh sách'}</button>
+        <button type="button" className="btn btn-secondary" disabled={busy} onClick={onCancel}>Huỷ</button>
+      </div>
+      <small className="field-help">Mặt hàng mới đang <b>ẩn trên web</b>. Chủ cửa hàng vào trang Sản phẩm đặt giá bán, ảnh rồi bật hiện khi muốn bán online.</small>
+    </div>
+  );
+}
+
+export function ReceiptForm({ products, canCost, initial = null, onSaved, onClose, onProductAdded }) {
   const [kind, setKind] = useState(initial?.kind || 'cong-gao');
   const [info, setInfo] = useState({ source: '', vehicle: '', note: '' });
   const [rows, setRows] = useState(() => [{ product_id: initial?.product_id ? String(initial.product_id) : '', bs: '', nc: '', cost: '' }]);
   const [mode, setMode] = useState('pack');     // 'pack' = bao / túi · 'kg'
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState(false);   // đang mở ô thêm mặt hàng mới
   const byId = useMemo(() => Object.fromEntries(products.map((p) => [String(p.id), p])), [products]);
   const taken = new Set(rows.map((r) => r.product_id).filter(Boolean));
   const setRow = (index, patch) => setRows((cur) => cur.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   const shopOnly = kind === 'cua-hang';
+  const productAdded = (result) => {
+    onProductAdded?.(result);
+    const id = String(result.product_id);
+    // Điền mặt hàng vừa thêm vào dòng trống đầu tiên, không có thì thêm dòng mới.
+    setRows((cur) => {
+      const empty = cur.findIndex((r) => !r.product_id);
+      if (empty >= 0) return cur.map((r, i) => (i === empty ? { ...r, product_id: id } : r));
+      return [...cur, { product_id: id, bs: '', nc: '', cost: '' }];
+    });
+    setAdding(false);
+  };
   const units = (r, key) => toUnits(byId[r.product_id], r[key], mode);
   const filled = rows.filter((r) => r.product_id && (units(r, 'bs') > 0 || units(r, 'nc') > 0));
   const sumKg = (key) => filled.reduce((total, r) => total + kgOf(byId[r.product_id], units(r, key)), 0);
@@ -166,7 +243,11 @@ export function ReceiptForm({ products, canCost, initial = null, onSaved, onClos
             {rows.length > 1 && <button type="button" className="icon-close" aria-label="Bỏ dòng" onClick={() => setRows((cur) => cur.filter((_, i) => i !== index))}>×</button>}
           </div>
         ))}
-        <button type="button" className="link-button" onClick={() => setRows((cur) => [...cur, { product_id: '', bs: '', nc: '', cost: '' }])}>+ Thêm loại hàng</button>
+        <div className="inv-line-actions">
+          <button type="button" className="link-button" onClick={() => setRows((cur) => [...cur, { product_id: '', bs: '', nc: '', cost: '' }])}>+ Thêm loại hàng</button>
+          {onProductAdded && !adding && <button type="button" className="link-button" onClick={() => setAdding(true)}>➕ Mặt hàng mới (chưa có trên web)</button>}
+        </div>
+        {adding && <NewProductForm onCreated={productAdded} onCancel={() => setAdding(false)} />}
         {filled.length > 0 && (
           <p className="inv-summary">
             {/* Theo bao / túi: ghi số bao như đã gõ; theo kg: ghi số kg. Dòng cuối luôn có tổng kg. */}
@@ -194,7 +275,8 @@ export function TransferForm({ products, initial = null, onSaved, onClose }) {
   const to = from === MAIN ? STORE : MAIN;
   const [note, setNote] = useState('');
   const [rows, setRows] = useState(() => [{ product_id: initial?.product_id ? String(initial.product_id) : '', quantity: '' }]);
-  const [mode, setMode] = useState('pack');
+  // Điều chuyển chỉ tính theo KG (24/11/2026); hàng không có khối lượng (miến, trứng…) tính theo đơn vị của nó.
+  const mode = 'kg';
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const byId = useMemo(() => Object.fromEntries(products.map((p) => [String(p.id), p])), [products]);
@@ -205,7 +287,7 @@ export function TransferForm({ products, initial = null, onSaved, onClose }) {
   const units = (r) => toUnits(byId[r.product_id], r.quantity, mode);
   const filled = rows.filter((r) => r.product_id && units(r) > 0);
   const over = filled.find((r) => units(r) > stockOf(byId[r.product_id], from));
-  const left = (p) => `${formatQty(stockOf(p, from))} ${unitWord(p)}${canKg(p) ? ` (${kgText(p, stockOf(p, from))})` : ''}`;
+  const left = (p) => amountText(p, stockOf(p, from));
 
   const save = async (event) => {
     event.preventDefault();
@@ -228,8 +310,7 @@ export function TransferForm({ products, initial = null, onSaved, onClose }) {
         <button type="button" className={from === STORE ? 'active' : ''} onClick={() => { setFrom(STORE); setRows([{ product_id: '', quantity: '' }]); }}>Cửa hàng Nguyễn Cao ➔ Kho Bồ Sơn<small>trả hàng về kho tổng</small></button>
       </div>
       <fieldset className="manual-lines inv-lines">
-        <legend>Hàng chuyển</legend>
-        <UnitToggle mode={mode} onChange={setMode} />
+        <legend>Hàng chuyển <small className="muted">(tính theo kg)</small></legend>
         {!available.length && <p className="muted">{WAREHOUSE_NAME[from]} hiện không có hàng để chuyển.</p>}
         {rows.map((row, index) => {
           const product = byId[row.product_id];
@@ -238,10 +319,9 @@ export function TransferForm({ products, initial = null, onSaved, onClose }) {
             <div key={index} className="inv-line one">
               <ProductSelect products={available} value={row.product_id} taken={taken} label={`Loại hàng chuyển ${index + 1}`}
                              hint={(p) => `còn ${left(p)}`} onChange={(value) => setRow(index, { product_id: value })} />
-              <label className="inv-qty">Số lượng chuyển{mode === 'kg' ? ' (kg)' : ''}
+              <label className="inv-qty">{!product || canKg(product) ? 'Số kg chuyển' : `Số lượng chuyển (${unitWord(product)})`}
                 <input className="input" inputMode="decimal" value={row.quantity} disabled={!row.product_id} placeholder="0" aria-invalid={!!tooMany}
                        onChange={(e) => setRow(index, { quantity: qtyInput(e.target.value) })} aria-label={`Số lượng chuyển ${index + 1}`} />
-                <QtyHint product={product} value={row.quantity} mode={mode} />
                 {product && <small className={tooMany ? 'err' : ''}>{WAREHOUSE_SHORT[from]} còn {left(product)}</small>}
               </label>
               {rows.length > 1 && <button type="button" className="icon-close" aria-label="Bỏ dòng" onClick={() => setRows((cur) => cur.filter((_, i) => i !== index))}>×</button>}

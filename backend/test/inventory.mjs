@@ -245,6 +245,19 @@ try {
     && (await inv('/movements', { token: sales })).status === 403);
   check('Nhân viên giao hàng không xem được kho (403)', (await inv('', { token: shipper })).status === 403 && (await inv('/stock', { token: shipper })).status === 403);
   check('Chưa đăng nhập không xem được kho (401)', (await call('/admin/inventory')).status === 401);
+
+  /* ---------- Thêm mặt hàng mới ngay trong phiếu nhập (24/11/2026) ---------- */
+  const fresh = await inv('/products', { method: 'POST', token: keeper, body: { name: `Gạo Nếp Cái Hoa Vàng ${suffix}`, unit: 'bao 25kg', weight_kg: 25, category: 'gao' } });
+  const freshRow = fresh.data.products?.find((p) => p.id === fresh.data.product_id);
+  check('Thủ kho thêm được mặt hàng mới (chưa có trên web): đang ẩn, có trong bảng tồn', fresh.status === 201 && freshRow?.is_active === 0 && freshRow.weight_kg === 25 && freshRow.total === 0,
+    JSON.stringify(freshRow));
+  check('Mặt hàng mới không hiện trên web', !(await call('/products')).data.products.some((p) => p.id === fresh.data.product_id));
+  const freshIn = await inv('/receipts', { method: 'POST', token: keeper, body: { kind: 'cong-gao', items: [{ product_id: fresh.data.product_id, quantity_bs: 4 }] } });
+  check('Nhập kho ngay mặt hàng vừa thêm', freshIn.status === 201 && (await row(fresh.data.product_id)).stock_bs === 4);
+  check('Trùng tên + quy cách thì báo đã có (409)', (await inv('/products', { method: 'POST', token: keeper, body: { name: `Gạo Nếp Cái Hoa Vàng ${suffix}`, unit: 'bao 25kg' } })).status === 409);
+  check('Thiếu tên / quy cách (400)', (await inv('/products', { method: 'POST', token: keeper, body: { name: 'G', unit: 'bao' } })).status === 400);
+  check('Người chỉ được xem kho / bán hàng không thêm được mặt hàng (403)', (await inv('/products', { method: 'POST', token: viewer, body: { name: 'Gạo Lạ', unit: 'bao 10kg' } })).status === 403
+    && (await inv('/products', { method: 'POST', token: sales, body: { name: 'Gạo Lạ', unit: 'bao 10kg' } })).status === 403);
 } finally {
   await app.close();
 }

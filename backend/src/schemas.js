@@ -329,6 +329,11 @@ add('inventory', 'GET', /^\/?$/);
 add('inventory', 'GET', /^\/(stock|receipts)\/?$/);
 add('inventory', 'PUT', /^\/products\/[^/]+\/online\/?$/, obj({ warehouse: z.enum(['KH_BS', 'KH_NC']) }));
 add('inventory', 'PUT', /^\/order\/?$/, obj({ ids: z.array(id).min(1).max(5000) }));
+// Kế toán thêm mặt hàng mới ngay trong phiếu nhập (chưa có trên web) — 24/11/2026.
+add('inventory', 'POST', /^\/products\/?$/, obj({
+  name: text(LIMITS.name), unit: text(40), weight_kg: decimal(0, 1000).nullable().optional(),
+  category: z.enum(PRODUCT_CATEGORY_CODES).optional(), sku: optionalText(20),
+}));
 add('inventory', 'GET', /^\/movements\/?$/, empty, obj({
   product_id: id.optional(), warehouse: warehouseCode.optional(), group: z.enum(['in', 'transfer', 'sale', 'count']).optional(),
   from: day.optional(), to: day.optional(), ...page,

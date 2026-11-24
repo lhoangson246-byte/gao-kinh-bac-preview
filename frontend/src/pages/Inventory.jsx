@@ -6,7 +6,7 @@ import StaffNav from '../components/StaffNav.jsx';
 import { DashboardSkeleton } from '../components/Skeleton.jsx';
 import useDragReorder from '../components/useDragReorder.js';
 import {
-  CountForm, MAIN, ReceiptForm, STORE, TransferForm, WAREHOUSE_NAME, WAREHOUSE_SHORT, formatQty,
+  CountForm, MAIN, ReceiptForm, STORE, TransferForm, WAREHOUSE_NAME, WAREHOUSE_SHORT, amountText, formatQty,
 } from '../components/InventoryForms.jsx';
 
 export const INVENTORY_PERMISSIONS = ['inventory.view', 'inventory.receive', 'inventory.transfer', 'inventory.count'];
@@ -31,7 +31,12 @@ function groupMovements(movements) {
 }
 
 /** Một lệnh chuyển đang trên đường: bên nhận đếm hàng rồi xác nhận. */
-function TransferCard({ transfer, canAct, onDone }) {
+function TransferCard({ transfer, canAct, onDone, products = [] }) {
+  // Lệnh chuyển hiện và đếm theo kg (24/11/2026); số gửi lên máy chủ vẫn là số bao / túi.
+  const weightOf = (item) => products.find((p) => p.id === item.product_id)?.weight_kg || 0;
+  const toKg = (item, units) => Math.round(units * weightOf(item) * 1000) / 1000;
+  const fromInput = (item, value) => { const n = Number(String(value).replace(',', '.')); const w = weightOf(item); return w > 0 ? Math.round((n / w) * 1000) / 1000 : n; };
+  const shown = (item, units) => amountText({ weight_kg: weightOf(item), unit: item.unit }, units);
   const [counting, setCounting] = useState(false);
   const [received, setReceived] = useState({});
   const [busy, setBusy] = useState(false);
@@ -46,10 +51,12 @@ function TransferCard({ transfer, canAct, onDone }) {
     run(() => api.inventoryTransferReceive(transfer.id, {}));
   };
   const confirmCounted = () => {
-    const items = transfer.items.map((i) => ({ item_id: i.id, received: received[i.id] === undefined || received[i.id] === '' ? i.quantity : Number(String(received[i.id]).replace(',', '.')) }));
+    const items = transfer.items.map((i) => ({ item_id: i.id, received: received[i.id] === undefined || received[i.id] === '' ? i.quantity : fromInput(i, received[i.id]) }));
     const missing = Math.round(items.reduce((sum, row, index) => sum + (transfer.items[index].quantity - row.received), 0) * 1000) / 1000;
     if (items.some((row, index) => row.received > transfer.items[index].quantity)) { setError('Số thực nhận không được lớn hơn số đã chuyển.'); return; }
-    if (!window.confirm(missing > 0 ? `Xác nhận nhận THIẾU ${missing} so với lệnh ${transfer.code}? Phần thiếu sẽ được ghi lại.` : `Xác nhận nhận đủ hàng của lệnh ${transfer.code}?`)) return;
+    const missingText = transfer.items.map((i, index) => ({ i, gap: Math.round((i.quantity - items[index].received) * 1000) / 1000 })).filter((x) => x.gap > 0)
+      .map(({ i, gap }) => `${i.product_name}: ${shown(i, gap)}`).join(', ');
+    if (!window.confirm(missing > 0 ? `Xác nhận nhận THIẾU so với lệnh ${transfer.code} (${missingText})? Phần thiếu sẽ được ghi lại.` : `Xác nhận nhận đủ hàng của lệnh ${transfer.code}?`)) return;
     run(() => api.inventoryTransferReceive(transfer.id, { items }));
   };
   const cancel = () => {
@@ -69,12 +76,12 @@ function TransferCard({ transfer, canAct, onDone }) {
           <li key={item.id}>
             <span>{item.product_name} <small className="muted">{item.unit}</small></span>
             {counting ? (
-              <label>Thực nhận
-                <input className="input" inputMode="numeric" value={received[item.id] ?? String(item.quantity)} aria-label={`Thực nhận: ${item.product_name}`}
-                       inputMode="decimal" onChange={(e) => setReceived({ ...received, [item.id]: e.target.value.replace(/[^\d.,]/g, '').slice(0, 9) })} />
-                <small>/ {formatQty(item.quantity)}</small>
+              <label>Thực nhận{weightOf(item) > 0 ? ' (kg)' : ''}
+                <input className="input" inputMode="decimal" value={received[item.id] ?? String(weightOf(item) > 0 ? toKg(item, item.quantity) : item.quantity).replace('.', ',')} aria-label={`Thực nhận: ${item.product_name}`}
+                       onChange={(e) => setReceived({ ...received, [item.id]: e.target.value.replace(/[^\d.,]/g, '').slice(0, 9) })} />
+                <small>/ {shown(item, item.quantity)}</small>
               </label>
-            ) : <b>{formatQty(item.quantity)}</b>}
+            ) : <b>{shown(item, item.quantity)}</b>}
           </li>
         ))}
       </ul>
@@ -193,7 +200,7 @@ export default function Inventory() {
   const canSetOnline = canTransfer || canManageProducts;
   const setOnline = async (p, code) => {
     if (code === p.online) return;
-    if (!window.confirm(`Bán “${p.name}” trên web từ ${WAREHOUSE_NAME[code]}?\nKhách sẽ thấy tồn ${WAREHOUSE_NAME[code]} (${formatQty(code === STORE ? p.stock_nc : p.stock_bs)}) và đơn web trừ hàng ở đó.`)) return;
+    if (!window.confirm(`Bán “${p.name}” trên web từ ${WAREHOUSE_NAME[code]}?\nKhách sẽ thấy tồn ${WAREHOUSE_NAME[code]} (${amountText(p, code === STORE ? p.stock_nc : p.stock_bs)}) và đơn web trừ hàng ở đó.`)) return;
     try {
       const result = await api.inventorySetOnline(p.id, code);
       setData((cur) => ({ ...cur, ...result, transfers: result.transfers || cur?.transfers || [] }));
@@ -245,7 +252,8 @@ export default function Inventory() {
               </div>
             </section>
 
-            {panel?.type === 'receive' && <ReceiptForm key={panel.key} products={products} canCost={canManageProducts} initial={panel.initial} onSaved={applyResult} onClose={() => setPanel(null)} />}
+            {panel?.type === 'receive' && <ReceiptForm key={panel.key} products={products} canCost={canManageProducts} initial={panel.initial} onSaved={applyResult} onClose={() => setPanel(null)}
+                                                    onProductAdded={(result) => { setData((cur) => ({ ...cur, ...result, transfers: cur?.transfers || [] })); setMessage(result.message); }} />}
             {panel?.type === 'transfer' && <TransferForm key={panel.key} products={products} initial={panel.initial} onSaved={applyResult} onClose={() => setPanel(null)} />}
             {panel?.type === 'count' && <CountForm key={panel.key} products={products} initialWarehouse={panel.initial?.warehouse || STORE} onSaved={applyResult} onClose={() => setPanel(null)} />}
 
@@ -261,7 +269,7 @@ export default function Inventory() {
               <section className="inv-section inv-transit" aria-label="Lệnh đang chuyển">
                 <h2>🔄 Đang chuyển ({data.transfers.length} lệnh) <small>Bên nhận đếm hàng rồi bấm xác nhận</small></h2>
                 <div className="inv-transfers">
-                  {data.transfers.map((t) => <TransferCard key={t.id} transfer={t} canAct={canTransfer} onDone={applyResult} />)}
+                  {data.transfers.map((t) => <TransferCard key={t.id} transfer={t} canAct={canTransfer} onDone={applyResult} products={products} />)}
                 </div>
               </section>
             )}
@@ -281,15 +289,15 @@ export default function Inventory() {
                   </button>
                 )}
               </div>
-              {sorting && <p className="alert info inv-sort-hint" role="status">Kéo tay nắm ⠿ ở đầu dòng để đổi chỗ (hoặc bấm vào tay nắm rồi dùng mũi tên lên / xuống). Thả tay là lưu. Thứ tự này chỉ áp dụng cho bảng kho, không đổi thứ tự trên web.</p>}
+              {sorting && <p className="alert info inv-sort-hint" role="status">Bấm nút <b>▲</b> / <b>▼</b> ở đầu dòng để đưa hàng lên / xuống (hoặc kéo tay nắm ⠿). Đổi là lưu ngay. Thứ tự này chỉ áp dụng cho bảng kho, không đổi thứ tự trên web.</p>}
               <div className="table-scroll">
                 <table className="data-table inv-table">
                   <thead>
                     <tr>
                       {sorting && <th aria-label="Kéo để đổi thứ tự" />}
                       <th>Mã SP</th><th>Tên sản phẩm</th>
+                      {showNc && showBs && <th className="inv-total-col">Tổng tồn</th>}
                       {showNc && <th className="wh-col KH_NC">Tồn Nguyễn Cao</th>}{showBs && <th className="wh-col KH_BS">Tồn Bồ Sơn</th>}
-                      {showNc && showBs && <th>Tổng tồn</th>}
                       <th>Bán web từ</th><th>Đang chuyển</th><th>Cảnh báo</th><th>Thao tác nhanh</th>
                     </tr>
                   </thead>
@@ -304,8 +312,14 @@ export default function Inventory() {
                         <tr key={p.id} className={`inv-row-${p.status.level}${p.is_active ? '' : ' inv-hidden'}${sort.dragId === p.id ? ' dragging' : ''}`}>
                           {sorting && (
                             <td className="inv-grip-cell">
-                              <button type="button" className="group-grip" title="Kéo để đổi thứ tự" aria-label={`Kéo để đổi thứ tự ${p.name}. Hoặc bấm mũi tên lên, xuống.`}
-                                      onPointerDown={(event) => sort.start(event, p.id)} onKeyDown={(event) => sort.keyMove(event, p.id)}>⠿</button>
+                              <span className="inv-move">
+                                <button type="button" className="inv-move-btn" aria-label={`Đưa ${p.name} lên`} title="Lên"
+                                        disabled={sort.order[0] === p.id} onClick={() => sort.move(p.id, -1)}>▲</button>
+                                <button type="button" className="group-grip" title="Kéo để đổi thứ tự" aria-label={`Kéo để đổi thứ tự ${p.name}. Hoặc bấm mũi tên lên, xuống.`}
+                                        onPointerDown={(event) => sort.start(event, p.id)} onKeyDown={(event) => sort.keyMove(event, p.id)}>⠿</button>
+                                <button type="button" className="inv-move-btn" aria-label={`Đưa ${p.name} xuống`} title="Xuống"
+                                        disabled={sort.order[sort.order.length - 1] === p.id} onClick={() => sort.move(p.id, 1)}>▼</button>
+                              </span>
                             </td>
                           )}
                           <td data-label="Mã SP">
@@ -314,9 +328,9 @@ export default function Inventory() {
                               : p.sku || '—'}
                           </td>
                           <td data-label="Tên"><strong>{p.name}</strong> <small className="muted">{p.unit}{p.is_active ? '' : ' · đang ẩn'}</small></td>
-                          {showNc && <td data-label="Tồn Nguyễn Cao" className={`inv-num${p.stock_nc < 0 ? ' inv-neg' : p.stock_nc <= data.low_stock_at ? ' inv-low' : ''}`}>{formatQty(p.stock_nc)}</td>}
-                          {showBs && <td data-label="Tồn Bồ Sơn" className={`inv-num${p.stock_bs < 0 ? ' inv-neg' : p.stock_bs <= data.low_stock_at ? ' inv-low' : ''}`}>{formatQty(p.stock_bs)}</td>}
-                          {showNc && showBs && <td data-label="Tổng tồn" className="inv-num"><strong>{formatQty(p.total)}</strong></td>}
+                          {showNc && showBs && <td data-label="Tổng tồn" className="inv-num inv-total-col"><strong>{amountText(p, p.total)}</strong></td>}
+                          {showNc && <td data-label="Tồn Nguyễn Cao" className={`inv-num${p.stock_nc < 0 ? ' inv-neg' : p.stock_nc <= data.low_stock_at ? ' inv-low' : ''}`}>{amountText(p, p.stock_nc)}</td>}
+                          {showBs && <td data-label="Tồn Bồ Sơn" className={`inv-num${p.stock_bs < 0 ? ' inv-neg' : p.stock_bs <= data.low_stock_at ? ' inv-low' : ''}`}>{amountText(p, p.stock_bs)}</td>}
                           <td data-label="Bán web từ">
                             {canSetOnline ? (
                               <select className={`input inv-online ${p.online}`} value={p.online} onChange={(e) => setOnline(p, e.target.value)} aria-label={`Bán web ${p.name} từ kho`}>
@@ -326,7 +340,7 @@ export default function Inventory() {
                             ) : <i className={`wh-chip ${p.online}`}>{WAREHOUSE_SHORT[p.online]}</i>}
                           </td>
                           <td data-label="Đang chuyển" className={`inv-num${moving > 0 ? '' : ' inv-none-mobile'}`}>
-                            {moving > 0 ? <span className="inv-moving">{formatQty(moving)}{showNc && showBs ? ` ➔ ${p.moving_to_nc ? WAREHOUSE_SHORT[STORE] : WAREHOUSE_SHORT[MAIN]}` : ''}</span> : '—'}
+                            {moving > 0 ? <span className="inv-moving">{amountText(p, moving)}{showNc && showBs ? ` ➔ ${p.moving_to_nc ? WAREHOUSE_SHORT[STORE] : WAREHOUSE_SHORT[MAIN]}` : ''}</span> : '—'}
                           </td>
                           <td data-label="Cảnh báo"><span className={`inv-status ${p.status.level}`}>{p.status.label}</span></td>
                           <td data-label="Thao tác" className="inv-row-actions">
