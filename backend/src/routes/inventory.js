@@ -192,8 +192,9 @@ router.get('/movements', view, (req, res, next) => {
     const total = db.prepare(`SELECT COUNT(*) AS n FROM stock_movements m ${clause}`).get(...args).n;
     const rows = db.prepare(`
       SELECT m.id, m.created_at, m.product_id, m.product_name, m.unit, m.warehouse, m.kind, m.quantity,
-             m.balance_after, m.ref_type, m.ref_code, m.note, COALESCE(m.actor_name, u.full_name) AS actor_name
-      FROM stock_movements m LEFT JOIN users u ON u.id = m.created_by
+             m.balance_after, m.ref_type, m.ref_code, m.note, COALESCE(m.actor_name, u.full_name) AS actor_name,
+             COALESCE(p.weight_kg, 0) AS weight_kg
+      FROM stock_movements m LEFT JOIN users u ON u.id = m.created_by LEFT JOIN products p ON p.id = m.product_id
       ${clause} ORDER BY m.id DESC LIMIT ? OFFSET ?
     `).all(...args, limit, offset);
     res.json({

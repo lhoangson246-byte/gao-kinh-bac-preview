@@ -506,7 +506,7 @@ export default function Admin() {
         )}
       </div>
       <div className="inventory">
-        <span>Còn trên web ({webPlace(product)})</span>
+        <span>Còn (cửa hàng + kho)</span>
         <strong className={product.is_active && webStock(product) <= 10 ? 'low-stock' : ''}>
           {webStock(product).toLocaleString('vi-VN', { maximumFractionDigits: 3 })} {product.unit}
           {product.is_active && webStock(product) <= 0 && ' · đã hết'}
@@ -1005,7 +1005,7 @@ export default function Admin() {
                             <input className="input" type="number" name="stock" value={form.stock} onChange={onChange} min={stockUnchanged ? undefined : 0} step="any" inputMode="numeric" aria-invalid={!!formErrors.stock} />
                             {formErrors.stock
                               ? <small className="err">{formErrors.stock}</small>
-                              : <small className="field-help">Tồn ở Kho Bồ Sơn (kho bán online, số khách thấy trên web). Tồn Cửa hàng Nguyễn Cao, nhập kho, điều chuyển, kiểm kê ở trang Kho hàng.</small>}
+                              : null}
                           </label>
                         </div>
                         {groups.length > 0 && (

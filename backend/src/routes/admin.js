@@ -1027,11 +1027,11 @@ router.put('/products/:id', (req, res, next) => {
     assertSkuFree(data.sku, productId);
 
     db.transaction(() => {
-      // Sửa ô tồn kho ở trang Sản phẩm = điều chỉnh tồn kho bán online (Kho Bồ Sơn); đi qua nhật ký kho
-      // để ai sửa, sửa bao nhiêu đều để lại dấu.
+      // Ô "Số lượng còn lại" ở trang Sản phẩm là TỔNG cửa hàng + kho (24/11/2026); số chênh lệch ghi vào kho
+      // trừ đơn web của sản phẩm (mặc định Bồ Sơn), đi qua nhật ký kho để ai sửa, sửa bao nhiêu đều để lại dấu.
       if (data.stock !== undefined) {
         const online = onlineWarehouseOf(before);
-        const current = before[stockColumn(online)];
+        const current = (before.stock || 0) + (before.stock_bs || 0);
         if (data.stock !== current) {
           moveStock({ productId, warehouse: online, delta: data.stock - current, kind: 'edit', actor: req.user, strict: false });
         }

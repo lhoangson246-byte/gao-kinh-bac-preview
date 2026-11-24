@@ -14,6 +14,8 @@ const LOG_PAGE = 30;
 const LOG_GROUPS = [['', 'Mọi việc'], ['in', 'Nhập kho'], ['transfer', 'Điều chuyển'], ['sale', 'Bán hàng'], ['count', 'Kiểm kê']];
 const fold = (value) => String(value || '').normalize('NFD').replace(/\p{M}/gu, '').replace(/[đĐ]/g, 'd').toLowerCase();
 const signed = (n) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${formatQty(Math.abs(n))}`;
+/** Nhật ký kho quy ra kg (24/11/2026): "+20 kg → tồn 3.000 kg"; hàng không có khối lượng giữ đơn vị của nó. */
+const signedAmount = (line) => `${line.quantity > 0 ? '+' : line.quantity < 0 ? '−' : ''}${amountText(line, Math.abs(line.quantity))}`;
 const kgText = (total) => `${formatQty(Math.round(total?.kg || 0))} kg`;
 
 /** Gộp các dòng nhật ký liền nhau của cùng một phiếu (một phiếu nhập nhiều loại gạo là một việc). */
@@ -179,7 +181,7 @@ export default function Inventory() {
   const alerts = useMemo(() => ({
     out: products.filter((p) => p.is_active && ['out', 'negative'].includes(p.status.code)).length,
     webLow: products.filter((p) => p.is_active && p.status.code === 'low').length,
-    storeLow: products.filter((p) => p.is_active && ['store_empty', 'store_low'].includes(p.status.code)).length,
+    storeLow: 0,
   }), [products]);
   const historyOf = logFilter.product_id ? products.find((p) => String(p.id) === logFilter.product_id) : null;
 
@@ -245,7 +247,7 @@ export default function Inventory() {
               <div className="inv-kpi store">
                 <span>Cửa hàng Nguyễn Cao (bán tại quầy)</span>
                 <strong>{kgText(data.totals[STORE])}</strong>
-                <small>{alerts.storeLow ? `🟡 ${alerts.storeLow} loại sắp hết hoặc hết ở cửa hàng` : 'Bán tại quầy trừ ở đây, đủ hàng'}</small>
+                <small>Bán tại quầy trừ ở đây</small>
               </div>
               <div className="inv-kpi main">
                 <span>Kho Bồ Sơn (đơn web trừ ở đây)</span>
@@ -306,10 +308,6 @@ export default function Inventory() {
                   <tbody ref={sort.listRef}>
                     {shownRows.map((p) => {
                       const moving = (showNc ? p.moving_to_nc : 0) + (showBs ? p.moving_to_bs : 0);
-                      const webAtStore = p.online === STORE;
-                      const fromOther = webAtStore ? MAIN : STORE;
-                      const otherStock = webAtStore ? p.stock_bs : p.stock_nc;
-                      const movingToWeb = webAtStore ? p.moving_to_nc : p.moving_to_bs;
                       return (
                         <tr key={p.id} className={`inv-row-${p.status.level}${p.is_active ? '' : ' inv-hidden'}${sort.dragId === p.id ? ' dragging' : ''}`}>
                           {sorting && (
@@ -347,15 +345,13 @@ export default function Inventory() {
                           <td data-label="Cảnh báo"><span className={`inv-status ${p.status.level}`}>{p.status.label}</span></td>
                           <td data-label="Thao tác" className="inv-row-actions">
                             <button type="button" className="link-button" onClick={() => showHistory(p)}>Xem lịch sử</button>
-                            {canTransfer && p.stock_bs >= 1 && ['store_empty', 'store_low'].includes(p.status.code) && !p.moving_to_nc && (
-                              <button type="button" className="link-button" onClick={() => open('transfer', { from: MAIN, product_id: p.id })}>Chuyển từ Bồ Sơn</button>
-                            )}
-                            {canTransfer && otherStock >= 1 && ['web_out', 'low'].includes(p.status.code) && !movingToWeb && (
-                              <button type="button" className="link-button" onClick={() => open('transfer', { from: fromOther, product_id: p.id })}>
-                                {fromOther === STORE ? 'Chuyển từ cửa hàng' : 'Chuyển từ Bồ Sơn'}
+                            {/* Một nơi bị âm (đơn đã nhận khi nơi đó thiếu): gợi ý chuyển từ nơi kia sang. */}
+                            {canTransfer && p.status.code === 'negative' && (p.stock_bs < 0 ? p.stock_nc : p.stock_bs) >= 1 && !(p.stock_bs < 0 ? p.moving_to_bs : p.moving_to_nc) && (
+                              <button type="button" className="link-button" onClick={() => open('transfer', { from: p.stock_bs < 0 ? STORE : MAIN, product_id: p.id })}>
+                                {p.stock_bs < 0 ? 'Chuyển từ cửa hàng' : 'Chuyển từ Bồ Sơn'}
                               </button>
                             )}
-                            {canReceive && (p.status.code === 'out' || (['web_out', 'low'].includes(p.status.code) && otherStock <= 0)) && (
+                            {canReceive && ['out', 'low'].includes(p.status.code) && (
                               <button type="button" className="link-button" onClick={() => open('receive', { kind: 'cong-gao', product_id: p.id })}>Nhập kho</button>
                             )}
                           </td>
@@ -398,8 +394,8 @@ export default function Inventory() {
                     <ul>
                       {entry.lines.map((line) => (
                         <li key={line.id}>
-                          {line.product_name} <small className="muted">{line.unit}</small>: <b className={line.quantity < 0 ? 'price-up' : 'price-down'}>{signed(line.quantity)}</b>
-                          <span className="muted"> → tồn {formatQty(line.balance_after)}</span>
+                          {line.product_name} <small className="muted">{line.unit}</small>: <b className={line.quantity < 0 ? 'price-up' : 'price-down'}>{signedAmount(line)}</b>
+                          <span className="muted"> → tồn {amountText(line, line.balance_after)}</span>
                           {line.note && line.note !== entry.lines[0].note && <small className="inv-note"> · {line.note}</small>}
                         </li>
                       ))}

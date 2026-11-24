@@ -45,8 +45,8 @@ try {
   check('Khách trên web thấy tồn (tổng hai nơi)', (await call(`/products/${webp.id}`)).data.product.stock === 7);
   // 24/11/2026: web bán theo TỔNG cửa hàng + kho; đơn trừ ở kho của sản phẩm (Bồ Sơn), kho thiếu thì vẫn nhận đơn.
   r = await row(gao.id);
-  check('Bồ Sơn hết mà cửa hàng còn: web vẫn thấy tổng (100), bảng tồn nhắc điều chuyển (vàng)', (await call(`/products/${gao.id}`)).data.product.stock === 100
-    && r.status.code === 'web_out' && r.status.level === 'yellow', short(r));
+  check('Bồ Sơn hết mà cửa hàng còn: web vẫn thấy tổng (100), cảnh báo theo tổng: đủ hàng', (await call(`/products/${gao.id}`)).data.product.stock === 100
+    && r.status.code === 'ok', short(r));
   const webOut = await call('/orders/guest', { method: 'POST', body: {
     receiver_name: 'Khách Web', phone: phone('07', 1), address: 'Số 1, đường Ngô Gia Tự, phường Tiền An', delivery_area: 'bac-ninh',
     payment_method: 'cod', items: [{ product_id: gao.id, quantity: 1 }] } });
@@ -192,9 +192,11 @@ try {
   check('Bồ Sơn về 0: khách trên web thấy hết hàng (0)', zeroBs.status === 200 && (await call(`/products/${webp.id}`)).data.product.stock === 0);
 
   /* ---------- Sửa tồn ở trang Sản phẩm, nhập kho nhanh, mã sản phẩm ---------- */
-  await call(`/admin/products/${gao.id}`, { method: 'PUT', token: owner, body: { stock: 390, price: 455000 } });
+  // 24/11/2026: ô "Số lượng còn lại" là TỔNG cửa hàng + kho; phần chênh lệch ghi vào kho trừ đơn web (Bồ Sơn).
+  const beforeEdit = await row(gao.id);
+  await call(`/admin/products/${gao.id}`, { method: 'PUT', token: owner, body: { stock: beforeEdit.total - 10, price: 455000 } });
   led = await ledgerSum(gao.id, 'KH_BS');
-  check('Sửa ô tồn kho ở trang Sản phẩm: sửa tồn Bồ Sơn, ghi nhật ký kho (−10)', (await row(gao.id)).stock_bs === 390 && (await row(gao.id)).stock_nc === 201
+  check('Sửa ô tồn kho (tổng) ở trang Sản phẩm: bớt 10 ở Bồ Sơn, ghi nhật ký kho (−10)', (await row(gao.id)).stock_bs === 390 && (await row(gao.id)).stock_nc === 201
     && led.last.kind === 'edit' && led.last.quantity === -10, short(led.last));
   await call(`/admin/products/${gao.id}`, { method: 'PUT', token: owner, body: { price: 456000 } });
   check('Sửa giá không đụng tới tồn và không ghi nhật ký kho', (await row(gao.id)).stock_bs === 390 && (await ledgerSum(gao.id, 'KH_BS')).last.id === led.last.id);
@@ -243,6 +245,9 @@ try {
   check('Số lẻ vẫn khớp sổ: tồn = tổng nhật ký kho', Math.abs(bulkNc.sum - 0.5) < 1e-9 && Math.abs(bulkBs.sum - 45.25) < 1e-9, `${bulkNc.sum} ${bulkBs.sum}`);
   check('Số âm / chữ bị từ chối (400)', (await inv('/receipts', { method: 'POST', body: { kind: 'cong-gao', items: [{ product_id: bulk.id, quantity_bs: '-1' }] } })).status === 400
     && (await inv('/transfers', { method: 'POST', body: { from: 'KH_BS', to: 'KH_NC', items: [{ product_id: bulk.id, quantity: 'abc' }] } })).status === 400);
+
+  check('Nhật ký kho kèm khối lượng mỗi bao để quy ra kg (bao 25kg → 25)', (await ledgerSum(gao.id, 'KH_BS')).list.every((m) => m.weight_kg === 25)
+    && (await ledgerSum(mien.id, 'KH_BS')).list.every((m) => m.weight_kg === 0));
 
   /* ---------- Phân quyền (kiểm tra ở máy chủ) ---------- */
   const viewer = await staff('Em Xem Kho', 1, ['inventory.view']);

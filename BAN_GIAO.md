@@ -1920,6 +1920,12 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
 - Trang Kho: lọc "Cửa hàng Nguyễn Cao" = hàng chọn đơn web trừ ở Nguyễn Cao + hàng đang có ở cửa hàng; lọc "Kho Bồ Sơn" = chỉ hàng của Kho Bồ Sơn. Cảnh báo: kho của sản phẩm hết mà nơi kia còn → vàng "… hết (còn ở …, web vẫn bán)"; tồn âm → đỏ "… thiếu hàng cho đơn — điều chuyển".
 - Kiểm thử: test:inventory (82), returns, retail, isolated cập nhật theo quy tắc mới.
 
+## 24/11/2026 (3) — Ô tồn trang Sản phẩm = tổng, cảnh báo theo tổng, nhật ký kho theo kg
+
+- Trang Sản phẩm: ô "Số lượng còn lại" và thẻ "Còn (cửa hàng + kho)" là TỔNG hai nơi (`webStock` = stock + stock_bs); bỏ dòng ghi chú dưới ô. Sửa số này thì phần chênh lệch ghi vào kho trừ đơn web của sản phẩm (mặc định Bồ Sơn), có nhật ký kho.
+- Cảnh báo bảng tồn chỉ theo tổng: Hết hàng (đỏ), một nơi âm kho → "… âm kho — điều chuyển từ … hoặc kiểm kê" (đỏ), Sắp hết (vàng, tổng ≤ 20), Đủ hàng (xanh). Bỏ "Cửa hàng hết, chỉ có ở Bồ Sơn" / "Sắp hết ở cửa hàng".
+- Nhật ký kho quy ra kg: "−20 kg → tồn 280 kg" (`GET /api/admin/inventory/movements` trả thêm `weight_kg`).
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

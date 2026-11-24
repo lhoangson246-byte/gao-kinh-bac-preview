@@ -741,7 +741,8 @@ export const formatDateTime = (value) => {
 };
 
 /** Tồn bán online của một sản phẩm (danh sách quản trị): kho bán web của sản phẩm, mặc định Kho Bồ Sơn (19/11/2026). */
-export const webStock = (p) => Number(p?.online_warehouse === 'KH_NC' ? p.stock : p?.stock_bs) || 0;
+// 24/11/2026: khách thấy TỔNG cửa hàng + kho (sản phẩm công khai chỉ có `stock` = tổng; trang quản trị có thêm stock_bs).
+export const webStock = (p) => (Number(p?.stock) || 0) + (Number(p?.stock_bs) || 0);
 export const webPlace = (p) => (p?.online_warehouse === 'KH_NC' ? 'Nguyễn Cao' : 'Bồ Sơn');
 
 export const STATUS_LABEL = {

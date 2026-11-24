@@ -70,7 +70,7 @@ export default function StockReceive({ product, onClose, onDone }) {
       {error && <div className="alert error" role="alert">{error}</div>}
 
       <div className="stock-current">
-        <div><span>Tồn {webPlace(product)} (web)</span><strong>{current.toLocaleString('vi-VN', { maximumFractionDigits: 3 })} {product.unit}</strong></div>
+        <div><span>Tồn (cửa hàng + kho)</span><strong>{current.toLocaleString('vi-VN', { maximumFractionDigits: 3 })} {product.unit}</strong></div>
         <div aria-hidden="true" className="stock-arrow">→</div>
         <div className={added > 0 ? 'stock-after' : ''}>
           <span>Sau khi nhập</span><strong>{stockAfter.toLocaleString('vi-VN', { maximumFractionDigits: 3 })} {product.unit}</strong>

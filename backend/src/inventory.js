@@ -137,26 +137,17 @@ export function inTransitByProduct() {
 }
 
 /**
- * Trạng thái cảnh báo của một dòng trong bảng tồn kho (24/11/2026): web bán theo TỔNG hai nơi; kho của sản phẩm
- * (Bán web từ) hết mà nơi kia còn thì web vẫn bán, chỉ nhắc điều chuyển.
+ * Trạng thái cảnh báo của một dòng trong bảng tồn kho (24/11/2026): tính theo TỔNG cửa hàng + kho — đúng số khách
+ * thấy trên web. Riêng một nơi bị âm (đơn đã nhận khi nơi đó thiếu) thì báo điều chuyển từ nơi kia sang.
  */
-export function stockStatus({ stock_nc: nc, stock_bs: bs, moving_to_nc: toNc = 0, moving_to_bs: toBs = 0, online = MAIN }) {
-  const webAtStore = online === STORE;
-  const home = webAtStore ? nc : bs;
-  const toHome = webAtStore ? toNc : toBs;
-  const homeName = webAtStore ? 'cửa hàng' : 'Bồ Sơn';
-  const otherName = webAtStore ? 'Bồ Sơn' : 'cửa hàng';
-  if (nc + bs <= 0) return { level: 'red', code: 'out', label: toNc + toBs > 0 ? 'Hết hàng, đang chuyển về' : 'Hết hàng, cần nhập' };
+export function stockStatus({ stock_nc: nc, stock_bs: bs, moving_to_nc: toNc = 0, moving_to_bs: toBs = 0 }) {
+  const total = nc + bs;
+  if (total <= 0) return { level: 'red', code: 'out', label: toNc + toBs > 0 ? 'Hết hàng, đang chuyển về' : 'Hết hàng, cần nhập' };
   if (nc < 0 || bs < 0) {
-    // Âm vì đơn đã nhận khi kho thiếu: cần điều chuyển từ nơi kia sang cho khớp.
-    return { level: 'red', code: 'negative', label: `${nc < 0 ? 'Cửa hàng' : 'Bồ Sơn'} thiếu hàng cho đơn — điều chuyển từ ${nc < 0 ? 'Bồ Sơn' : 'cửa hàng'}` };
+    // Âm do đơn đã nhận khi nơi đó thiếu, hoặc quầy bán khi số trên máy chưa khớp hàng thật.
+    return { level: 'red', code: 'negative', label: `${nc < 0 ? 'Cửa hàng' : 'Bồ Sơn'} âm kho — điều chuyển từ ${nc < 0 ? 'Bồ Sơn' : 'cửa hàng'} hoặc kiểm kê` };
   }
-  if (home <= 0) {
-    return { level: 'yellow', code: 'web_out', label: toHome > 0 ? `${homeName === 'Bồ Sơn' ? 'Bồ Sơn' : 'Cửa hàng'} hết, đang chuyển về` : `${homeName === 'Bồ Sơn' ? 'Bồ Sơn' : 'Cửa hàng'} hết (còn ở ${otherName}, web vẫn bán)` };
-  }
-  if (nc + bs <= LOW_STOCK_AT) return { level: 'yellow', code: 'low', label: 'Sắp hết (web)' };
-  if (!webAtStore && nc <= 0) return { level: 'blue', code: 'store_empty', label: toNc > 0 ? 'Đang chuyển về cửa hàng' : 'Cửa hàng hết, chỉ có ở Bồ Sơn' };
-  if (!webAtStore && nc <= LOW_STOCK_AT) return { level: 'yellow', code: 'store_low', label: 'Sắp hết ở cửa hàng' };
+  if (total <= LOW_STOCK_AT) return { level: 'yellow', code: 'low', label: 'Sắp hết' };
   return { level: 'green', code: 'ok', label: 'Đủ hàng' };
 }
 
