@@ -1926,6 +1926,14 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
 - Cảnh báo bảng tồn chỉ theo tổng: Hết hàng (đỏ), một nơi âm kho → "… âm kho — điều chuyển từ … hoặc kiểm kê" (đỏ), Sắp hết (vàng, tổng ≤ 20), Đủ hàng (xanh). Bỏ "Cửa hàng hết, chỉ có ở Bồ Sơn" / "Sắp hết ở cửa hàng".
 - Nhật ký kho quy ra kg: "−20 kg → tồn 280 kg" (`GET /api/admin/inventory/movements` trả thêm `weight_kg`).
 
+## 25/11/2026 — Bỏ cột "Đơn web trừ ở"; lệnh lấy hàng ở Cửa hàng Nguyễn Cao cho đơn giao
+
+- Trang Kho bỏ cột "Đơn web trừ ở". Đơn khách đặt trên web LUÔN trừ ở Kho Bồ Sơn (`onlineWarehouseOf` luôn trả KH_BS; cột `products.online_warehouse` không còn dùng). Lọc "Cửa hàng Nguyễn Cao" / "Kho Bồ Sơn" = hàng đang có ở nơi đó.
+- Kho Bồ Sơn hết vẫn nhận đơn (tổng còn đủ). Thẻ đơn: dòng sản phẩm báo "⚠️ Kho Bồ Sơn hết — thiếu … kg · cửa hàng còn … kg" + nút "📦 Lấy từ Cửa hàng Nguyễn Cao" mở form nổi (điền sẵn số kg thiếu).
+- Lệnh lấy hàng (`store_pickups` / `store_pickup_items`, mã LH000123): `POST /api/admin/inventory/pickups` (orders.manage / inventory.transfer) — chưa trừ kho; trang Bán hàng tại quầy hiện "📦 Lệnh lấy hàng cho đơn giao" (tự tải 30 giây), nhân viên bấm "Nhận lệnh" → `/pickups/:id/accept` (retail.sell / inventory.transfer): Cửa hàng Nguyễn Cao trừ đúng số (`pickup_out`), Kho Bồ Sơn được bù phần âm (`pickup_cover`), một lần duy nhất; "Từ chối" → `/reject` không đổi kho. Thẻ đơn hiện trạng thái lệnh; trang shipper hiện "🏬 Qua Cửa hàng Nguyễn Cao lấy: …".
+- Lưu ý có từ trước: trang Bán hàng tại quầy tải danh sách gạo qua `GET /api/admin/products` (cần products.manage) — tài khoản chỉ có retail.sell bị báo lỗi quyền ở đầu trang.
+- Kiểm thử: test:returns (34, có luồng lấy hàng), test:inventory (83).
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

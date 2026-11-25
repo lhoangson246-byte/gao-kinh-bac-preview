@@ -8,7 +8,7 @@ import { LIMITS, PRODUCT_CATEGORY_CODES, localDate } from '../constants.js';
 import { writeAdminAudit } from '../audit.js';
 import {
   LOW_STOCK_AT, MAIN, MOVEMENT_GROUPS, MOVEMENT_KINDS, STORE, WAREHOUSES, inTransitByProduct, isWarehouse,
-  moveStock, receiptCode, roundQty, stockColumn, stockStatus, toQty, transferCode, warehouseName,
+  moveStock, pickupCode, receiptCode, roundQty, stockColumn, stockStatus, toQty, transferCode, warehouseName,
 } from '../inventory.js';
 
 /**
@@ -158,6 +158,119 @@ router.post('/products', allow('inventory.receive', 'products.manage'), (req, re
     `).run(name, unit, Math.round(weight * 1000) / 1000, category, sku || null).lastInsertRowid;
     writeAdminAudit(req, { action: 'create', entityType: 'product', entityId: id, after: { name, unit, weight_kg: weight, category, sku, is_active: 0, via: 'phiếu nhập kho' } });
     res.status(201).json({ ...overview(), product_id: id, message: `Đã thêm mặt hàng mới “${name}” (${unit}) — đang ẩn trên web, chủ cửa hàng đặt giá ở trang Sản phẩm khi muốn bán online.` });
+  } catch (err) { next(err); }
+});
+
+/* ---------------- Lệnh lấy hàng ở Cửa hàng Nguyễn Cao cho đơn giao (25/11/2026) ---------------- */
+
+/** Danh sách lệnh lấy hàng kèm dòng hàng và mã đơn. */
+export function pickupsList(where = '', args = [], limit = 50) {
+  const rows = db.prepare(`
+    SELECT s.*, o.code AS order_code, o.receiver_name, o.status AS order_status, u.full_name AS shipper_name
+    FROM store_pickups s JOIN orders o ON o.id = s.order_id LEFT JOIN users u ON u.id = o.shipper_id
+    ${where} ORDER BY (s.status = 'requested') DESC, s.id DESC LIMIT ?
+  `).all(...args, limit);
+  if (!rows.length) return rows;
+  const items = db.prepare(`SELECT * FROM store_pickup_items WHERE pickup_id IN (${rows.map(() => '?').join(',')}) ORDER BY id`).all(...rows.map((r) => r.id));
+  return rows.map((r) => ({ ...r, items: items.filter((i) => i.pickup_id === r.id) }));
+}
+
+/**
+ * POST /api/admin/inventory/pickups { order_id, items: [{ product_id, quantity }], note? } — kế toán tạo lệnh lấy hàng ở
+ * Cửa hàng Nguyễn Cao cho một đơn đang xử lý (Kho Bồ Sơn hết hàng đó). Chưa trừ kho nào: chờ cửa hàng nhận lệnh.
+ * `quantity` tính theo đơn vị của sản phẩm (giao diện nhập kg rồi đổi ra).
+ */
+router.post('/pickups', allow('orders.manage', 'inventory.transfer'), (req, res, next) => {
+  try {
+    const orderId = Number(req.body.order_id);
+    const note = cleanText(req.body.note, LIMITS.note);
+    const actor = actorOf(req);
+    const pickupId = db.transaction(() => {
+      const order = db.prepare('SELECT id, code, status FROM orders WHERE id = ?').get(orderId);
+      if (!order) throw new HttpError(404, 'Không tìm thấy đơn hàng.');
+      if (!['pending', 'confirmed', 'shipping'].includes(order.status)) throw new HttpError(400, 'Đơn đã kết thúc, không tạo lệnh lấy hàng được.');
+      const lines = db.prepare('SELECT product_id, SUM(quantity) AS q FROM order_items WHERE order_id = ? AND product_id IS NOT NULL GROUP BY product_id').all(orderId);
+      const ordered = new Map(lines.map((l) => [l.product_id, l.q]));
+      const already = new Map(db.prepare(`
+        SELECT i.product_id, SUM(i.quantity) AS q FROM store_pickup_items i JOIN store_pickups s ON s.id = i.pickup_id
+        WHERE s.order_id = ? AND s.status IN ('requested', 'accepted') GROUP BY i.product_id
+      `).all(orderId).map((r) => [r.product_id, r.q]));
+      const getProduct = db.prepare('SELECT id, name, unit, weight_kg FROM products WHERE id = ?');
+      const wanted = [];
+      for (const row of req.body.items) {
+        const productId = Number(row.product_id);
+        const quantity = toQty(row.quantity, { min: 0.001, max: MAX_QTY });
+        const product = getProduct.get(productId);
+        if (!product || !ordered.has(productId)) throw new HttpError(400, 'Có loại hàng không nằm trong đơn này.', { items: 'Chỉ lấy hàng có trong đơn.' });
+        if (!quantity) throw new HttpError(400, 'Số lượng lấy phải lớn hơn 0.', { items: 'Số lượng chưa hợp lệ.' });
+        const left = roundQty(ordered.get(productId) - (already.get(productId) || 0));
+        if (quantity > left + 1e-9) throw new HttpError(400, `“${product.name}”: đơn chỉ còn ${left} ${product.unit} chưa có lệnh lấy hàng.`, { items: 'Vượt số lượng trong đơn.' });
+        wanted.push({ product, quantity });
+      }
+      const id = db.prepare('INSERT INTO store_pickups (order_id, note, created_by, actor_name) VALUES (?, ?, ?, ?)').run(orderId, note, actor.id, actor.full_name).lastInsertRowid;
+      db.prepare('UPDATE store_pickups SET code = ? WHERE id = ?').run(pickupCode(id), id);
+      const ins = db.prepare('INSERT INTO store_pickup_items (pickup_id, product_id, product_name, unit, weight_kg, quantity) VALUES (?, ?, ?, ?, ?, ?)');
+      for (const { product, quantity } of wanted) ins.run(id, product.id, product.name, product.unit, product.weight_kg || 0, quantity);
+      return id;
+    })();
+    const [pickup] = pickupsList('WHERE s.id = ?', [pickupId], 1);
+    writeAdminAudit(req, { action: 'create', entityType: 'store_pickup', entityId: pickup.code,
+      after: { order: pickup.order_code, items: pickup.items.map((i) => `${i.product_name} × ${i.quantity}`) } });
+    res.status(201).json({ pickup, message: `Đã gửi lệnh lấy hàng ${pickup.code} tới Cửa hàng Nguyễn Cao cho đơn ${pickup.order_code}. Cửa hàng bấm "Nhận lệnh" thì shipper qua lấy.` });
+  } catch (err) { next(err); }
+});
+
+/** GET /api/admin/inventory/pickups?status=requested|accepted|rejected|all&order_id= */
+router.get('/pickups', allow('retail.sell', 'orders.view', ...INVENTORY_PERMISSIONS), (req, res) => {
+  const where = [];
+  const args = [];
+  const status = req.query.status || 'requested';
+  if (status !== 'all') { where.push('s.status = ?'); args.push(status); }
+  if (req.query.order_id) { where.push('s.order_id = ?'); args.push(Number(req.query.order_id)); }
+  res.json({ pickups: pickupsList(where.length ? `WHERE ${where.join(' AND ')}` : '', args) });
+});
+
+/**
+ * POST /api/admin/inventory/pickups/:id/accept — nhân viên bán tại quầy nhận lệnh: Cửa hàng Nguyễn Cao bị trừ đúng số
+ * hàng (shipper sẽ qua lấy), Kho Bồ Sơn được bù lại phần đã âm vì đơn. Mỗi lệnh chỉ nhận một lần.
+ */
+router.post('/pickups/:id/accept', allow('retail.sell', 'inventory.transfer'), (req, res, next) => {
+  try {
+    const pickupId = toInteger(req.params.id, { min: 1 });
+    const actor = actorOf(req);
+    const note = cleanText(req.body.note, LIMITS.note);
+    db.transaction(() => {
+      const pickup = pickupId && db.prepare('SELECT s.*, o.code AS order_code FROM store_pickups s JOIN orders o ON o.id = s.order_id WHERE s.id = ?').get(pickupId);
+      if (!pickup) throw new HttpError(404, 'Không tìm thấy lệnh lấy hàng.');
+      const claimed = db.prepare(`UPDATE store_pickups SET status = 'accepted', handled_by = ?, handler_name = ?, handled_at = datetime('now'), handle_note = ?
+        WHERE id = ? AND status = 'requested'`).run(actor.id, actor.full_name, note, pickupId).changes;
+      if (!claimed) throw new HttpError(409, 'Lệnh này đã được xử lý rồi.');
+      const ref = { type: 'store_pickup', id: pickupId, code: pickup.code };
+      for (const item of db.prepare('SELECT * FROM store_pickup_items WHERE pickup_id = ?').all(pickupId)) {
+        if (!item.product_id) continue;
+        moveStock({ productId: item.product_id, warehouse: STORE, delta: -item.quantity, kind: 'pickup_out', ref, strict: false, actor,
+          note: `Shipper lấy tại cửa hàng cho đơn ${pickup.order_code}` });
+        moveStock({ productId: item.product_id, warehouse: MAIN, delta: item.quantity, kind: 'pickup_cover', ref, actor,
+          note: `Hàng của đơn ${pickup.order_code} lấy ở Cửa hàng Nguyễn Cao` });
+      }
+    })();
+    const [pickup] = pickupsList('WHERE s.id = ?', [pickupId], 1);
+    writeAdminAudit(req, { action: 'accept', entityType: 'store_pickup', entityId: pickup.code, after: { order: pickup.order_code } });
+    res.json({ pickup, message: `Đã nhận lệnh ${pickup.code}: cửa hàng xuất hàng cho đơn ${pickup.order_code}, chờ shipper qua lấy.` });
+  } catch (err) { next(err); }
+});
+
+/** POST /api/admin/inventory/pickups/:id/reject { note? } — cửa hàng không đủ hàng / kế toán huỷ lệnh. Không đổi kho. */
+router.post('/pickups/:id/reject', allow('retail.sell', 'inventory.transfer', 'orders.manage'), (req, res, next) => {
+  try {
+    const pickupId = toInteger(req.params.id, { min: 1 });
+    const actor = actorOf(req);
+    const changed = pickupId && db.prepare(`UPDATE store_pickups SET status = 'rejected', handled_by = ?, handler_name = ?, handled_at = datetime('now'), handle_note = ?
+      WHERE id = ? AND status = 'requested'`).run(actor.id, actor.full_name, cleanText(req.body.note, LIMITS.note), pickupId).changes;
+    if (!changed) throw new HttpError(409, 'Không tìm thấy lệnh đang chờ hoặc lệnh đã được xử lý.');
+    const [pickup] = pickupsList('WHERE s.id = ?', [pickupId], 1);
+    writeAdminAudit(req, { action: 'reject', entityType: 'store_pickup', entityId: pickup.code, after: { order: pickup.order_code, note: pickup.handle_note } });
+    res.json({ pickup, message: `Đã từ chối lệnh ${pickup.code}.` });
   } catch (err) { next(err); }
 });
 

@@ -329,6 +329,12 @@ add('inventory', 'GET', /^\/?$/);
 add('inventory', 'GET', /^\/(stock|receipts)\/?$/);
 add('inventory', 'PUT', /^\/products\/[^/]+\/online\/?$/, obj({ warehouse: z.enum(['KH_BS', 'KH_NC']) }));
 add('inventory', 'PUT', /^\/order\/?$/, obj({ ids: z.array(id).min(1).max(5000) }));
+// Lệnh lấy hàng ở cửa hàng cho đơn giao (25/11/2026).
+add('inventory', 'GET', /^\/pickups\/?$/, empty, obj({ status: z.enum(['requested', 'accepted', 'rejected', 'all']).optional(), order_id: z.string().regex(/^\d+$/).optional() }));
+add('inventory', 'POST', /^\/pickups\/?$/, obj({
+  order_id: id, note, items: z.array(obj({ product_id: id, quantity: decimal(0.001, 100000) })).min(1).max(30),
+}));
+add('inventory', 'POST', /^\/pickups\/[^/]+\/(accept|reject)\/?$/, obj({ note }));
 // Kế toán thêm mặt hàng mới ngay trong phiếu nhập (chưa có trên web) — 24/11/2026.
 add('inventory', 'POST', /^\/products\/?$/, obj({
   name: text(LIMITS.name), unit: text(40), weight_kg: decimal(0, 1000).nullable().optional(),

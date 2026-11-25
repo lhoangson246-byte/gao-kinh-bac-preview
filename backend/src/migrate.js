@@ -1426,5 +1426,37 @@ if (!db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(deleteTestOrd
     if (!ocols.includes('geo_label')) db.exec('ALTER TABLE orders ADD COLUMN geo_label TEXT');
   }
 
+  // 25/11/2026: lệnh lấy hàng ở Cửa hàng Nguyễn Cao cho một đơn giao (Kho Bồ Sơn hết). Kế toán tạo trên thẻ đơn;
+  // nhân viên bán tại quầy bấm "Nhận lệnh" thì cửa hàng bị trừ đúng số đó (bù lại phần Kho Bồ Sơn đã âm vì đơn)
+  // và shipper qua cửa hàng lấy hàng đi giao.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS store_pickups (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      code          TEXT UNIQUE,                 -- LH000123
+      order_id      INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      status        TEXT NOT NULL DEFAULT 'requested',   -- requested · accepted · rejected
+      note          TEXT,
+      created_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      actor_name    TEXT,
+      created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+      handled_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      handler_name  TEXT,
+      handled_at    TEXT,
+      handle_note   TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_store_pickups_order ON store_pickups(order_id);
+    CREATE INDEX IF NOT EXISTS idx_store_pickups_status ON store_pickups(status);
+    CREATE TABLE IF NOT EXISTS store_pickup_items (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      pickup_id   INTEGER NOT NULL REFERENCES store_pickups(id) ON DELETE CASCADE,
+      product_id  INTEGER REFERENCES products(id) ON DELETE SET NULL,
+      product_name TEXT NOT NULL,
+      unit        TEXT,
+      weight_kg   REAL NOT NULL DEFAULT 0,
+      quantity    REAL NOT NULL CHECK (quantity > 0)
+    );
+    CREATE INDEX IF NOT EXISTS idx_store_pickup_items_pickup ON store_pickup_items(pickup_id);
+  `);
+
   db.prepare('INSERT OR IGNORE INTO app_migrations (name) VALUES (?)').run(SCHEMA_VERSION);
 }

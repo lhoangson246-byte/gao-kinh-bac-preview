@@ -62,6 +62,13 @@ router.get('/orders', async (req, res, next) => {
     WHERE order_id IN (${orders.map(() => '?').join(',')}) ORDER BY order_id, id
   `).all(...orders.map((o) => o.id)) : [];
   for (const order of orders) order.items = items.filter((i) => i.order_id === order.id);
+  // Hàng cần qua Cửa hàng Nguyễn Cao lấy (lệnh lấy hàng cửa hàng đã nhận / đang chờ) — 25/11/2026.
+  const pickupRows = orders.length ? db.prepare(`
+    SELECT s.order_id, s.code, s.status, i.product_name, i.unit, i.weight_kg, i.quantity
+    FROM store_pickups s JOIN store_pickup_items i ON i.pickup_id = s.id
+    WHERE s.order_id IN (${orders.map(() => '?').join(',')}) AND s.status IN ('requested', 'accepted') ORDER BY s.id, i.id
+  `).all(...orders.map((o) => o.id)) : [];
+  for (const order of orders) order.store_pickups = pickupRows.filter((p) => p.order_id === order.id);
   const active = orders.filter((o) => ['confirmed', 'shipping'].includes(o.status) && o.fulfillment !== 'pickup');
   await ensureOrderPoints(active, { max: 6, budgetMs: 4000 });
   // Vừa giao xong một đơn (trong 2 tiếng) thì tính tiếp từ chỗ đó; không thì từ kho.

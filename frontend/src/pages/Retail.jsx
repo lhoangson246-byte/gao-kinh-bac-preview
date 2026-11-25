@@ -9,6 +9,7 @@ import ReturnManager from '../components/ReturnManager.jsx';
 import OrderAlerts from '../components/OrderAlerts.jsx';
 import AccountSignup from '../components/AccountSignup.jsx';
 import ProductImage from '../components/ProductImage.jsx';
+import { StorePickupInbox } from '../components/StorePickup.jsx';
 
 const PAYMENT_LABEL = { cash: 'Tiền mặt', transfer: 'Chuyển khoản' };
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -99,6 +100,8 @@ export default function Retail() {
             </div>
           )}
           {msg && <div className="toast success" role="status"><span>✓</span>{msg}</div>}
+          {/* Lệnh lấy hàng cho đơn giao: Kho Bồ Sơn hết, kế toán nhờ cửa hàng xuất (25/11/2026). */}
+          <StorePickupInbox />
 
           {stats && (
             <section className="stats" aria-label="Thống kê bán tại quầy">

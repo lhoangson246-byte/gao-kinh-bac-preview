@@ -592,3 +592,26 @@ tr.ws-open td { background: var(--green-100); }
 .stock-warn .btn { justify-self: start; margin-top: 4px; }
 .stock-warn-banner a { font-weight: 800; }
 .manual-short.warn { color: #8a5a00; }
+
+/* Lệnh lấy hàng ở Cửa hàng Nguyễn Cao cho đơn giao (25/11/2026) */
+.admin-order-items li.item-short > span { color: #8a3a05; }
+.item-short-note { display: block; margin-top: 2px; color: #b4500f !important; font-weight: 700; }
+.order-pickups { display: grid; gap: 4px; margin: 6px 0 0; padding: 0; list-style: none; font-size: .84rem; }
+.order-pickups li { padding: 6px 9px; border-radius: 8px; background: #f4f1ea; }
+.order-pickups li.accepted { background: #e7f4ea; }
+.order-pickups li.rejected { background: #fbe9e7; }
+.pickup-modal { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: rgba(20, 25, 20, .45); }
+.pickup-modal-box { position: relative; display: grid; gap: 10px; width: min(520px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 18px; border-radius: 16px; background: #fff; box-shadow: 0 12px 40px rgba(0, 0, 0, .25); }
+.pickup-modal-box h3 { margin: 0 28px 0 0; }
+.pickup-modal-box .icon-close { position: absolute; top: 10px; right: 10px; }
+.pickup-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; }
+.pickup-row small { display: block; color: var(--muted); font-weight: 500; }
+.pickup-qty { display: flex; align-items: center; gap: 6px; }
+.pickup-qty .input { width: 100px; text-align: right; }
+.pickup-inbox { display: grid; gap: 8px; margin: 0 0 16px; padding: 14px; border: 2px solid #d9822b; border-radius: 14px; background: #fff8ec; }
+.pickup-inbox h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 1.1rem; }
+.pickup-count { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 999px; background: #d9822b; color: #fff; font-size: .8rem; }
+.pickup-card { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: #fff; }
+.pickup-card header small { display: block; color: var(--muted); }
+.pickup-card ul { margin: 0; padding-left: 18px; }
+.delivery-pickup { margin: 4px 0; padding: 6px 10px; border-radius: 8px; background: #fff3d6; color: #5a3a05; font-size: .9rem; }

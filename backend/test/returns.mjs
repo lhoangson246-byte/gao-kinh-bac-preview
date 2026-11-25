@@ -30,35 +30,60 @@ try {
   const complete = async (id) => { for (const status of ['confirmed', 'shipping', 'completed']) await call(`/admin/orders/${id}/status`, { method: 'PATCH', token: owner, body: { status } }); };
   const adminOrder = async (id) => (await call('/admin/orders?limit=300', { token: owner })).data.orders.find((o) => o.id === id);
 
-  /* ---------- Kho bán online của từng sản phẩm ---------- */
+  /* ---------- Đơn web luôn trừ Kho Bồ Sơn; kho hết → lệnh lấy hàng ở Cửa hàng Nguyễn Cao (25/11/2026) ---------- */
   const a = await make('Gạo bán ở cửa hàng', 0);
   const b = await make('Gạo bán ở kho', 50);
   await inv('/count', { method: 'POST', body: { warehouse: 'KH_NC', kind: 'opening', items: [{ product_id: a.id, counted: 30 }, { product_id: b.id, counted: 5 }] } });
   let r = await row(a.id);
-  // 24/11/2026: web thấy tổng hai nơi; Bồ Sơn hết chỉ nhắc điều chuyển (vàng), web vẫn bán.
-  check('Mặc định đơn web trừ ở Bồ Sơn: Bồ Sơn hết thì web vẫn thấy tổng 30, cảnh báo theo tổng (đủ hàng)', r.online === 'KH_BS' && (await pub(a.id)).stock === 30
-    && r.status.code === 'ok', short(r));
+  check('Bồ Sơn hết, cửa hàng còn 30: web vẫn thấy tổng 30, cảnh báo theo tổng (đủ hàng)', (await pub(a.id)).stock === 30 && r.status.code === 'ok', short(r));
   const viewer = await staff('Em Xem Kho', 1, ['inventory.view']);
-  check('Quyền xem kho không đổi được kho bán online (403)', (await call(`/admin/inventory/products/${a.id}/online`, { method: 'PUT', token: viewer, body: { warehouse: 'KH_NC' } })).status === 403);
-  const switched = await inv(`/products/${a.id}/online`, { method: 'PUT', body: { warehouse: 'KH_NC' } });
-  r = switched.data.products?.find((p) => p.id === a.id);
-  check('Chuyển sang bán web từ Cửa hàng Nguyễn Cao: web thấy 30, bảng tồn hết báo đỏ', switched.status === 200 && r.online === 'KH_NC'
-    && (await pub(a.id)).stock === 30 && r.status.code !== 'web_out' && /Nguyễn Cao/.test(switched.data.message || ''), short(r));
-  check('Kho lạ bị từ chối (400)', (await inv(`/products/${a.id}/online`, { method: 'PUT', body: { warehouse: 'KH_XX' } })).status === 400);
+  const seller = await staff('Em Bán Quầy', 2, ['retail.sell']);
+  const accountant = await staff('Chị Kế Toán', 3, ['orders.view', 'orders.manage']);
 
   const mixed = await guestOrder([{ product_id: a.id, quantity: 2 }, { product_id: b.id, quantity: 3 }], 1);
   const ra = await row(a.id); const rb = await row(b.id);
-  check('Đơn web hai món: món bán ở cửa hàng trừ cửa hàng, món bán ở kho trừ Bồ Sơn', mixed.status === 201 && ra.stock_nc === 28 && ra.stock_bs === 0
+  check('Đơn web luôn trừ Kho Bồ Sơn (kể cả món kho đã hết: âm 2), cửa hàng giữ nguyên', mixed.status === 201 && ra.stock_bs === -2 && ra.stock_nc === 30
     && rb.stock_bs === 47 && rb.stock_nc === 5, short({ s: mixed.status, m: mixed.data.message, ra, rb }));
   let o = await adminOrder(mixed.data.order?.id);
-  check('Đơn lấy hàng ở hai nơi: tính là đơn Kho Bồ Sơn; từng dòng ghi kho đã trừ', o?.warehouse === 'KH_BS'
-    && o.items.find((i) => i.product_id === a.id)?.warehouse === 'KH_NC' && o.items.find((i) => i.product_id === b.id)?.warehouse === 'KH_BS', short(o?.items));
-  await call(`/admin/orders/${o.id}/status`, { method: 'PATCH', token: owner, body: { status: 'cancelled' } });
-  check('Huỷ đơn: hàng trả về đúng kho của từng dòng', (await row(a.id)).stock_nc === 30 && (await row(b.id)).stock_bs === 50);
-  const storeOnly = await guestOrder([{ product_id: a.id, quantity: 1 }], 2);
-  check('Đơn web chỉ có hàng bán ở cửa hàng: đơn tính cho Cửa hàng Nguyễn Cao', (await adminOrder(storeOnly.data.order?.id))?.warehouse === 'KH_NC');
-  const over = await guestOrder([{ product_id: a.id, quantity: 40 }], 3);
-  check('Cửa hàng không đủ: đơn web bị từ chối', over.status === 400 && (await row(a.id)).stock_nc === 29, short(over.data));
+  check('Từng dòng của đơn web ghi kho Bồ Sơn', o?.warehouse === 'KH_BS' && o.items.every((i) => i.warehouse === 'KH_BS'), short(o?.items));
+  check('Thẻ đơn báo đúng món thiếu: thiếu 2 túi (10 kg), cửa hàng còn 150 kg; món đủ hàng không báo', o?.stock_warnings?.length === 1
+    && o.stock_warnings[0].product_name === a.name && o.stock_warnings[0].short === 2 && o.stock_warnings[0].short_kg === 10 && o.stock_warnings[0].other_kg === 150, short(o?.stock_warnings));
+
+  const pickup = (token, body) => call('/admin/inventory/pickups', { method: 'POST', token, body });
+  check('Chỉ xem kho / bán quầy không tạo được lệnh lấy hàng (403)', (await pickup(viewer, { order_id: o.id, items: [{ product_id: a.id, quantity: 2 }] })).status === 403
+    && (await pickup(seller, { order_id: o.id, items: [{ product_id: a.id, quantity: 2 }] })).status === 403);
+  check('Lấy quá số trong đơn / món không có trong đơn bị từ chối (400)', (await pickup(accountant, { order_id: o.id, items: [{ product_id: a.id, quantity: 3 }] })).status === 400
+    && (await pickup(accountant, { order_id: o.id, items: [{ product_id: 999999, quantity: 1 }] })).status === 400);
+  const created = await pickup(accountant, { order_id: o.id, items: [{ product_id: a.id, quantity: 2 }], note: 'Anh Diệu qua lấy' });
+  check('Kế toán gửi lệnh lấy hàng ở cửa hàng (LH…): chưa trừ kho nào', created.status === 201 && /^LH\d{6}$/.test(created.data.pickup?.code || '')
+    && (await row(a.id)).stock_nc === 30 && (await row(a.id)).stock_bs === -2, short(created.data));
+  check('Lệnh đã đủ số trong đơn thì không gửi thêm (400)', (await pickup(accountant, { order_id: o.id, items: [{ product_id: a.id, quantity: 1 }] })).status === 400);
+  o = await adminOrder(o.id);
+  check('Thẻ đơn hiện lệnh đang chờ cửa hàng nhận', o.pickups?.[0]?.status === 'requested' && o.pickups[0].items[0].quantity === 2);
+  const inbox = (await call('/admin/inventory/pickups', { token: seller })).data.pickups;
+  check('Nhân viên bán tại quầy thấy lệnh đang chờ (kèm mã đơn, món, ghi chú)', inbox?.some((x) => x.id === created.data.pickup.id && x.order_code === o.code && x.note === 'Anh Diệu qua lấy'), short(inbox));
+  const accepted = await call(`/admin/inventory/pickups/${created.data.pickup.id}/accept`, { method: 'POST', token: seller, body: {} });
+  {
+    const x = await row(a.id);
+    check('Cửa hàng nhận lệnh: Nguyễn Cao trừ 2 (28), Kho Bồ Sơn được bù về 0', accepted.status === 200 && x.stock_nc === 28 && x.stock_bs === 0, short({ s: accepted.status, x }));
+  }
+  check('Nhận lệnh hai lần bị chặn (409)', (await call(`/admin/inventory/pickups/${created.data.pickup.id}/accept`, { method: 'POST', token: seller, body: {} })).status === 409);
+  o = await adminOrder(o.id);
+  check('Thẻ đơn hết cảnh báo, lệnh ghi "đã nhận" kèm người nhận', !o.stock_warnings?.length && o.pickups[0].status === 'accepted' && !!o.pickups[0].handler_name, short(o.pickups));
+  const ledger = (await inv(`/movements?product_id=${a.id}&group=transfer`)).data.movements;
+  check('Nhật ký kho ghi xuất ở cửa hàng và bù ở Bồ Sơn kèm mã lệnh', ledger.some((m) => m.kind === 'pickup_out' && m.warehouse === 'KH_NC' && m.quantity === -2 && m.ref_code === created.data.pickup.code)
+    && ledger.some((m) => m.kind === 'pickup_cover' && m.warehouse === 'KH_BS' && m.quantity === 2), short(ledger));
+  // Từ chối: không đổi kho
+  const second = await guestOrder([{ product_id: a.id, quantity: 1 }], 2);
+  const req2 = await pickup(accountant, { order_id: second.data.order.id, items: [{ product_id: a.id, quantity: 1 }] });
+  const rejected = await call(`/admin/inventory/pickups/${req2.data.pickup.id}/reject`, { method: 'POST', token: seller, body: { note: 'Cửa hàng cũng hết' } });
+  check('Cửa hàng từ chối lệnh: không đổi kho, ghi lý do', rejected.status === 200 && rejected.data.pickup.status === 'rejected' && rejected.data.pickup.handle_note === 'Cửa hàng cũng hết'
+    && (await row(a.id)).stock_nc === 28 && (await row(a.id)).stock_bs === -1);
+  await call(`/admin/orders/${second.data.order.id}/status`, { method: 'PATCH', token: owner, body: { status: 'cancelled' } });
+  await call(`/admin/orders/${mixed.data.order.id}/status`, { method: 'PATCH', token: owner, body: { status: 'cancelled' } });
+  check('Huỷ đơn: hàng trả về Kho Bồ Sơn', (await row(b.id)).stock_bs === 50 && (await row(a.id)).stock_bs === 2);
+  const over = await guestOrder([{ product_id: a.id, quantity: 31 }], 3);
+  check('Vượt tổng hai nơi (30): đơn web bị từ chối', over.status === 400, short(over.data));
 
   /* ---------- Thứ tự bảng tồn kho ---------- */
   const before = (await inv()).data.products.map((p) => p.id);

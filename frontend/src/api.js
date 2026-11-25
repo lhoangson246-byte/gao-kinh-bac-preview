@@ -155,6 +155,11 @@ export const api = {
   inventory: () => request('/admin/inventory', { auth: true }),
   inventoryStock: () => request('/admin/inventory/stock', { auth: true }),
   inventoryMovements: (params = {}) => request(`/admin/inventory/movements?${new URLSearchParams(params)}`, { auth: true }),
+  /** Lệnh lấy hàng ở Cửa hàng Nguyễn Cao cho đơn giao (25/11/2026). */
+  inventoryPickups: (params = {}) => request(`/admin/inventory/pickups?${new URLSearchParams(params)}`, { auth: true }),
+  inventoryCreatePickup: (body) => request('/admin/inventory/pickups', { method: 'POST', auth: true, body }),
+  inventoryAcceptPickup: (id, note = null) => request(`/admin/inventory/pickups/${id}/accept`, { method: 'POST', auth: true, body: { note } }),
+  inventoryRejectPickup: (id, note = null) => request(`/admin/inventory/pickups/${id}/reject`, { method: 'POST', auth: true, body: { note } }),
   /** Thêm mặt hàng mới ngay trong phiếu nhập (ẩn trên web) — 24/11/2026. */
   inventoryNewProduct: (body) => request('/admin/inventory/products', { method: 'POST', auth: true, body }),
   inventoryReceive: (body) => request('/admin/inventory/receipts', { method: 'POST', body, auth: true }),

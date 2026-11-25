@@ -230,6 +230,9 @@ export default function Delivery() {
                 )}
               </div>
               {order.warehouse === 'KH_BS' && <p className="delivery-meta">📦 Lấy hàng ở Kho Bồ Sơn</p>}
+              {order.store_pickups?.length > 0 && (
+                <p className="delivery-pickup">🏬 Qua <b>Cửa hàng Nguyễn Cao</b> lấy: {order.store_pickups.map((p) => `${p.product_name} ${p.weight_kg > 0 ? `${String(Math.round(p.quantity * p.weight_kg * 10) / 10).replace('.', ',')} kg` : `${p.quantity} ${p.unit}`}${p.status === 'requested' ? ' (cửa hàng chưa nhận lệnh)' : ''}`).join(', ')}</p>
+              )}
               {order.delivery_slot && <p className="delivery-meta">🕒 {DELIVERY_SLOT_LABEL[order.delivery_slot]}</p>}
               {order.note && <p className="delivery-note">📝 {order.note}</p>}
               <ul className="delivery-items">

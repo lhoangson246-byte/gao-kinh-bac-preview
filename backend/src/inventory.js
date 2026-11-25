@@ -28,7 +28,9 @@ export const ONLINE_COLUMN = COLUMN[ONLINE];
  *  - onlineWarehouseOf(product): 'KH_BS' | 'KH_NC'
  *  - ONLINE_STOCK_SQL: biểu thức SQL tồn bán online (dùng được với bí danh bảng qua onlineStockSql('p.')).
  */
-export const onlineWarehouseOf = (product) => (product?.online_warehouse === STORE ? STORE : MAIN);
+// 25/11/2026: bỏ cột "Đơn web trừ ở" — đơn khách đặt trên web LUÔN trừ ở Kho Bồ Sơn (cột online_warehouse cũ không
+// còn dùng). Kho hết thì vẫn nhận đơn; kế toán tạo "lệnh lấy hàng ở cửa hàng" cho đơn (store_pickups bên dưới).
+export const onlineWarehouseOf = () => MAIN;
 /**
  * 24/11/2026: khách thấy trên web TỔNG tồn của cả hai nơi (cửa hàng + kho). Đơn vẫn trừ ở kho của sản phẩm
  * (cột "Bán web từ", mặc định Kho Bồ Sơn) hoặc kho nhân viên chọn khi tạo đơn; kho đó thiếu thì vẫn nhận đơn
@@ -76,11 +78,13 @@ export const MOVEMENT_KINDS = {
   count: 'Kiểm kê',
   edit: 'Sửa tồn ở trang Sản phẩm',
   order_return: 'Khách trả hàng, nhập lại kho',
+  pickup_out: 'Xuất cho đơn giao (shipper lấy tại cửa hàng)',
+  pickup_cover: 'Bù hàng thiếu cho đơn (lấy ở cửa hàng)',
 };
 /** Nhóm để lọc nhật ký kho. */
 export const MOVEMENT_GROUPS = {
   in: ['opening', 'receipt'],
-  transfer: ['transfer_out', 'transfer_in', 'transfer_cancel'],
+  transfer: ['transfer_out', 'transfer_in', 'transfer_cancel', 'pickup_out', 'pickup_cover'],
   sale: ['order', 'order_wholesale', 'order_cancel', 'counter', 'order_return'],
   count: ['count', 'edit'],
 };
@@ -153,3 +157,4 @@ export function stockStatus({ stock_nc: nc, stock_bs: bs, moving_to_nc: toNc = 0
 
 export const receiptCode = (id) => `NK${String(id).padStart(6, '0')}`;
 export const transferCode = (id) => `DC${String(id).padStart(6, '0')}`;
+export const pickupCode = (id) => `LH${String(id).padStart(6, '0')}`;

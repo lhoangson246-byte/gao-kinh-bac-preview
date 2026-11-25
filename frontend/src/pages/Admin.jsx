@@ -25,6 +25,7 @@ import OrderReturnForm from '../components/OrderReturnForm.jsx';
 import BusinessUpdate from '../components/BusinessUpdate.jsx';
 import DispatchPanel from '../components/DispatchPanel.jsx';
 import OrderLocation from '../components/OrderLocation.jsx';
+import { OrderPickups, PickupForm } from '../components/StorePickup.jsx';
 import OrderPrint from '../components/OrderPrint.jsx';
 import { ListSkeleton } from '../components/Skeleton.jsx';
 import useScrollTabs from '../components/useScrollTabs.js';
@@ -115,6 +116,7 @@ export default function Admin() {
   const filterRef = useScrollTabs(`${filter}|${tab}|${loading}`);
   const [busyId, setBusyId] = useState(null);
   const [returning, setReturning] = useState(null);   // id đơn đang lập phiếu trả / đổi hàng
+  const [pickupFor, setPickupFor] = useState(null);   // đơn đang mở form lấy hàng ở cửa hàng (25/11/2026)
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const navigate = useNavigate();
@@ -733,6 +735,8 @@ export default function Admin() {
                     </div>
                   </div>
                   {printing && <OrderPrint orders={printing} onDone={() => setPrinting(null)} />}
+                  {pickupFor && <PickupForm order={pickupFor} warnings={pickupFor.stock_warnings || []} onClose={() => setPickupFor(null)}
+                                            onDone={(message) => { setPickupFor(null); notify(message); reload({ refreshProducts: false }); }} />}
                   {showCreate && (
                     <ManualOrderForm shippers={shippers} onClose={() => setShowCreate(false)}
                                      onCreated={(order) => { setShowCreate(false); notify(`Đã tạo đơn ${order.code}.`); reload({ refreshProducts: false }); }} />
@@ -801,7 +805,6 @@ export default function Admin() {
                                 <h2>{order.receiver_name}</h2>
                                 {order.wholesale_code && <p className="wholesale-tag">🏢 Khách buôn {order.wholesale_code} · {order.wholesale_company}</p>}
                                 {order.warehouse === 'KH_BS' && <p className="warehouse-tag">📦 Xuất hàng từ Kho Bồ Sơn</p>}
-                                {order.stock_warnings?.length > 0 && <StockWarning warnings={order.stock_warnings} />}
                                 <a href={`tel:${order.phone}`} className="phone-link">{order.phone}</a>
                                 <p className="address-text">{order.address}</p>
                                 {order.fulfillment !== 'pickup' && !['completed', 'cancelled'].includes(order.status) && (
@@ -826,8 +829,15 @@ export default function Admin() {
                               <section>
                                 <p className="detail-label">Sản phẩm</p>
                                 <ul className="admin-order-items">
-                                  {order.items.map((item) => <li key={item.id}><span>{item.product_name}{!!item.is_reward && <span className="gift-tag">Quà đổi điểm</span>}{item.promo && <span className="gift-tag promo">Quà khuyến mãi{item.product_id ? '' : ' · giao tay'}</span>}<small>{item.quantity} {item.unit}</small></span><strong>{formatVND(item.price * item.quantity)}</strong></li>)}
+                                  {order.items.map((item) => {
+                                    // Kho xuất hết món này (25/11/2026): báo ngay ở dòng sản phẩm.
+                                    const short = order.stock_warnings?.find((w) => w.product_name === item.product_name);
+                                    return <li key={item.id} className={short ? 'item-short' : ''}><span>{item.product_name}{!!item.is_reward && <span className="gift-tag">Quà đổi điểm</span>}{item.promo && <span className="gift-tag promo">Quà khuyến mãi{item.product_id ? '' : ' · giao tay'}</span>}<small>{item.quantity} {item.unit}</small>
+                                      {short && <small className="item-short-note">⚠️ {WH_NAME[short.warehouse]} hết — thiếu {short.short_kg != null ? `${fmtKg(short.short_kg)} kg` : `${fmtKg(short.short)} ${short.unit}`} · cửa hàng còn {short.other_kg != null ? `${fmtKg(short.other_kg)} kg` : fmtKg(short.other_stock)}</small>}</span><strong>{formatVND(item.price * item.quantity)}</strong></li>;
+                                  })}
                                 </ul>
+                                {order.stock_warnings?.length > 0 && <StockWarning order={order} canAct={canManageOrders} onOpen={() => setPickupFor(order)} />}
+                                <OrderPickups pickups={order.pickups} />
                                 {(order.discount > 0 || order.shipping_fee > 0) && (
                                   <>
                                     <div className="admin-order-line"><span>Tiền hàng</span><span>{formatVND(order.subtotal || order.total + order.discount)}</span></div>
@@ -1112,19 +1122,15 @@ const fmtKg = (v) => String(v).replace('.', ',');
  * Kho xuất của đơn đang thiếu hàng (24/11/2026): web bán theo tổng hai nơi nên đơn vẫn được nhận. Báo kế toán
  * điều chuyển từ nơi kia sang, hoặc để shipper qua cửa hàng lấy sau khi điều chuyển đúng số lượng.
  */
-function StockWarning({ warnings }) {
+function StockWarning({ order, canAct, onOpen }) {
+  const warnings = order.stock_warnings;
   const where = WH_NAME[warnings[0].warehouse];
+  const waiting = order.pickups?.some((p) => p.status === 'requested');
   return (
     <div className="stock-warn" role="alert">
-      <b>⚠️ {where} đang hết / thiếu hàng cho đơn này</b>
-      <ul>
-        {warnings.map((w, i) => (
-          <li key={i}>{w.product_name}: thiếu <b>{w.short_kg != null ? `${fmtKg(w.short_kg)} kg` : `${fmtKg(w.short)} ${w.unit}`}</b>
-            {' '}— {WH_NAME[w.other_warehouse]} còn {w.other_kg != null ? `${fmtKg(w.other_kg)} kg` : fmtKg(w.other_stock)}</li>
-        ))}
-      </ul>
-      <small>Điều chuyển từ {WH_NAME[warnings[0].other_warehouse]} sang {where}, hoặc để nhân viên giao qua cửa hàng lấy sau khi điều chuyển số lượng tương ứng.</small>
-      <Link to="/quan-tri/kho" className="btn btn-secondary">🔄 Mở trang Kho để điều chuyển</Link>
+      <b>⚠️ {where} đang hết {warnings.length} món của đơn này</b>
+      <small>{waiting ? 'Đã gửi lệnh lấy hàng tới cửa hàng — chờ cửa hàng nhận lệnh.' : 'Gửi lệnh lấy hàng từ Cửa hàng Nguyễn Cao: cửa hàng nhận lệnh thì bị trừ đúng số đó, shipper qua cửa hàng lấy hàng đi giao.'}</small>
+      {canAct && !waiting && <button type="button" className="btn btn-primary" onClick={onOpen}>📦 Lấy từ Cửa hàng Nguyễn Cao</button>}
     </div>
   );
 }

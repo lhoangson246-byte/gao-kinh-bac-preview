@@ -61,6 +61,10 @@ export function listAdminOrders({ status, from = null, to = null, limit = 30, of
     FROM order_returns WHERE order_id IN (${page}) ORDER BY id
   `).all(...args);
   for (const row of rows) row.returns = returns.filter((r) => r.order_id === row.id);
+  // Lệnh lấy hàng ở Cửa hàng Nguyễn Cao cho đơn (25/11/2026).
+  const pickups = db.prepare(`SELECT id, code, order_id, status, actor_name, created_at, handler_name, handled_at, handle_note FROM store_pickups WHERE order_id IN (${page}) ORDER BY id`).all(...args);
+  const pickupItems = pickups.length ? db.prepare(`SELECT pickup_id, product_id, product_name, unit, weight_kg, quantity FROM store_pickup_items WHERE pickup_id IN (${pickups.map(() => '?').join(',')})`).all(...pickups.map((p) => p.id)) : [];
+  for (const row of rows) row.pickups = pickups.filter((p) => p.order_id === row.id).map((p) => ({ ...p, items: pickupItems.filter((i) => i.pickup_id === p.id) }));
   // Kho xuất đang thiếu hàng (24/11/2026): web bán theo tổng hai nơi nên đơn vẫn nhận khi kho của đơn đã hết; tồn
   // kho đó âm. Báo trên thẻ đơn đang xử lý để kế toán điều chuyển từ nơi kia sang / shipper qua cửa hàng lấy.
   const productIds = [...new Set(items.filter((i) => i.product_id).map((i) => i.product_id))];

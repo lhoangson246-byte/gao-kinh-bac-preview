@@ -170,10 +170,9 @@ export default function Inventory() {
     return products.filter((p) => {
       if (q && !fold(`${p.sku || ''} ${p.name}`).includes(q)) return false;
       if (onlyAlert && p.status.level === 'green') return false;
-      // 24/11/2026: Cửa hàng Nguyễn Cao = hàng chọn "Đơn web trừ ở Nguyễn Cao" + hàng đang có ở cửa hàng;
-      // Kho Bồ Sơn = chỉ hàng của Kho Bồ Sơn (đơn web trừ ở Bồ Sơn).
-      if (warehouse === STORE) return p.online === STORE || p.stock_nc !== 0 || p.moving_to_nc > 0;
-      if (warehouse === MAIN) return p.online === MAIN && (p.is_active || p.stock_bs !== 0 || p.moving_to_bs > 0);
+      // 25/11/2026: mỗi nơi chỉ hiện hàng đang có ở nơi đó (hoặc đang chuyển tới).
+      if (warehouse === STORE) return p.stock_nc !== 0 || p.moving_to_nc > 0;
+      if (warehouse === MAIN) return p.stock_bs !== 0 || p.moving_to_bs > 0;
       // Hàng đã ẩn khỏi cửa hàng và không còn tồn ở đâu thì không cần hiện.
       return p.is_active || p.total !== 0 || p.moving_to_nc > 0 || p.moving_to_bs > 0;
     });
@@ -199,18 +198,6 @@ export default function Inventory() {
     },
   });
   const shownRows = sorting ? sort.order.map((id) => products.find((p) => p.id === id)).filter(Boolean) : rows;
-
-  // Kho bán online của từng sản phẩm (19/11/2026): hàng đã chuyển sang cửa hàng vẫn bán trên web được.
-  const canSetOnline = canTransfer || canManageProducts;
-  const setOnline = async (p, code) => {
-    if (code === p.online) return;
-    if (!window.confirm(`Đơn web của “${p.name}” trừ hàng ở ${WAREHOUSE_NAME[code]}?\nKhách vẫn thấy tổng tồn cửa hàng + kho (${amountText(p, p.total)}). ${WAREHOUSE_NAME[code]} hết thì đơn vẫn nhận và thẻ đơn báo kế toán điều chuyển.`)) return;
-    try {
-      const result = await api.inventorySetOnline(p.id, code);
-      setData((cur) => ({ ...cur, ...result, transfers: result.transfers || cur?.transfers || [] }));
-      setMessage(result.message);
-    } catch (err) { setError(err.message); }
-  };
 
   if (!canView) {
     return (
@@ -302,7 +289,7 @@ export default function Inventory() {
                       <th>Mã SP</th><th>Tên sản phẩm</th>
                       {showNc && showBs && <th className="inv-total-col">Tổng tồn</th>}
                       {showNc && <th className="wh-col KH_NC">Tồn Nguyễn Cao</th>}{showBs && <th className="wh-col KH_BS">Tồn Bồ Sơn</th>}
-                      <th title="Đơn khách đặt trên web và đơn kế toán tạo trừ hàng ở kho này">Đơn web trừ ở</th><th>Đang chuyển</th><th>Cảnh báo</th><th>Thao tác nhanh</th>
+                      <th>Đang chuyển</th><th>Cảnh báo</th><th>Thao tác nhanh</th>
                     </tr>
                   </thead>
                   <tbody ref={sort.listRef}>
@@ -331,14 +318,6 @@ export default function Inventory() {
                           {showNc && showBs && <td data-label="Tổng tồn" className="inv-num inv-total-col"><strong>{amountText(p, p.total)}</strong></td>}
                           {showNc && <td data-label="Tồn Nguyễn Cao" className={`inv-num${p.stock_nc < 0 ? ' inv-neg' : p.stock_nc <= data.low_stock_at ? ' inv-low' : ''}`}>{amountText(p, p.stock_nc)}</td>}
                           {showBs && <td data-label="Tồn Bồ Sơn" className={`inv-num${p.stock_bs < 0 ? ' inv-neg' : p.stock_bs <= data.low_stock_at ? ' inv-low' : ''}`}>{amountText(p, p.stock_bs)}</td>}
-                          <td data-label="Bán web từ">
-                            {canSetOnline ? (
-                              <select className={`input inv-online ${p.online}`} value={p.online} onChange={(e) => setOnline(p, e.target.value)} aria-label={`Bán web ${p.name} từ kho`}>
-                                <option value={MAIN}>Bồ Sơn</option>
-                                <option value={STORE}>Nguyễn Cao</option>
-                              </select>
-                            ) : <i className={`wh-chip ${p.online}`}>{WAREHOUSE_SHORT[p.online]}</i>}
-                          </td>
                           <td data-label="Đang chuyển" className={`inv-num${moving > 0 ? '' : ' inv-none-mobile'}`}>
                             {moving > 0 ? <span className="inv-moving">{amountText(p, moving)}{showNc && showBs ? ` ➔ ${p.moving_to_nc ? WAREHOUSE_SHORT[STORE] : WAREHOUSE_SHORT[MAIN]}` : ''}</span> : '—'}
                           </td>
@@ -363,8 +342,8 @@ export default function Inventory() {
                 </table>
               </div>
               <p className="field-help">
-                Khách thấy trên web <b>tổng tồn</b> cửa hàng + kho. Cột "Đơn web trừ ở": đơn khách đặt online trừ hàng ở kho đó (mặc định Bồ Sơn); kho đó hết thì đơn vẫn nhận,
-                thẻ đơn báo kế toán điều chuyển từ nơi kia sang hoặc để shipper qua cửa hàng lấy. Bán tại quầy trừ ở Cửa hàng Nguyễn Cao. Đơn kế toán tạo trừ ở kho chọn khi tạo đơn.
+                Khách thấy trên web <b>tổng tồn</b> cửa hàng + kho. Đơn khách đặt online trừ ở <b>Kho Bồ Sơn</b>; kho hết thì đơn vẫn nhận, thẻ đơn báo kế toán và có nút
+                gửi <b>lệnh lấy hàng từ Cửa hàng Nguyễn Cao</b> (cửa hàng nhận lệnh thì bị trừ, shipper qua cửa hàng lấy). Bán tại quầy trừ ở Cửa hàng Nguyễn Cao.
                 "Sắp hết" khi tổng còn từ {data.low_stock_at} trở xuống.
               </p>
             </section>
