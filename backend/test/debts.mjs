@@ -70,10 +70,21 @@ try {
   const adminOrder = async (id) => (await call('/admin/orders?status=completed', { token: owner })).data.orders.find((o) => o.id === id);
   const viaTransfer = await newOrder('Anh Chuyển', phone('08'), 1);
   const shot = (await upload(shipper)).data;
-  const doneT = await call(`/delivery/orders/${viaTransfer.id}/status`, { method: 'PATCH', token: shipper, body: { status: 'completed', photo: shot.id, paid_by: 'transfer' } });
+  const goods = (await upload(shipper)).data;
+  // 25/11/2026: chuyển khoản cũng bắt buộc ảnh gạo đã giao, kèm ảnh chuyển khoản (hai ảnh khác nhau).
+  check('Chuyển khoản thiếu ảnh chuyển khoản bị từ chối (400)', (await call(`/delivery/orders/${viaTransfer.id}/status`, { method: 'PATCH', token: shipper,
+    body: { status: 'completed', photo: goods.id, paid_by: 'transfer' } })).status === 400);
+  check('Chuyển khoản dùng một ảnh cho cả hai bị từ chối (400)', (await call(`/delivery/orders/${viaTransfer.id}/status`, { method: 'PATCH', token: shipper,
+    body: { status: 'completed', photo: goods.id, transfer_photo: goods.id, paid_by: 'transfer' } })).status === 400);
+  const doneT = await call(`/delivery/orders/${viaTransfer.id}/status`, { method: 'PATCH', token: shipper, body: { status: 'completed', photo: goods.id, transfer_photo: shot.id, paid_by: 'transfer' } });
   let rowT = await adminOrder(viaTransfer.id);
-  check('Khách trả chuyển khoản: đơn thành chuyển khoản, ảnh là ảnh chuyển khoản chờ cửa hàng xác nhận', doneT.status === 200
-    && rowT?.payment_method === 'bank' && rowT.transfer_proof === shot.url && !!rowT.transfer_reported_at && !rowT.transfer_confirmed_at && !rowT.delivery_photo, JSON.stringify(rowT && { m: rowT.payment_method, p: rowT.transfer_proof, d: rowT.delivery_photo }));
+  check('Khách trả chuyển khoản: có ảnh gạo đã giao + ảnh chuyển khoản chờ cửa hàng xác nhận', doneT.status === 200
+    && rowT?.payment_method === 'bank' && rowT.transfer_proof === shot.url && !!rowT.transfer_reported_at && !rowT.transfer_confirmed_at && rowT.delivery_photo === goods.url,
+    JSON.stringify(rowT && { m: rowT.payment_method, p: rowT.transfer_proof, d: rowT.delivery_photo }));
+  check('Đơn ghi giờ chụp ảnh gạo và ảnh chuyển khoản', /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(rowT?.delivery_photo_at || '') && !!rowT?.transfer_proof_at, JSON.stringify(rowT && { a: rowT.delivery_photo_at, b: rowT.transfer_proof_at }));
+  const dispatchDone = (await call('/admin/dispatch', { token: owner })).data.completed?.find((o) => o.id === viaTransfer.id);
+  check('Bản đồ điều phối: đơn giao xong hôm nay kèm giờ hoàn thành, ảnh gạo và giờ chụp', !!dispatchDone?.completed_at && dispatchDone.delivery_photo === goods.url
+    && !!dispatchDone.delivery_photo_at && dispatchDone.transfer_proof === shot.url && dispatchDone.shipper_name === 'Chú Giao Hàng', JSON.stringify(dispatchDone));
   const viaCash = await newOrder('Chị Tiền Mặt', phone('05'), 1);
   const shot2 = (await upload(shipper)).data;
   const doneC = await call(`/delivery/orders/${viaCash.id}/status`, { method: 'PATCH', token: shipper, body: { status: 'completed', photo: shot2.id, paid_by: 'cash' } });

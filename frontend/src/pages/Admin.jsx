@@ -26,6 +26,7 @@ import BusinessUpdate from '../components/BusinessUpdate.jsx';
 import DispatchPanel from '../components/DispatchPanel.jsx';
 import OrderLocation from '../components/OrderLocation.jsx';
 import { OrderPickups, PickupForm } from '../components/StorePickup.jsx';
+import ProofHover from '../components/ProofHover.jsx';
 import OrderPrint from '../components/OrderPrint.jsx';
 import { ListSkeleton } from '../components/Skeleton.jsx';
 import useScrollTabs from '../components/useScrollTabs.js';
@@ -797,7 +798,16 @@ export default function Admin() {
                           <article key={order.id} id={`admin-order-${order.id}`} className={`admin-order-card${highlightId === order.id ? ' highlight' : ''}`}>
                             <header>
                               <div><span className="order-number">Đơn {order.code || `#${order.id}`}</span><span className={`status ${order.status}`}>{STATUS_LABEL[order.status]}</span>{order.source === 'staff' ? <span className="guest-tag staff">Nhân viên tạo</span> : !!order.is_guest && <span className="guest-tag" title="Khách đặt không cần đăng nhập">Mua nhanh</span>}{order.fulfillment === 'pickup' && <span className="guest-tag pickup">Lấy tại cửa hàng</span>}{order.payment_status === 'debt' && <span className="guest-tag debt">Công nợ</span>}</div>
-                              <time>{formatDateTime(order.created_at)}{order.completed_at && order.status === 'completed' && <small className="done-time">✓ Hoàn thành {formatDateTime(order.completed_at)}</small>}</time>
+                              <time>{formatDateTime(order.created_at)}
+                                {order.shipping_at && ['shipping', 'completed'].includes(order.status) && order.fulfillment !== 'pickup' && <small className="start-time">🛵 Bắt đầu giao {formatDateTime(order.shipping_at)}</small>}
+                                {order.completed_at && order.status === 'completed' && (
+                                  // Rê chuột vào giờ hoàn thành: ảnh gạo shipper chụp, giờ chụp, giờ bắt đầu / hoàn thành (25/11/2026).
+                                  <ProofHover className="done-time" photo={order.delivery_photo} photoAt={order.delivery_photo_at} transferProof={order.transfer_proof}
+                                              transferProofAt={order.transfer_proof_at} startedAt={order.fulfillment !== 'pickup' ? order.shipping_at : null}
+                                              completedAt={order.completed_at} debt={order.payment_status === 'debt'}>
+                                    ✓ Hoàn thành {formatDateTime(order.completed_at)}{order.delivery_photo ? ' 📷' : ''}
+                                  </ProofHover>
+                                )}</time>
                             </header>
                             <div className="admin-order-grid">
                               <section>

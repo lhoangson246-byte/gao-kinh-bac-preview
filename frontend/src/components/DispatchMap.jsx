@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api, DELIVERY_SLOT_LABEL, formatVND } from '../api';
 import { createHtmlMarkerClass, effectiveMapsKey, loadGoogleMaps, onMapsAuthFailure } from '../dispatch/googleMaps.js';
+import ProofHover, { shortTime } from './ProofHover.jsx';
 import { applyShipperUpdate, createFleet, haversineKm, mergeFleet, nearestShippers, setShipperStatus, tickFleet } from '../dispatch/fleet.js';
 
 /*
@@ -30,9 +31,19 @@ const km = (v) => `${(Math.round(v * 10) / 10).toString().replace('.', ',')} km`
 const readPref = (key, fallback) => { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } };
 const savePref = (key, value) => { try { localStorage.setItem(key, value); } catch { /* bỏ qua */ } };
 
-/** Chữ viết tắt + màu riêng cho ảnh đại diện khi nhân viên chưa có ảnh. */
+/** Chữ viết tắt cho ảnh đại diện khi nhân viên chưa có ảnh. */
 const initials = (name) => String(name || '?').trim().split(/\s+/).slice(-2).map((w) => w[0]).join('').toUpperCase();
-const hue = (id) => (String(id).split('').reduce((h, c) => h * 31 + c.charCodeAt(0), 7) % 360 + 360) % 360;
+/*
+ * Mỗi shipper một màu riêng (25/11/2026): bảng màu dễ phân biệt, gán theo thứ tự mã nhân viên nên hai shipper
+ * không bao giờ trùng màu (trước đây tính màu từ mã nên có lúc hai người gần giống nhau). Màu dùng cho ảnh đại diện,
+ * đường lộ trình trên bản đồ và tên người giao trong danh sách đơn.
+ */
+const PALETTE = ['#d64545', '#2b7bd6', '#2f9e44', '#e8890c', '#8e44ad', '#0f9d9a', '#c2255c', '#5c7cfa', '#a0522d', '#4d7c0f', '#d6336c', '#495057'];
+const colorTable = (fleet) => new Map([...fleet].map((s) => s.id).sort((a, b) => (typeof a === typeof b ? (a > b) - (a < b) : typeof a === 'number' ? -1 : 1))
+  // Quá 12 người thì sinh thêm màu theo góc vàng (137,5°) để vẫn không trùng.
+  .map((id, i) => [id, i < PALETTE.length ? PALETTE[i] : `hsl(${Math.round((i * 137.508) % 360)} 62% ${i % 2 ? 38 : 46}%)`]));
+let shipperColors = new Map();
+const colorOf = (id) => shipperColors.get(id) || '#7a5b2e';
 
 /* ---------------------------------- Ghim (dùng chung cho cả hai chế độ) ---------------------------------- */
 
@@ -55,12 +66,12 @@ function ShipperPin({ shipper, active, onSelect }) {
     <button type="button" className={`dship ${shipper.status}${active ? ' active' : ''}`}
             onClick={(e) => { e.stopPropagation(); onSelect({ kind: 'shipper', id: shipper.id }); }}
             aria-label={`${shipper.full_name}: ${SHIPPER_STATUS[shipper.status]}`}>
-      <span className="dship-avatar" style={{ background: `hsl(${hue(shipper.id)} 55% 42%)` }}>
+      <span className="dship-avatar" style={{ background: colorOf(shipper.id) }}>
         {shipper.avatar_url ? <img src={shipper.avatar_url} alt="" /> : initials(shipper.full_name)}
         {/* Huy hiệu trạng thái góc trên ảnh: ⏳ chờ giao, ✕ đỏ đang giao, ✓ xanh đã giao xong */}
         <StatusBadge status={shipper.status} />
       </span>
-      <span className="dship-name">{shipper.source === 'live' ? '📡' : '🛵'} {shipper.full_name}</span>
+      <span className="dship-name" style={{ borderColor: colorOf(shipper.id) }}>{shipper.source === 'live' ? '📡' : '🛵'} {shipper.full_name}</span>
     </button>
   );
 }
@@ -163,7 +174,7 @@ function SimMap({ data, fleet, selected, onSelect, focus }) {
         ))}
         {fleet.filter((s) => s.orderIds.length).map((s) => (
           <polyline key={s.id} className="sim-route" points={s.path.map((p) => { const q = project(p); return `${q.x},${q.y}`; }).join(' ')}
-                    style={{ stroke: `hsl(${hue(s.id)} 55% 42%)` }} />
+                    style={{ stroke: colorOf(s.id) }} />
         ))}
       </svg>
       <div className="sim-layer" style={{ left: W.x, top: W.y, zIndex: 2 }}><WarehousePin warehouse={wh} /></div>
@@ -372,6 +383,8 @@ export default function DispatchMap({ shippers: shipperOptions = [] }) {
   if (!data) return <p className="route-hint">Đang tải bản đồ điều phối…</p>;
 
   const orders = data.orders;
+  const completed = data.completed || [];
+  shipperColors = colorTable(fleet);
   const order = selected?.kind === 'order' ? orders.find((o) => o.id === selected.id) : null;
   const shipper = selected?.kind === 'shipper' ? fleet.find((s) => s.id === selected.id) : null;
   // Danh sách đơn: chưa giao cho ai lên đầu, rồi gần kho trước.
@@ -432,7 +445,8 @@ export default function DispatchMap({ shippers: shipperOptions = [] }) {
                   <ul className="dispatch-items">{order.items.map((i, k) => <li key={k}>{i.product_name} <b>{i.quantity} {i.unit}</b></li>)}</ul>
                   <p>Khách trả <b>{formatVND(order.total)}</b> · {order.payment_method === 'bank' ? 'chuyển khoản' : 'tiền mặt khi nhận'}</p>
                   <p>{order.distance_km != null ? <>📏 Cách {data.warehouse.name} ≈ {km(order.distance_km)}</> : '📍 Chưa có định vị (dán link ở thẻ "Gợi ý gom chuyến")'}</p>
-                  <p>🛵 Người giao: <b>{order.shipper_name || 'chưa giao cho ai'}</b></p>
+                  <p>🛵 Người giao: <b style={order.shipper_id ? { color: colorOf(order.shipper_id) } : undefined}>{order.shipper_name || 'chưa giao cho ai'}</b>
+                    {order.shipping_at ? <> · bắt đầu giao lúc <b>{shortTime(order.shipping_at)}</b></> : order.shipper_id ? ' · chưa bấm Bắt đầu' : ''}</p>
                   {order.located && (
                     <div className="dispatch-near">
                       <b>Shipper gần nhất:</b>
@@ -484,7 +498,7 @@ export default function DispatchMap({ shippers: shipperOptions = [] }) {
             {fleet.map((s) => (
               <li key={s.id} className={selected?.kind === 'shipper' && selected.id === s.id ? 'active' : ''}>
                 <button type="button" onClick={() => focusShipper(s)}>
-                  <span className="dship-avatar small" style={{ background: `hsl(${hue(s.id)} 55% 42%)` }}>
+                  <span className="dship-avatar small" style={{ background: colorOf(s.id) }}>
                     {initials(s.full_name)}
                     <StatusBadge status={s.status} />
                   </span>
@@ -504,7 +518,8 @@ export default function DispatchMap({ shippers: shipperOptions = [] }) {
                     <span className="dispatch-order-top"><b>{o.code}</b> <span className={`status ${o.status}`}>{STATUS_LABEL[o.status]}</span></span>
                     <span className="dispatch-order-name">{o.wholesale ? '🏢 ' : ''}{o.customer_label}</span>
                     <small>{o.address}</small>
-                    <small>{o.shipper_name ? `🛵 ${o.shipper_name}` : '⚠️ Chưa giao cho ai'}{o.located
+                    {o.shipping_at && <small className="dispatch-started">🛵 Bắt đầu giao lúc <b>{shortTime(o.shipping_at)}</b></small>}
+                    <small>{o.shipper_name ? <><i className="dship-dot" style={{ background: colorOf(o.shipper_id) }} />{o.shipper_name}</> : '⚠️ Chưa giao cho ai'}{o.located
                       ? ` · cách kho ${km(o.distance_km)}${near ? ` · gần nhất: ${near.shipper.full_name} (${km(near.km)})` : ''}`
                       : ' · chưa có định vị'}</small>
                   </button>
@@ -512,6 +527,30 @@ export default function DispatchMap({ shippers: shipperOptions = [] }) {
               );
             })}
           </ul>
+          {completed.length > 0 && (
+            <>
+              <h3>Đã giao hôm nay ({completed.length})</h3>
+              <p className="route-hint">Rê chuột (hoặc chạm) vào trạng thái để xem ảnh gạo đã giao và giờ hoàn thành.</p>
+              <ul className="dispatch-orders done">
+                {completed.map((o) => (
+                  <li key={o.id}>
+                    <div className="dispatch-done-row">
+                      <span className="dispatch-order-top"><b>{o.code}</b>{' '}
+                        <ProofHover className={`status completed${o.delivery_photo ? '' : ' nophoto'}`} photo={o.delivery_photo} photoAt={o.delivery_photo_at}
+                                    transferProof={o.transfer_proof} transferProofAt={o.transfer_proof_at} startedAt={o.shipping_at} completedAt={o.completed_at} debt={o.debt}>
+                          {o.debt ? 'Ghi nợ' : 'Đã giao'} {shortTime(o.completed_at)} {o.delivery_photo ? '📷' : ''}
+                        </ProofHover>
+                      </span>
+                      <span className="dispatch-order-name">{o.wholesale ? '🏢 ' : ''}{o.customer_label}</span>
+                      <small>{o.address}</small>
+                      <small><i className="dship-dot" style={{ background: colorOf(o.shipper_id) }} />{o.shipper_name}
+                        {o.shipping_at ? ` · bắt đầu ${shortTime(o.shipping_at)}` : ''} · hoàn thành {shortTime(o.completed_at)}</small>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </aside>
       </div>
     </div>

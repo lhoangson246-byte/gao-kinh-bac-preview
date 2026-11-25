@@ -22,7 +22,7 @@ router.use(validateRoutes('delivery'));
 
 const ORDER_COLUMNS = `id, code, status, receiver_name, phone, address, note, delivery_slot, delivery_lat, delivery_lng, map_url, warehouse,
   payment_method, payment_status, total, fulfillment, created_at, confirmed_at, shipping_at, completed_at, cancelled_at, delivery_photo,
-  transfer_confirmed_at, geo_lat, geo_lng, geo_source, geo_checked_at`;
+  transfer_confirmed_at, (transfer_proof IS NOT NULL) AS has_transfer_proof, geo_lat, geo_lng, geo_source, geo_checked_at`;
 // Đơn vừa giao xong trong khoảng này thì lộ trình còn lại tính từ chỗ đơn đó (nhân viên đang ở ngoài đường).
 const LAST_STOP_MINUTES = 120;
 
@@ -123,10 +123,10 @@ router.delete('/location', (req, res) => {
  *
  * Giao xong (19/11/2026): nhân viên chọn khách trả bằng gì.
  *  - Tiền mặt   → chụp ảnh gạo đã giao (ảnh giao hàng); đơn tính là tiền mặt.
- *  - Chuyển khoản → chụp ảnh màn hình chuyển khoản của khách (ảnh chuyển khoản, chờ cửa hàng xác nhận
- *    tiền về); đơn tính là chuyển khoản.
- * Đơn mà cửa hàng đã xác nhận nhận tiền chuyển khoản thì luôn là chuyển khoản, ảnh chụp là ảnh giao hàng.
- * Không gửi paid_by (ứng dụng cũ) thì theo cách khách chọn lúc đặt.
+ *  - Chuyển khoản → CŨNG phải chụp ảnh gạo đã giao (25/11/2026), kèm ảnh màn hình chuyển khoản của khách
+ *    (transfer_photo, chờ cửa hàng xác nhận tiền về); đơn tính là chuyển khoản.
+ * Đơn mà cửa hàng đã xác nhận nhận tiền / khách đã gửi ảnh chuyển khoản trên web thì chỉ cần ảnh gạo.
+ * Không gửi paid_by thì theo cách khách chọn lúc đặt.
  */
 router.patch('/orders/:id/status', (req, res, next) => {
   try {
@@ -153,8 +153,11 @@ router.patch('/orders/:id/status', (req, res, next) => {
           // Đã có ảnh chuyển khoản của khách (hoặc cửa hàng đã nhận tiền): giữ ảnh đó, ảnh mới là ảnh giao hàng.
           db.prepare("UPDATE orders SET delivery_photo = ?, payment_method = 'bank' WHERE id = ?").run(photo, orderId);
         } else {
-          db.prepare(`UPDATE orders SET transfer_proof = ?, transfer_reported_at = datetime('now'), payment_method = 'bank'
-                      WHERE id = ?`).run(photo, orderId);
+          // Ảnh gạo đã giao + ảnh chuyển khoản của khách (hai ảnh khác nhau).
+          const proof = ownPhoto(req.body.transfer_photo, req.user, 'transfer_photo');
+          if (proof === photo) throw new HttpError(400, 'Cần hai ảnh khác nhau: gạo đã giao và ảnh chuyển khoản.', { transfer_photo: 'Chụp ảnh chuyển khoản của khách.' });
+          db.prepare(`UPDATE orders SET delivery_photo = ?, transfer_proof = ?, transfer_reported_at = datetime('now'), payment_method = 'bank'
+                      WHERE id = ?`).run(photo, proof, orderId);
         }
       },
     });

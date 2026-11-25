@@ -189,7 +189,7 @@ export const api = {
   /** Hồ sơ khách tự lưu theo số điện thoại. */
   customerProfileLookup: (phone, signal) => request(`/admin/customer-profiles/lookup?${new URLSearchParams({ phone })}`, { auth: true, signal }),
   customerProfiles: ({ q = '', offset = 0 } = {}) => request(`/admin/customer-profiles?${new URLSearchParams({ ...(q ? { q } : {}), ...(offset ? { offset } : {}) })}`, { auth: true }),
-  deliverySetStatus: (orderId, status, photo, paidBy) => request(`/delivery/orders/${orderId}/status`, { method: 'PATCH', auth: true, body: { status, ...(photo ? { photo } : {}), ...(paidBy ? { paid_by: paidBy } : {}) } }),
+  deliverySetStatus: (orderId, status, photo, paidBy, transferPhoto) => request(`/delivery/orders/${orderId}/status`, { method: 'PATCH', auth: true, body: { status, ...(photo ? { photo } : {}), ...(transferPhoto ? { transfer_photo: transferPhoto } : {}), ...(paidBy ? { paid_by: paidBy } : {}) } }),
   adminOrderReturn: (orderId, body) => request(`/admin/orders/${orderId}/returns`, { method: 'POST', auth: true, body }),
   inventorySetOnline: (productId, warehouse) => request(`/admin/inventory/products/${productId}/online`, { method: 'PUT', auth: true, body: { warehouse } }),
   inventoryReorder: (ids) => request('/admin/inventory/order', { method: 'PUT', auth: true, body: { ids } }),

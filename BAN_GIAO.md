@@ -1934,6 +1934,17 @@ Kiểm thử: `npm --prefix backend run test:attendance` (27), `test:profiles` (
 - Lưu ý có từ trước: trang Bán hàng tại quầy tải danh sách gạo qua `GET /api/admin/products` (cần products.manage) — tài khoản chỉ có retail.sell bị báo lỗi quyền ở đầu trang.
 - Kiểm thử: test:returns (34, có luồng lấy hàng), test:inventory (83).
 
+## 25/11/2026 (tối) — Shipper bấm "Bắt đầu" để nhận đơn, bắt buộc ảnh gạo, giờ bắt đầu / hoàn thành, màu shipper
+
+- **Trang shipper:** đơn mới giao cho shipper chỉ hiện mã đơn, địa chỉ, khoảng cách, khung giờ (và hàng cần qua Cửa hàng Nguyễn Cao lấy) cùng nút **🛵 Bắt đầu**. Bấm Bắt đầu (= nhận đơn, ghi `orders.shipping_at`) mới hiện tên, số điện thoại, chỉ đường, hàng, tiền thu. Thẻ đơn ghi "Bắt đầu giao lúc HH:MM".
+- **Hoàn thành đơn:** tiền mặt hay chuyển khoản đều **bắt buộc ảnh gạo đã giao tới nơi** (`delivery_photo`). Chuyển khoản mà cửa hàng chưa nhận tiền và khách chưa gửi ảnh trên web thì thêm ảnh chuyển khoản (`transfer_photo` → `transfer_proof`, phải khác ảnh gạo). `PATCH /api/delivery/orders/:id/status` từ chối 400 nếu thiếu.
+- **Giờ chụp ảnh:** lấy `proof_photos.created_at` (giờ tải ảnh lên) — `delivery_photo_at`, `transfer_proof_at` trong danh sách đơn quản trị và bản đồ điều phối.
+- **Bản đồ điều phối:** "Đơn cần giao" ghi giờ shipper bấm bắt đầu; thêm mục **"Đã giao hôm nay"** (`completed` trong `GET /api/admin/dispatch`). Rê chuột / chạm vào trạng thái "Đã giao HH:MM" hiện ảnh gạo đã giao, giờ chụp, ảnh chuyển khoản (nếu có), giờ bắt đầu và giờ hoàn thành (`components/ProofHover.jsx`, khung nổi `position: fixed`, ảnh chỉ tải khi mở).
+- **Trang Đơn hàng:** bảng Hoàn thành — rê chuột vào trạng thái "Hoàn thành" xem ảnh như trên, cột Giờ hoàn thành ghi thêm giờ bắt đầu giao; thẻ đơn ghi "🛵 Bắt đầu giao" và giờ hoàn thành rê chuột xem ảnh.
+- **Màu shipper:** mỗi shipper một màu riêng từ bảng 12 màu dễ phân biệt, gán theo thứ tự mã nhân viên (quá 12 người thì sinh thêm theo góc vàng) — dùng cho ảnh đại diện, đường lộ trình, chấm màu cạnh tên người giao.
+- `GET /api/proofs/:id` cho thêm quyền `orders.manage` (người điều phối xem được ảnh).
+- Kiểm thử: `test/debts.mjs` 82/82 (thêm: chuyển khoản thiếu ảnh / trùng ảnh bị chặn, giờ chụp, mục đã giao hôm nay trên bản đồ).
+
 ## Tự kiểm tra an toàn
 
 Có hai nhóm việc: nhóm máy kiểm tra hộ được, và nhóm chỉ chủ cửa hàng kiểm tra được.

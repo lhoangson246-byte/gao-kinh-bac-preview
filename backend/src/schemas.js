@@ -306,7 +306,7 @@ add('delivery', 'POST', /^\/location\/?$/, obj({
 }));
 add('delivery', 'DELETE', /^\/location\/?$/);
 add('delivery', 'GET', /^\/search\/?$/, empty, obj({ q: z.string().max(80) }));
-add('delivery', 'PATCH', /^\/orders\/[^/]+\/status\/?$/, obj({ status: z.enum(['shipping', 'completed']), photo: z.string().max(40).optional(), paid_by: z.enum(['cash', 'transfer']).optional() }));
+add('delivery', 'PATCH', /^\/orders\/[^/]+\/status\/?$/, obj({ status: z.enum(['shipping', 'completed']), photo: z.string().max(40).optional(), transfer_photo: z.string().max(40).optional(), paid_by: z.enum(['cash', 'transfer']).optional() }));
 add('delivery', 'POST', /^\/orders\/[^/]+\/debt\/?$/, obj({
   delivered_photo: z.string().max(40), invoice_photo: z.string().max(40), company: optionalText(160), comment: optionalText(1000),
 }));

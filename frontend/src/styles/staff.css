@@ -615,3 +615,26 @@ tr.ws-open td { background: var(--green-100); }
 .pickup-card header small { display: block; color: var(--muted); }
 .pickup-card ul { margin: 0; padding-left: 18px; }
 .delivery-pickup { margin: 4px 0; padding: 6px 10px; border-radius: 8px; background: #fff3d6; color: #5a3a05; font-size: .9rem; }
+
+/* Giờ bắt đầu / hoàn thành giao, rê chuột xem ảnh gạo đã giao; nút Bắt đầu nhận đơn của shipper (25/11/2026) */
+.admin-order-card header time .start-time { display: block; color: #5a3a05; font-size: .76rem; font-weight: 700; }
+.admin-order-card header time .done-time { cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; }
+.proof-hover { position: relative; cursor: help; }
+.proof-hover:focus-visible { outline: 2px solid #f1b52a; outline-offset: 2px; border-radius: 6px; }
+.proof-hover-card { position: fixed; z-index: 1000; display: grid; gap: 4px; padding: 8px; border: 1px solid var(--border); border-radius: 12px; background: #fff; color: var(--text, #2b2118); box-shadow: 0 8px 24px rgba(0, 0, 0, .22); font-size: .8rem; font-weight: 500; text-align: left; white-space: normal; text-decoration: none; cursor: default; }
+.proof-hover-card img { display: block; width: 100%; max-height: 220px; object-fit: cover; border-radius: 8px; background: #f2ece2; }
+.proof-hover-card img.small { max-height: 110px; }
+.proof-hover-card small { display: block; color: var(--muted); font-size: .78rem; }
+.proof-hover-card small b { color: var(--text, #2b2118); }
+.proof-hover-none { padding: 14px 8px; border-radius: 8px; background: #f6f1e8; color: var(--muted); text-align: center; }
+.status.completed.proof-hover { white-space: nowrap; }
+.status.completed.proof-hover.nophoto { opacity: .8; }
+.dispatch-done-row { display: grid; gap: 2px; width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: #fbfaf6; }
+.dispatch-done-row small { display: block; color: var(--muted); font-size: .78rem; overflow-wrap: anywhere; }
+.dispatch-started { color: #5a3a05 !important; font-weight: 600; }
+.dship-dot { display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 50%; vertical-align: -1px; }
+.dship-name { border-bottom: 3px solid transparent; }
+.delivery-start { margin-top: 8px; padding: 10px; border-radius: 12px; background: #fff8e6; }
+.delivery-start p { margin: 0 0 8px; font-size: .9rem; color: #5a3a05; }
+.delivery-started { margin: 6px 0 0; padding: 4px 10px; border-radius: 8px; background: #efe6fb; color: #4b2a86; font-size: .9rem; }
+@media print { .proof-hover-card { display: none !important; } }

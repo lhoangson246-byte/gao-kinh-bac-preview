@@ -142,7 +142,7 @@ router.post(
 );
 
 /** GET /api/proofs/:id — chỉ người trong cửa hàng (xem đơn, giao hàng, công nợ). */
-router.get('/proofs/:id', requireAuth, requirePermission('orders.view', 'delivery', 'debt.view'), (req, res) => {
+router.get('/proofs/:id', requireAuth, requirePermission('orders.view', 'orders.manage', 'delivery', 'debt.view'), (req, res) => {
   const id = String(req.params.id);
   if (!/^[0-9a-f]{32}$/.test(id)) return res.status(404).json({ message: 'Không tìm thấy ảnh.' });
   const row = db.prepare('SELECT mime, bytes FROM proof_photos WHERE id = ?').get(id);

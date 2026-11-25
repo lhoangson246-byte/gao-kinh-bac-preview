@@ -13,7 +13,7 @@ import {
 } from '../constants.js';
 import { HttpError, cleanImageUrl, cleanText, normalizePhone, phoneKey, toInteger } from '../validate.js';
 import { writeAdminAudit } from '../audit.js';
-import { listAdminOrders } from '../order-lists.js';
+import { listAdminOrders, proofTimes } from '../order-lists.js';
 import { buildOrdersWorkbook } from '../orders-export.js';
 import { MAX_BANNERS, MAX_BRANCHES, readStorefront } from './settings.js';
 import {
@@ -437,6 +437,17 @@ router.get('/dispatch', async (req, res, next) => {
       GROUP BY shipper_id
     `).all().map((r) => [r.shipper_id, r.n]));
     const point = (o) => orderPoint(o);
+    // Đơn đã giao xong hôm nay (25/11/2026): giờ bắt đầu / hoàn thành và ảnh gạo đã giao (kèm giờ chụp) để kế toán
+    // rê chuột vào trạng thái là xem được.
+    const finished = db.prepare(`
+      SELECT o.id, o.code, o.receiver_name, o.address, o.shipper_id, s.full_name AS shipper_name, o.shipping_at, o.completed_at,
+             o.delivery_photo, o.transfer_proof, o.payment_status, o.payment_method, w.company AS wholesale_company, o.wholesale_customer_id
+      FROM orders o LEFT JOIN users s ON s.id = o.shipper_id LEFT JOIN wholesale_customers w ON w.id = o.wholesale_customer_id
+      WHERE o.status = 'completed' AND o.shipper_id IS NOT NULL AND ${localDate('o.completed_at')} = ${localDate("'now'")}
+      ORDER BY o.completed_at DESC LIMIT 100
+    `).all();
+    const photoAt = proofTimes(finished.flatMap((o) => [o.delivery_photo, o.transfer_proof]));
+    const proofUrl = (id) => (id ? `/api/proofs/${id}` : null);
     // Vị trí thật gửi từ điện thoại nhân viên giao trong 10 phút gần nhất (cũ hơn thì coi như chưa có).
     const live = new Map(db.prepare(`
       SELECT user_id, lat, lng, accuracy, updated_at FROM shipper_locations WHERE updated_at > datetime('now', '-10 minutes')
@@ -455,9 +466,17 @@ router.get('/dispatch', async (req, res, next) => {
           delivery_slot: o.delivery_slot || null, delivery_day: deliveryDay(o.created_at, o.delivery_slot), total: o.total,
           payment_method: o.payment_method, shipper_id: o.shipper_id || null, shipper_name: o.shipper_name || null,
           lat: p?.lat ?? null, lng: p?.lng ?? null, located: !!p, distance_km: distanceFromWarehouse(o), map_url: o.map_url || null,
+          shipping_at: o.shipping_at || null,
           items: items.filter((i) => i.order_id === o.id).map(({ product_name, quantity, unit }) => ({ product_name, quantity, unit })),
         };
       }),
+      completed: finished.map((o) => ({
+        id: o.id, code: o.code, customer_label: o.wholesale_company || o.receiver_name, wholesale: !!o.wholesale_customer_id, address: o.address,
+        shipper_id: o.shipper_id, shipper_name: o.shipper_name, shipping_at: o.shipping_at || null, completed_at: o.completed_at,
+        debt: o.payment_status === 'debt', payment_method: o.payment_method,
+        delivery_photo: proofUrl(o.delivery_photo), delivery_photo_at: photoAt.get(o.delivery_photo) || null,
+        transfer_proof: proofUrl(o.transfer_proof), transfer_proof_at: photoAt.get(o.transfer_proof) || null,
+      })),
       shippers: shippers.map((u) => {
         const mine = orders.filter((o) => o.shipper_id === u.id);
         const plan = planRoute(mine);

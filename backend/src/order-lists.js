@@ -24,6 +24,14 @@ const TRANSFER_PENDING = "payment_method = 'bank' AND transfer_reported_at IS NO
 export const orderDaySql = (prefix = '') => `CASE ${prefix}status WHEN 'completed' THEN COALESCE(${prefix}completed_at, ${prefix}created_at)
   WHEN 'cancelled' THEN COALESCE(${prefix}cancelled_at, ${prefix}created_at) ELSE ${prefix}created_at END`;
 
+/** Giờ tải lên của các ảnh chứng từ: Map id → created_at. */
+export function proofTimes(ids) {
+  const list = [...new Set(ids.filter((id) => typeof id === 'string' && /^[0-9a-f]{32}$/.test(id)))];
+  if (!list.length) return new Map();
+  return new Map(db.prepare(`SELECT id, created_at FROM proof_photos WHERE id IN (${list.map(() => '?').join(',')})`)
+    .all(...list).map((r) => [r.id, r.created_at]));
+}
+
 export function listAdminOrders({ status, from = null, to = null, limit = 30, offset = 0, transferPending = false } = {}) {
   // Trang và dòng hàng phải cùng snapshot khi có đơn mới tới đồng thời.
   return db.transaction(() => {
@@ -39,10 +47,14 @@ export function listAdminOrders({ status, from = null, to = null, limit = 30, of
     LEFT JOIN users tc ON tc.id = o.transfer_confirmed_by
     LEFT JOIN wholesale_customers w ON w.id = o.wholesale_customer_id
     WHERE o.id IN (${page}) ORDER BY o.id DESC`).all(...args);
+  const photoTime = proofTimes(rows.flatMap((r) => [r.delivery_photo, r.transfer_proof]));
   // Mã băm bí mật của đơn mua nhanh không cần lộ ra, kể cả với quản trị.
   for (const row of rows) {
     delete row.guest_token_hash;
     // Ảnh chứng từ chỉ xem được khi đăng nhập (GET /api/proofs/:id).
+    // Giờ chụp (giờ tải ảnh lên) để rê chuột vào trạng thái xem ảnh + giờ chụp + giờ hoàn thành (25/11/2026).
+    row.delivery_photo_at = row.delivery_photo ? photoTime.get(row.delivery_photo) || null : null;
+    row.transfer_proof_at = row.transfer_proof ? photoTime.get(row.transfer_proof) || null : null;
     if (row.delivery_photo) row.delivery_photo = `/api/proofs/${row.delivery_photo}`;
     if (row.transfer_proof) row.transfer_proof = `/api/proofs/${row.transfer_proof}`;
     // Khoảng cách đường chim bay từ Kho Bồ Sơn (20/11/2026), null khi chưa có định vị.

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, DELIVERY_SLOT_LABEL, formatDateTime, formatVND, mapLink } from '../api';
+import { api, DELIVERY_SLOT_LABEL, formatVND, mapLink } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
 import PushSettings from '../components/PushSettings.jsx';
 import ProofPhoto from '../components/ProofPhoto.jsx';
 import StaffNav from '../components/StaffNav.jsx';
 import CustomerFinder from '../components/CustomerFinder.jsx';
 import { ListSkeleton } from '../components/Skeleton.jsx';
+import { shortTime } from '../components/ProofHover.jsx';
 
 const REFRESH_MS = 30_000;
 const formatPhone = (phone) => String(phone || '').replace(/^(\d{4})(\d{3})(\d{3})$/, '$1 $2 $3');
@@ -37,15 +38,17 @@ export default function Delivery() {
   const [route, setRoute] = useState(null);   // lộ trình: thứ tự đi rồi về Kho Bồ Sơn ngắn nhất (20/11/2026)
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
-  const [photos, setPhotos] = useState({});   // { orderId: { id, url } } ảnh gạo đã giao / ảnh chuyển khoản
+  // { orderId: { goods: { id, url }, transfer: { id, url } } } — ảnh gạo đã giao (luôn bắt buộc, 25/11/2026) và ảnh chuyển khoản.
+  const [photos, setPhotos] = useState({});
+  const setPhoto = (orderId, kind, value) => setPhotos((cur) => ({ ...cur, [orderId]: { ...cur[orderId], [kind]: value } }));
   const [payWays, setPayWays] = useState({});   // { orderId: 'cash' | 'transfer' } khách trả bằng gì (19/11/2026)
   // Mặc định theo cách khách chọn lúc đặt; cửa hàng đã nhận chuyển khoản thì luôn là chuyển khoản.
   const payWayOf = (order) => (order.transfer_confirmed_at ? 'transfer' : payWays[order.id] || (order.payment_method === 'bank' ? 'transfer' : 'cash'));
   const pickPayWay = (order, way) => {
     if (payWayOf(order) === way) return;
     setPayWays((cur) => ({ ...cur, [order.id]: way }));
-    // Đổi cách trả thì ảnh cần chụp cũng khác: bỏ ảnh đã chụp để chụp lại cho đúng.
-    setPhotos((cur) => { const next = { ...cur }; delete next[order.id]; return next; });
+    // Đổi cách trả: giữ ảnh gạo đã chụp, chỉ bỏ ảnh chuyển khoản.
+    setPhotos((cur) => ({ ...cur, [order.id]: { goods: cur[order.id]?.goods } }));
   };
   // Chia sẻ vị trí GPS cho bản đồ điều phối của kế toán / quản lý (mặc định bật; nhân viên tắt được).
   const [gpsOn, setGpsOn] = useState(() => readPref(GPS_PREF, '1') === '1');
@@ -74,13 +77,19 @@ export default function Delivery() {
     return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
   }, [load]);
 
+  // Cần ảnh chuyển khoản: khách trả chuyển khoản mà cửa hàng chưa nhận tiền và khách chưa gửi ảnh trên web.
+  const needTransferPhoto = (order) => payWayOf(order) === 'transfer' && !order.transfer_confirmed_at && !order.has_transfer_proof;
+  const photosReady = (order) => !!photos[order.id]?.goods && (!needTransferPhoto(order) || !!photos[order.id]?.transfer);
   const setStatus = async (order, status) => {
     const way = payWayOf(order);
+    if (status === 'shipping' && !window.confirm(`Nhận đơn ${order.code} và bắt đầu giao ngay?`)) return;
     if (status === 'completed' && !window.confirm(`Xác nhận đã giao đơn ${order.code} cho ${order.receiver_name}${way === 'cash'
       ? ` và đã thu tiền mặt ${formatVND(order.total)}` : order.transfer_confirmed_at ? '' : `, khách đã chuyển khoản ${formatVND(order.total)}`}?`)) return;
     setBusyId(order.id);
     try {
-      await api.deliverySetStatus(order.id, status, status === 'completed' ? photos[order.id]?.id : undefined, status === 'completed' ? way : undefined);
+      const done = status === 'completed';
+      await api.deliverySetStatus(order.id, status, done ? photos[order.id]?.goods?.id : undefined, done ? way : undefined,
+        done && needTransferPhoto(order) ? photos[order.id]?.transfer?.id : undefined);
       await load();
     } catch (err) {
       setError(err.message);
@@ -211,15 +220,29 @@ export default function Delivery() {
             <article key={order.id} className={`delivery-card ${order.status}`}>
               <header>
                 <strong>{stepOf.get(order.id) && route.stops.length >= 2 && <span className="delivery-step">Điểm {stepOf.get(order.id).step}</span>}{order.code}</strong>
-                <span className={`status ${order.status}`}>{order.status === 'shipping' ? 'Đang giao' : 'Chờ giao'}</span>
+                <span className={`status ${order.status}`}>{order.status === 'shipping' ? 'Đang giao' : 'Chờ nhận đơn'}</span>
               </header>
-              <h2>{order.receiver_name}</h2>
               <p className="delivery-address">{order.fulfillment === 'pickup' ? '🏬 Khách lấy tại cửa hàng' : `🏠 ${order.address}`}</p>
               {order.fulfillment !== 'pickup' && (
                 <p className="delivery-distance">{order.distance_km != null
                   ? <>📏 Cách kho {km(order.distance_km)}{stepOf.get(order.id) && route.stops.length >= 2 && stepOf.get(order.id).step > 1 ? ` · cách điểm trước ${km(stepOf.get(order.id).leg_km)}` : ''}</>
                   : 'Chưa có định vị, gọi khách hỏi đường'}</p>
               )}
+              {order.delivery_slot && <p className="delivery-meta">🕒 {DELIVERY_SLOT_LABEL[order.delivery_slot]}</p>}
+              {order.store_pickups?.length > 0 && (
+                <p className="delivery-pickup">🏬 Qua <b>Cửa hàng Nguyễn Cao</b> lấy: {order.store_pickups.map((p) => `${p.product_name} ${p.weight_kg > 0 ? `${String(Math.round(p.quantity * p.weight_kg * 10) / 10).replace('.', ',')} kg` : `${p.quantity} ${p.unit}`}${p.status === 'requested' ? ' (cửa hàng chưa nhận lệnh)' : ''}`).join(', ')}</p>
+              )}
+              {order.status === 'confirmed' ? (
+                <div className="delivery-start">
+                  <p>Bấm <b>Bắt đầu</b> để nhận đơn — sau đó mới hiện tên, số điện thoại khách, hàng cần giao và tiền cần thu.</p>
+                  <button type="button" className="btn btn-primary btn-block btn-large" disabled={busyId === order.id} onClick={() => setStatus(order, 'shipping')}>
+                    {busyId === order.id ? 'Đang lưu…' : '🛵 Bắt đầu'}
+                  </button>
+                </div>
+              ) : (
+                <>
+              {order.shipping_at && <p className="delivery-started">🛵 Bắt đầu giao lúc <b>{shortTime(order.shipping_at)}</b></p>}
+              <h2>{order.receiver_name}</h2>
               {/* Hai nút to cạnh nhau, bấm được bằng một ngón khi đang cầm lái. */}
               <div className={`delivery-quick${order.fulfillment === 'pickup' ? ' one' : ''}`}>
                 <a className="btn btn-primary delivery-call" href={`tel:${order.phone}`}>📞 Gọi<small>{formatPhone(order.phone)}</small></a>
@@ -230,10 +253,6 @@ export default function Delivery() {
                 )}
               </div>
               {order.warehouse === 'KH_BS' && <p className="delivery-meta">📦 Lấy hàng ở Kho Bồ Sơn</p>}
-              {order.store_pickups?.length > 0 && (
-                <p className="delivery-pickup">🏬 Qua <b>Cửa hàng Nguyễn Cao</b> lấy: {order.store_pickups.map((p) => `${p.product_name} ${p.weight_kg > 0 ? `${String(Math.round(p.quantity * p.weight_kg * 10) / 10).replace('.', ',')} kg` : `${p.quantity} ${p.unit}`}${p.status === 'requested' ? ' (cửa hàng chưa nhận lệnh)' : ''}`).join(', ')}</p>
-              )}
-              {order.delivery_slot && <p className="delivery-meta">🕒 {DELIVERY_SLOT_LABEL[order.delivery_slot]}</p>}
               {order.note && <p className="delivery-note">📝 {order.note}</p>}
               <ul className="delivery-items">
                 {order.items.map((item, i) => (
@@ -245,13 +264,9 @@ export default function Delivery() {
                   ? <>🏦 Đã chuyển khoản: <strong>{formatVND(order.total)}</strong> — cửa hàng đã nhận tiền</>
                   : payWayOf(order) === 'cash'
                     ? <>💵 Thu tiền mặt: <strong>{formatVND(order.total)}</strong></>
-                    : <>🏦 Khách chuyển khoản: <strong>{formatVND(order.total)}</strong> — chụp ảnh chuyển khoản khi giao</>}
+                    : <>🏦 Khách chuyển khoản: <strong>{formatVND(order.total)}</strong>{order.has_transfer_proof ? ' — khách đã gửi ảnh chuyển khoản' : ' — chụp ảnh chuyển khoản khi giao'}</>}
               </p>
-              {order.status === 'confirmed' ? (
-                <button type="button" className="btn btn-primary btn-block btn-large" disabled={busyId === order.id} onClick={() => setStatus(order, 'shipping')}>
-                  {busyId === order.id ? 'Đang lưu…' : '🛵 Bắt đầu giao'}
-                </button>
-              ) : debtForms[order.id] ? (
+              {debtForms[order.id] ? (
                 <div className="delivery-debt">
                   <h3>📝 Khách nợ — gửi kế toán duyệt</h3>
                   <ProofPhoto label="Chụp gạo đã giao tới nơi" value={debtForms[order.id].delivered}
@@ -285,20 +300,24 @@ export default function Delivery() {
                       ))}
                     </div>
                   )}
-                  <ProofPhoto
-                    key={`${order.id}-${payWayOf(order)}`}
-                    camera={!(payWayOf(order) === 'transfer' && !order.transfer_confirmed_at)}
-                    label={payWayOf(order) === 'transfer' && !order.transfer_confirmed_at ? 'Chụp ảnh chuyển khoản của khách' : 'Chụp ảnh gạo đã giao'}
-                    value={photos[order.id]}
-                    onChange={(v) => setPhotos((cur) => ({ ...cur, [order.id]: v }))} />
-                  {payWayOf(order) === 'transfer' && !order.transfer_confirmed_at && (
-                    <small className="field-help">Chụp màn hình báo chuyển tiền thành công trên điện thoại khách, hoặc chọn ảnh khách gửi. Cửa hàng kiểm tra tiền về rồi xác nhận.</small>
+                  {/* Tiền mặt hay chuyển khoản đều phải chụp ảnh gạo đã giao tới nơi (25/11/2026). */}
+                  <ProofPhoto key={`${order.id}-goods`} label="Chụp ảnh gạo đã giao tới nơi" value={photos[order.id]?.goods}
+                              onChange={(v) => setPhoto(order.id, 'goods', v)} />
+                  {needTransferPhoto(order) && (
+                    <>
+                      <ProofPhoto key={`${order.id}-transfer`} camera={false} label="Chụp ảnh chuyển khoản của khách" value={photos[order.id]?.transfer}
+                                  onChange={(v) => setPhoto(order.id, 'transfer', v)} />
+                      <small className="field-help">Chụp màn hình báo chuyển tiền thành công trên điện thoại khách, hoặc chọn ảnh khách gửi. Cửa hàng kiểm tra tiền về rồi xác nhận.</small>
+                    </>
                   )}
-                  <button type="button" className="btn btn-primary btn-block btn-large delivery-done" disabled={busyId === order.id || !photos[order.id]}
+                  <button type="button" className="btn btn-primary btn-block btn-large delivery-done" disabled={busyId === order.id || !photosReady(order)}
                           onClick={() => setStatus(order, 'completed')}>
-                    {busyId === order.id ? 'Đang lưu…' : photos[order.id] ? '✅ Hoàn thành đơn' : '✅ Hoàn thành đơn (chụp ảnh trước)'}
+                    {busyId === order.id ? 'Đang lưu…' : photosReady(order) ? '✅ Hoàn thành đơn'
+                      : !photos[order.id]?.goods ? '✅ Hoàn thành đơn (chụp ảnh gạo trước)' : '✅ Hoàn thành đơn (chụp ảnh chuyển khoản trước)'}
                   </button>
                   <button type="button" className="btn btn-secondary btn-block" onClick={() => setDebt(order.id, {})}>📝 Khách nợ (công nợ)</button>
+                </>
+              )}
                 </>
               )}
             </article>
@@ -313,7 +332,7 @@ export default function Delivery() {
                 <li key={order.id}>
                   <span><strong>{order.code}</strong> · {order.receiver_name}</span>
                   <span className={`status ${order.status}`}>
-                    {order.status === 'completed' ? `${order.payment_status === 'debt' ? 'Ghi nợ' : 'Đã giao'} ${formatDateTime(order.completed_at).split(' ')[0]}` : 'Đã huỷ'}
+                    {order.status === 'completed' ? `${order.payment_status === 'debt' ? 'Ghi nợ' : 'Đã giao'} ${shortTime(order.completed_at)}` : 'Đã huỷ'}
                   </span>
                 </li>
               ))}

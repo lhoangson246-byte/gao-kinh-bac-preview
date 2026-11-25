@@ -1,6 +1,7 @@
 import { Fragment, useState } from 'react';
 import { formatDateTime, formatVND, STATUS_LABEL } from '../api';
 import OrderReturnForm from './OrderReturnForm.jsx';
+import ProofHover from './ProofHover.jsx';
 
 const time = (value) => formatDateTime(value).split(' ')[0];
 
@@ -37,10 +38,18 @@ export default function OrdersTable({ orders, canReturn = false, onReturned }) {
               <td data-label="Thanh toán">{o.payment_method === 'bank' ? 'Chuyển khoản' : 'Tiền mặt'}{o.payment_method === 'bank' && (
                 <small className="cell-note">{o.transfer_confirmed_at ? '✓ đã nhận tiền' : o.transfer_reported_at ? '💳 khách báo đã chuyển' : 'chưa báo chuyển'}</small>
               )}</td>
-              <td data-label="Trạng thái"><span className={`status ${o.status}`}>{STATUS_LABEL[o.status]}</span>
+              <td data-label="Trạng thái">{o.status === 'completed' ? (
+                  // Rê chuột vào trạng thái: ảnh gạo shipper chụp, giờ chụp, giờ bắt đầu / hoàn thành (25/11/2026).
+                  <ProofHover className="status completed" photo={o.delivery_photo} photoAt={o.delivery_photo_at} transferProof={o.transfer_proof}
+                              transferProofAt={o.transfer_proof_at} startedAt={o.fulfillment !== 'pickup' ? o.shipping_at : null}
+                              completedAt={o.completed_at} debt={o.payment_status === 'debt'}>
+                    {STATUS_LABEL[o.status]}{o.delivery_photo ? ' 📷' : ''}
+                  </ProofHover>
+                ) : <span className={`status ${o.status}`}>{STATUS_LABEL[o.status]}</span>}
                 {o.returns?.length > 0 && <small className="cell-note">↩️ {o.returns.map((r) => (r.return_type === 'return' ? `trả, hoàn ${formatVND(r.refund_amount)}` : 'đổi hàng')).join(' · ')}</small>}</td>
               <td data-label="Giờ hoàn thành">{o.status === 'completed' && o.completed_at
-                ? <>{time(o.completed_at)}<small className="cell-note">{formatDateTime(o.completed_at).split(' ')[1]}</small></>
+                ? <>{time(o.completed_at)}<small className="cell-note">{formatDateTime(o.completed_at).split(' ')[1]}</small>
+                    {o.shipping_at && o.fulfillment !== 'pickup' && <small className="cell-note">🛵 bắt đầu {formatDateTime(o.shipping_at).split(' ')[0]}</small>}</>
                 : '—'}</td>
               <td data-label="Nguồn">{o.source === 'staff' ? 'Nhân viên tạo' : o.is_guest ? 'Mua nhanh' : 'Tài khoản'}</td>
               <td data-label="Người giao">{o.shipper_name || '—'}</td>
